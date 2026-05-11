@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>GIS Municipal - Prototipo</title>
+
+  <!-- LIBRERIA -->
+  <!--sin CSS separado -->
+  <script type="module" src="https://js.arcgis.com/5.0/"></script>
+
+  <!-- Acces token
+     <script>
+        var esriConfig = {
+            apiKey: "AAPTadkxfK14vSCzHdNapz79qLQ..Hca_FJ-Nx5q_tBp9oVa2LKhZp4j-S6l9VZXrnvBH7dPRBxaWn7o4N64L4EcfrrLlNB8FpM9WUnP30C49aypD7gvcnplxY3TjgZFuxzuqRx-n4LmLWxNxf3Rb0EH4u6gl2JJmE463sgcHMtxWCMhUCr0dKgnoR_TD14oLBj3DRfZZl5YZ6F-UahsdEGVfulplMJRhJbJYpDM2y5nmUZ-StelIC9t5aSataU6oAmNir32_-QJZx6PK46y-UnIpAT1_BhGpiupI",
+        };
+    </script> -->
+
+  <link rel="stylesheet" href="./styles.css"/>
+
+</head>
+
+<body>
+
+  <div id="toolbar">
+    <h1>GIS Municipal</h1>
+    <button id="btn-toggle-view">Cambiar a 3D</button>
+  </div>
+
+  <!-- VISTA 2D: Web Component -->
+  <arcgis-map
+    id="my-map"
+    basemap="streets-vector"
+    center="-1.6457,42.6954"
+    zoom="13">
+  </arcgis-map>
+
+  <!-- VISTA 3D: Web Component -->
+  <arcgis-scene
+    id="my-scene"
+    basemap="topo-3d"
+    ground="world-elevation"
+    style="display:none;">
+  </arcgis-scene>
+
+ 
+<!-- PANEL -->
+  <div id="panel">
+    <p class="panel-label">Capas</p>
+    <arcgis-layer-list 
+        ID = "layer-list"    
+        reference-element="my-map">
+    </arcgis-layer-list>
+
+    <p class="panel-label">Leyenda</p>
+        <arcgis-legend 
+        id = "legend"
+        reference-element="my-map">
+    </arcgis-legend>
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+
+</html>

@@ -1,0 +1,26 @@
+# Dependencias
+node_modules/
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+
+# Variables de entorno y claves API
+.env
+*.env.local
+
+# Carpetas de build/distribución
+dist/
+build/
+
+# VS Code
+.vscode/
+
+# Carpetas que no subo todavía 
+
+notes/
+context/
+docs/
+prompts/
+research/
+
