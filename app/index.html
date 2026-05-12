@@ -9,13 +9,6 @@
   <!--sin CSS separado -->
   <script type="module" src="https://js.arcgis.com/5.0/"></script>
 
-  <!-- Acces token
-     <script>
-        var esriConfig = {
-            apiKey: "AAPTadkxfK14vSCzHdNapz79qLQ..Hca_FJ-Nx5q_tBp9oVa2LKhZp4j-S6l9VZXrnvBH7dPRBxaWn7o4N64L4EcfrrLlNB8FpM9WUnP30C49aypD7gvcnplxY3TjgZFuxzuqRx-n4LmLWxNxf3Rb0EH4u6gl2JJmE463sgcHMtxWCMhUCr0dKgnoR_TD14oLBj3DRfZZl5YZ6F-UahsdEGVfulplMJRhJbJYpDM2y5nmUZ-StelIC9t5aSataU6oAmNir32_-QJZx6PK46y-UnIpAT1_BhGpiupI",
-        };
-    </script> -->
-
   <link rel="stylesheet" href="./ui/styles.css"/>
 
 </head>
@@ -30,7 +23,7 @@
   <!-- VISTA 2D: Web Component -->
   <arcgis-map
     id="my-map"
-    basemap="streets-vector"
+    basemap="osm"
     center="-1.6457,42.6954"
     zoom="13">
   </arcgis-map>
@@ -38,7 +31,7 @@
   <!-- VISTA 3D: Web Component -->
   <arcgis-scene
     id="my-scene"
-    basemap="topo-3d"
+    basemap="osm"
     ground="world-elevation"
     style="display:none;">
   </arcgis-scene>

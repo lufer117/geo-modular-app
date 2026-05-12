@@ -33,6 +33,7 @@ const REGISTRO_TIPOS = {
     title:     cfg.title,
     url:       cfg.url,
     sublayers: cfg.sublayers,
+    legendEnabled: cfg.legendEnabled ?? true,
     visible:   cfg.visible
   }),
 
@@ -41,6 +42,7 @@ const REGISTRO_TIPOS = {
     title:       cfg.title,
     url:         cfg.url,
     activeLayer: cfg.activeLayer,
+    legendEnabled: cfg.legendEnabled ?? true,
     visible:     cfg.visible
   }),
 
@@ -49,6 +51,7 @@ const REGISTRO_TIPOS = {
     id:      cfg.id,
     title:   cfg.title,
     url:     cfg.url,
+    legendEnabled: cfg.legendEnabled ?? true,
     visible: cfg.visible
   }),
 
@@ -56,6 +59,7 @@ const REGISTRO_TIPOS = {
     id:      cfg.id,
     title:   cfg.title,
     url:     cfg.url,
+    legendEnabled: cfg.legendEnabled ?? true,
     visible: cfg.visible
   }),
 
@@ -63,6 +67,7 @@ const REGISTRO_TIPOS = {
     id:      cfg.id,
     title:   cfg.title,
     url:     cfg.url,
+    legendEnabled: cfg.legendEnabled ?? true,
     visible: cfg.visible
   })
 
