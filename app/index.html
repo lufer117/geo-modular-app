@@ -17,23 +17,32 @@
 
   <div id="toolbar">
     <h1>GIS Municipal</h1>
-    <button id="btn-toggle-view">Cambiar a 3D</button>
+    <calcite-button id="btn-toggle"
+                    appearance="outline-fill"
+                    kind="neutral">
+                    3D
+    </calcite-button>
   </div>
 
   <!-- VISTA 2D: Web Component -->
   <arcgis-map
     id="my-map"
-    basemap="osm"
+    basemap="topo-vector"
     center="-1.6457,42.6954"
-    zoom="13">
+    zoom="13"
+    class="visible">
+    <arcgis-zoom slot="top-left"></arcgis-zoom>
   </arcgis-map>
 
   <!-- VISTA 3D: Web Component -->
   <arcgis-scene
     id="my-scene"
-    basemap="osm"
+    item-id="8244d9e565db4e448b19fb7d82e52315"
     ground="world-elevation"
-    style="display:none;">
+    camera-tilt="60">
+    <arcgis-zoom slot="top-left"> </arcgis-zoom>
+    <arcgis-navigation-toggle slot="top-left"> </arcgis-navigation-toggle>
+    <arcgis-compass slot="top-left"> </arcgis-compass>
   </arcgis-scene>
 
  

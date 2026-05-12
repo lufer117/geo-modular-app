@@ -1,4 +1,4 @@
-// app.js
+// main.js
 // ============================================================
 // ARQUITECTURA: Dos mapas completamente independientes.
 //
@@ -18,113 +18,109 @@ import { crearCapa }    from "./core/layerFactory.js";
 // ── REFERENCIAS DOM ─────────────────────────────────────
 const mapEl = document.getElementById("my-map");
 const sceneEl = document.getElementById("my-scene");
-const btnToggle = document.getElementById("btn-toggle-view");
+const btnToggle = document.getElementById("btn-toggle");
 const layerListEl = document.getElementById("layer-list");
 const legendEl = document.getElementById("legend");
 
-// ── ESTADO DE LA APLICACIÓN ─────────────────────────────
-let vistaActual  = "2D";
-// let capasCreadas = false;    // puede dar problemas 
+// ── ESPERAR QUE AMBAS VISTAS ESTÉN LISTAS─────────────────────────────
 
-// ── MAPA 2D: con capas WMS ──────────────────────────────
-// El Web Component arcgis-map crea su Map interno al inicializarse.
-// Esperamos al evento para acceder a él y añadir las capas.
-mapEl.addEventListener("arcgisViewReadyChange", () => {
-  const mapView = mapEl.view;
+await mapEl.viewOnReady();
+await sceneEl.viewOnReady();
 
-  // Guardia doble: vista nula (evento de destrucción) o ya inicializado
-  if (!mapView) return;
 
-  const capas = CAPAS_CONFIG.map(crearCapa).filter(Boolean);
-  mapView.map.addMany(capas);
-  // capasCreadas = true;
+// ── CREAR CAPAS ─────────────────────────────
 
-  console.log("[app] Mapa 2D listo. Capas cargadas:", capas.length);
-});
+const capas2D = [];
+const capas3D = [];
 
-// ── MAPA 3D: solo basemap + elevación ───────────────────
-// No se añaden capas WMS aquí intencionalmente.
-// La elevación (ground="world-elevation") viene del atributo HTML.
-sceneEl.addEventListener("arcgisViewReadyChange", () => {
-  const sceneView = sceneEl.view;
-  if (!sceneView) return;
 
-  console.log("[app] Escena 3D lista. Solo basemap activo.");
-});
+CAPAS_CONFIG.forEach((cfg) => {
 
-// ── BOTÓN TOGGLE 2D / 3D ────────────────────────────────
-// CRÍTICO: el callback DEBE ser async para poder usar await dentro.
-// Sin async, cualquier await lanza: "Unexpected reserved word".
-btnToggle.addEventListener("click", async () => {
+  const capa2D = crearCapa(cfg);
 
-  const mapView   = mapEl.view;
-  const sceneView = sceneEl.view;
+  if (!capa2D) return;
 
-  // Guardia: no hacer nada si alguna vista no está lista
-  if (!mapView || !sceneView) {
-    console.warn("[app] Vistas no listas todavía.");
-    return;
+  // ── TODAS LAS CAPAS VAN AL 2D ─────────────────────────
+  capas2D.push(capa2D);
+
+  // ── SOLO ALGUNAS VAN AL 3D ────────────────────────────
+  // compatibleCon3D será parte futura de la config.
+  // false por defecto para evitar problemas con WMS.
+  const compatibleCon3D = cfg.compatibleCon3D ?? false;
+
+  if (compatibleCon3D) {
+
+    // Nunca compartir misma instancia entre vistas.
+    const capa3D = capa2D.clone();
+
+    capas3D.push(capa3D);
   }
+});
 
-  if (vistaActual === "2D") {
-    await cambiarA3D(mapView, sceneView);
+// ── AÑADIR CAPAS A CADA MAPA ───────────────────────────
+mapEl.view.map.addMany(capas2D);
+
+sceneEl.view.map.addMany(capas3D);
+
+
+// ── CORRECCIÓN DE ESCALA WEB MERCATOR ───────────────────
+// MapView usa proyección Web Mercator (EPSG:3857) que distorsiona
+// la escala en función de la latitud. .
+const getScaleFactor = (viewpoint) =>
+  Math.cos((viewpoint.targetGeometry.latitude * Math.PI) / 180);
+
+// ── 5. SHOW/HIDE CON CSS TRANSITION ────────────────────────
+// CSS maneja la transición (opacity + visibility en styles.css).
+const mostrarVista = (mostrar, ocultar) => {
+  mostrar.classList.add("visible");
+  ocultar.classList.remove("visible");
+};
+
+// ── 6. ESTADO ──────────────────────────────────────────────
+let is2D = true;
+
+// ── 7. TOGGLE 2D / 3D ──────────────────────────────────────
+btnToggle.addEventListener("click", () => {
+
+  // Clonar el viewpoint de la vista activa antes de modificarlo.
+  const viewpoint = is2D
+    ? mapEl.viewpoint.clone()
+    : sceneEl.viewpoint.clone();
+
+  const factor = getScaleFactor(viewpoint);
+
+  if (is2D) {
+    // ── 2D → 3D ──────────────────────────────────────────
+    // Reducir escala para compensar la distorsión Mercator.
+    // (zoom in hasta reflejar la distancia real en el terreno)
+    viewpoint.scale *= factor;
+
+    // Asignación directa: instantánea y precisa (no animada).
+    sceneEl.viewpoint = viewpoint;
+
+    mostrarVista(sceneEl, mapEl);
+
+    // Redirigir widgets a la escena 3D
+    layerListEl.setAttribute("reference-element", "my-scene");
+    legendEl.setAttribute("reference-element", "my-scene");
+
+    btnToggle.textContent = "2D";
+
   } else {
-    await cambiarA2D(mapView, sceneView);
+    // ── 3D → 2D ──────────────────────────────────────────
+    // Aumentar escala para compensar la distorsión inversa.
+    viewpoint.scale /= factor;
+
+    mapEl.viewpoint = viewpoint;
+
+    mostrarVista(mapEl, sceneEl);
+
+    // Redirigir widgets al mapa 2D
+    layerListEl.setAttribute("reference-element", "my-map");
+    legendEl.setAttribute("reference-element", "my-map");
+
+    btnToggle.textContent = "3D";
   }
+
+  is2D = !is2D;
 });
-
-// ── FUNCIÓN: 2D → 3D ────────────────────────────────────
-async function cambiarA3D(mapView, sceneView) {
-
-  // Leer el viewpoint actual del mapa 2D
-  // viewpoint encapsula centro + escala + rotación en un solo objeto.
-  // Es más preciso que leer center + zoom por separado.
-  const viewpoint = mapView.viewpoint;
-
-  // Ocultar mapa 2D, mostrar escena 3D
-  mapEl.style.display   = "none";
-  sceneEl.style.display = "block";
-
-  // Esperar a que SceneView termine de renderizar
-  await sceneView.when(); 
-  await sceneView.ready;
-
-  // Navegar a la misma posición pero con tilt para efecto 3D.
-  // No pasamos el viewpoint directamente porque viene con tilt=0 (2D),
-  // lo que daría una vista cenital sin profundidad.
-  await sceneView.goTo({
-    target:  viewpoint.targetGeometry,  // mismo centro geográfico
-    scale:   viewpoint.scale,           // mismo nivel de zoom
-    tilt:    60,                        // ángulo que da el efecto de volumen
-    heading: 0                          // norte arriba
-  });
-
-  // Redirigir widgets a la escena 3D
-  layerListEl.setAttribute("reference-element", "my-scene");
-  legendEl.setAttribute("reference-element", "my-scene");
-
-  btnToggle.textContent = "Ver en 2D";
-  vistaActual = "3D";
-}
-
-// ── FUNCIÓN: 3D → 2D ────────────────────────────────────
-async function cambiarA2D(mapView, sceneView) {
-
-  // Leer viewpoint de la escena 3D
-  const viewpoint = sceneView.viewpoint;
-
-  // Ocultar escena 3D, mostrar mapa 2D
-  sceneEl.style.display = "none";
-  mapEl.style.display   = "block";
-
-  // goTo acepta un Viewpoint directamente en MapView.
-  // Ignora el tilt automáticamente (2D no tiene tilt).
-  await mapView.goTo(viewpoint);
-
-  // Redirigir widgets al mapa 2D
-  layerListEl.setAttribute("reference-element", "my-map");
-  legendEl.setAttribute("reference-element", "my-map");
-
-  btnToggle.textContent = "Ver en 3D";
-  vistaActual = "2D";
-}

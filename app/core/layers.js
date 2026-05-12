@@ -22,7 +22,7 @@ export const CAPAS_CONFIG = [
     description: "",          // ← vacío ahora, se rellena cuando llegue la BD
     tipo: "WMS",
     url: "https://www.ign.es/wms-inspire/pnoa-ma",
-    sublayers: [{ name: "OI.OrthoimageCoverage" }],
+    sublayers: [{ name: "fondo" }],
     legendEnabled: true,
     visible: false // usuario activa la capa
   },

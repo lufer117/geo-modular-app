@@ -71,14 +71,29 @@ sin importar el tamaño de la ventana. */
 }
 
 
-/* ── Mapa principal ArcGIS ─────────────────────────────────────── */
+/* ── Mapas ─────────────────────────────────────── */
+/* ── Vistas: transición suave entre 2D y 3D ─────────────── */
 arcgis-map,
 arcgis-scene {
   position: absolute;
-  top: 48px;       /* debajo del toolbar */
+  top: 48px;
   left: 0;
-  right: 300px;    /* espacio para el panel lateral */
+  right: 300px;
   bottom: 0;
+
+  /* Estado por defecto: oculto sin ocupar espacio visual    */
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity     400ms ease,
+    visibility  400ms ease;
+}
+
+/* Clase añadida/retirada por JS para mostrar la vista activa */
+arcgis-map.visible,
+arcgis-scene.visible {
+  opacity: 1;
+  visibility: visible;
 }
 
 /* ── Panel lateral fijo a la derecha────────────────────────────── */
