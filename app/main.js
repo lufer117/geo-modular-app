@@ -28,6 +28,7 @@ await mapEl.viewOnReady();
 await sceneEl.viewOnReady();
 
 
+
 // ── CREAR CAPAS ─────────────────────────────
 
 const capas2D = [];
@@ -62,6 +63,36 @@ mapEl.view.map.addMany(capas2D);
 
 sceneEl.view.map.addMany(capas3D);
 
+// ── RENDERIZAR LEYENDA ─────────────────────────────
+
+CAPAS_CONFIG.forEach(cfg => {
+
+  if (!cfg.legend?.url) return;
+
+  // contenedor por capa
+  const item = document.createElement("div");
+
+  item.classList.add("legend-item");
+
+  // título
+  const title = document.createElement("p");
+
+  title.textContent = cfg.title;
+
+  // imagen
+  const img = document.createElement("img");
+
+  img.src = cfg.legend.url;
+
+  img.alt = cfg.title;
+
+  // append
+  item.appendChild(title);
+
+  item.appendChild(img);
+
+  legendEl.appendChild(item);
+});
 
 // ── CORRECCIÓN DE ESCALA WEB MERCATOR ───────────────────
 // MapView usa proyección Web Mercator (EPSG:3857) que distorsiona
@@ -101,8 +132,8 @@ btnToggle.addEventListener("click", () => {
     mostrarVista(sceneEl, mapEl);
 
     // Redirigir widgets a la escena 3D
-    layerListEl.setAttribute("reference-element", "my-scene");
-    legendEl.setAttribute("reference-element", "my-scene");
+    // layerListEl.setAttribute("reference-element", "my-scene");
+    // legendEl.setAttribute("reference-element", "my-scene");
 
     btnToggle.textContent = "2D";
 

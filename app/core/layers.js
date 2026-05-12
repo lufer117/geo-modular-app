@@ -13,7 +13,8 @@ export const CAPAS_CONFIG = [
     tipo: "WMS",
     url: "https://ovc.catastro.meh.es/cartografia/INSPIRE/spadgcwms.aspx",
     sublayers: [{ name: "CP.CadastralParcel" }],
-    legendEnabled: true,
+    // legendEnabled: true,
+    //compatible3D: false,
     visible: false // para que sea el usuario el que la active
   },
   {
@@ -23,7 +24,8 @@ export const CAPAS_CONFIG = [
     tipo: "WMS",
     url: "https://www.ign.es/wms-inspire/pnoa-ma",
     sublayers: [{ name: "fondo" }],
-    legendEnabled: true,
+    // legendEnabled: true,
+    //compatible3D: false,
     visible: false // usuario activa la capa
   },
   {
@@ -33,7 +35,12 @@ export const CAPAS_CONFIG = [
     tipo: "WMS",
     url: "https://www.ign.es/wms-inspire/unidades-administrativas",
     sublayers: [{ name: "AU.AdministrativeUnit" }],
-    legendEnabled: true,
+    // legendEnabled: true,
+    //compatible3D: false,
+    legend: {
+      type: "image",
+      url: "https://www.ign.es/wms-inspire/unidades-administrativas/leyendas/LimitesAdministrativos.png"
+      },
     visible: false
   }
 ];
