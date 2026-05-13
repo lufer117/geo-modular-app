@@ -26,6 +26,16 @@ export const CAPAS_CONFIG = [
         visible:       false,
         subLayersVisible: false,   
         legendEnabled: true
+      },
+      {
+        id:            "cartografia-catastral",
+        title:         "Cartografia catastral",
+        tipo:          "WMS",
+        url:           "http://ovc.catastro.meh.es/Cartografia/WMS/ServidorWMS.aspx",
+        sublayers:     null,        
+        visible:       false,
+        subLayersVisible: false,   
+        legendEnabled: true
       }
     ]
   },
