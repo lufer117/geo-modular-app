@@ -67,23 +67,5 @@ export const CAPAS_CONFIG = [
       }
     ]
   },
-  {
-    id:     "grupo-transporte",
-    title:  "Transporte e Infraestructuras",
-    tipo:   "GRUPO",
-    visible: true,
-    visibilityMode: "independent",
-    capas: [
-      {
-        id:            "red-viaria",
-        title:         "Red Viaria (IGN)",
-        tipo:          "WMS",
-        url:           "https://www.ign.es/wms-inspire/redes-transporte",
-        sublayers:     null,
-        visible:       false,
-        subLayersVisible: false,
-        legendEnabled: true
-      }
-    ]
-  }
+  
 ];

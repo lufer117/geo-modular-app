@@ -13,6 +13,7 @@
 
 import { CAPAS_CONFIG } from "./core/layers.js";
 import { crearCapa }    from "./core/layerFactory.js";
+import { initLegend }   from "./core/legendManager.js"; 
 
 
 // ── REFERENCIAS DOM ─────────────────────────────────────
@@ -62,6 +63,11 @@ CAPAS_CONFIG.forEach((cfg) => {
 mapEl.view.map.addMany(capas2D);
 
 sceneEl.view.map.addMany(capas3D);
+
+// ── LEYENDA DINÁMICA ────────────────────────────────────────
+// legendManager escucha cambios de visibilidad por sí solo.
+// main.js no necesita saber cómo se dibuja la leyenda.
+await initLegend(legendEl, mapEl.view);
 
 // ── CORRECCIÓN DE ESCALA WEB MERCATOR ───────────────────
 // MapView usa proyección Web Mercator (EPSG:3857) que distorsiona
