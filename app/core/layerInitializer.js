@@ -3,6 +3,7 @@
 // RESPONSABILIDAD:
 // Aplicar comportamiento runtime a capas ya creadas.
 // layerInitializer  → configura estado dinámico (load, sublayers, etc.)
+// Estado: ⚠️ parcial - solo WMS implementado
 // ============================================================
 
 const INITIALIZERS = {
