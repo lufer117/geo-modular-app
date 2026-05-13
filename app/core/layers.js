@@ -1,46 +1,89 @@
 // layers.js
 // ============================================================
 // SISTEMA DE CONFIGURACIÓN
-// En el futuro estos datos vendrán de un JSON externo o BD.
-// La estructura de cada objeto NO cambiará cuando eso ocurra.
+// Único archivo que cambia entre municipios.
+// Estructura: array de GRUPOS → cada grupo contiene capas.
+// sublayers: null → carga todas las sublayers de la capa
+// visible: false → apaga al inicio
+// subLayersVisible: false → sublayers WMS apagadas al inicio.
+// El usuario activa individualmente lo que necesita.
 // ============================================================
 
 export const CAPAS_CONFIG = [
   {
-    id: "catastro",
-    title: "Catastro",
-    description: "",          // ← vacío ahora, se rellena cuando llegue la BD
-    tipo: "WMS",
-    url: "https://ovc.catastro.meh.es/cartografia/INSPIRE/spadgcwms.aspx",
-    sublayers: [{ name: "CP.CadastralParcel" }],
-    // legendEnabled: true,
-    //compatible3D: false,
-    visible: false // para que sea el usuario el que la active
+    id:     "grupo-catastro",
+    title:  "Catastro y Edificación",
+    tipo:   "GRUPO",
+    visible: true,
+    visibilityMode: "independent",// "independent" → checkboxes, cada capa se activa sola
+    capas: [
+      {
+        id:            "catastro-parcelas",
+        title:         "Parcelas Catastrales",
+        tipo:          "WMS",
+        url:           "https://ovc.catastro.meh.es/cartografia/INSPIRE/spadgcwms.aspx",
+        sublayers:     null,        
+        visible:       false,
+        subLayersVisible: false,   
+        legendEnabled: true
+      }
+    ]
   },
   {
-    id: "pnoa",
-    title: "Ortofoto PNOA (IGN)",
-    description: "",          // ← vacío ahora, se rellena cuando llegue la BD
-    tipo: "WMS",
-    url: "https://www.ign.es/wms-inspire/pnoa-ma",
-    sublayers: [{ name: "fondo" }],
-    // legendEnabled: true,
-    //compatible3D: false,
-    visible: false // usuario activa la capa
-  },
-  {
-    id: "unidades-administrativas",
-    title: "Unidades administrativas de España",
-    description: "",          // ← vacío ahora, se rellena cuando llegue la BD
-    tipo: "WMS",
-    url: "https://www.ign.es/wms-inspire/unidades-administrativas",
-    sublayers: [{ name: "AU.AdministrativeUnit" }],
-    // legendEnabled: true,
-    //compatible3D: false,
-    legend: {
-      type: "image",
-      url: "https://www.ign.es/wms-inspire/unidades-administrativas/leyendas/LimitesAdministrativos.png"
+    id:     "grupo-mapas-base",
+    title:  "Mapas base",
+    tipo:   "GRUPO",
+    visible: true,
+    visibilityMode: "independent",
+    capas: [
+      {
+        id:            "pnoa",
+        title:         "Ortofoto PNOA (IGN)",
+        tipo:          "WMS",
+        url:           "https://www.ign.es/wms-inspire/pnoa-ma",
+        sublayers:     null,        // null → carga todas desde GetCapabilities
+        visible:       false,
+        subLayersVisible: false,
+        legendEnabled: true
       },
-    visible: false
+    ]
+  },
+  {
+    id:     "grupo-ocupacion-suelo",
+    title:  "Ocupación y cobertura del suelo",
+    tipo:   "GRUPO",
+    visible: true,
+    visibilityMode: "independent",
+    capas: [      
+      {
+        id:            "usos-suelo",
+        title:         "Usos del suelo (SIOSE)",
+        tipo:          "WMS",
+        url:           "https://servicios.idee.es/wms-inspire/ocupacion-suelo",
+        sublayers:     null,
+        visible:       false,
+        subLayersVisible: false,
+        legendEnabled: true
+      }
+    ]
+  },
+  {
+    id:     "grupo-transporte",
+    title:  "Transporte e Infraestructuras",
+    tipo:   "GRUPO",
+    visible: true,
+    visibilityMode: "independent",
+    capas: [
+      {
+        id:            "red-viaria",
+        title:         "Red Viaria (IGN)",
+        tipo:          "WMS",
+        url:           "https://www.ign.es/wms-inspire/redes-transporte",
+        sublayers:     null,
+        visible:       false,
+        subLayersVisible: false,
+        legendEnabled: true
+      }
+    ]
   }
 ];
