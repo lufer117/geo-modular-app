@@ -15,6 +15,7 @@ build/
 
 # VS Code
 .vscode/
+app/proyecto_gis.code-workspace
 
 # Carpetas que no subo todavía 
 
