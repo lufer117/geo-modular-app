@@ -14,6 +14,7 @@
 import { CAPAS_CONFIG } from "./core/layers.js";
 import { crearCapa }    from "./core/layerFactory.js";
 import { initLegend }   from "./core/legendManager.js"; 
+import { inicializarCapa } from "./core/layerInitializer.js";
 
 
 // ── REFERENCIAS DOM ─────────────────────────────────────
@@ -36,28 +37,31 @@ const capas2D = [];
 const capas3D = [];
 
 
-CAPAS_CONFIG.forEach((cfg) => {
+for (const cfg of CAPAS_CONFIG) {
 
   const capa2D = crearCapa(cfg);
 
-  if (!capa2D) return;
+  if (!capa2D) continue;
 
-  // ── TODAS LAS CAPAS VAN AL 2D ─────────────────────────
+  // ── Inicialización runtime ───────────────────────────
+  await inicializarCapa(capa2D, cfg);
+
+  // ── Añadir a colección 2D ────────────────────────────
   capas2D.push(capa2D);
 
-  // ── SOLO ALGUNAS VAN AL 3D ────────────────────────────
-  // compatibleCon3D será parte futura de la config.
-  // false por defecto para evitar problemas con WMS.
+  // ── Capas compatibles con 3D ─────────────────────────
   const compatibleCon3D = cfg.compatibleCon3D ?? false;
 
   if (compatibleCon3D) {
 
-    // Nunca compartir misma instancia entre vistas.
+    // nunca compartir instancia entre vistas
     const capa3D = capa2D.clone();
+
+    await inicializarCapa(capa3D, cfg);
 
     capas3D.push(capa3D);
   }
-});
+}
 
 // ── AÑADIR CAPAS A CADA MAPA ───────────────────────────
 mapEl.view.map.addMany(capas2D);
