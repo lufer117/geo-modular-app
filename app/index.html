@@ -1,65 +1,155 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>GIS Municipal - Prototipo</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Visor GIS Municipal</title>
 
-  <!-- LIBRERIA -->
-  <!--sin CSS separado -->
-  <script type="module" src="https://js.arcgis.com/5.0/"></script>
+  <!--
+    ArcGIS Maps SDK v5 — CDN oficial.
+    Carga el runtime del SDK, los Web Components (arcgis-map, arcgis-scene, etc.)
+    y Calcite Components en un único bundle.
+  -->
+  <link rel="stylesheet" href="https://js.arcgis.com/5.0/esri/themes/light/main.css" />
+  <script src="https://js.arcgis.com/5.0/"></script>
 
-  <link rel="stylesheet" href="./ui/styles.css"/>
+  <!--
+    Calcite Components — sistema de diseño de Esri.
+    Coherencia visual con el ecosistema ArcGIS sin depender de frameworks externos.
+  -->
+  <script type="module" src="https://js.arcgis.com/calcite-components/2.13.2/calcite.esm.js"></script>
+  <link rel="stylesheet" href="https://js.arcgis.com/calcite-components/2.13.2/calcite.css" />
 
+  <link rel="stylesheet" href="styles.css" />
 </head>
-
 <body>
 
-  <div id="toolbar">
-    <h1>GIS Municipal</h1>
-    <calcite-button id="btn-toggle"
-                    appearance="outline-fill"
-                    kind="neutral">
-                    3D
-    </calcite-button>
-  </div>
+  <!--
+    calcite-shell: layout principal de Esri.
+    Gestiona panel lateral + área de contenido principal sin CSS manual.
+  -->
+  <calcite-shell>
 
-  <!-- VISTA 2D: Web Component -->
-  <arcgis-map
-    id="my-map"
-    basemap="topo-vector"
-    center="-1.6457,42.6954"
-    zoom="13"
-    class="visible">
-    <arcgis-zoom slot="top-left"></arcgis-zoom>
-  </arcgis-map>
+    <!-- ═══════════════════════════════════════════════
+         BARRA SUPERIOR
+         Slot "header" de calcite-shell.
+         toolbar.js monta aquí el botón toggle y el indicador de escala.
+    ═══════════════════════════════════════════════ -->
+    <calcite-navigation-logo
+      id="app-logo"
+      heading="Visor GIS Municipal"
+      description=""
+>   </calcite-navigation-logo>
 
-  <!-- VISTA 3D: Web Component -->
-  <arcgis-scene
-    id="my-scene"
-    item-id="8244d9e565db4e448b19fb7d82e52315"
-    ground="world-elevation"
-    camera-tilt="60">
-    <arcgis-zoom slot="top-left"> </arcgis-zoom>
-    <arcgis-navigation-toggle slot="top-left"> </arcgis-navigation-toggle>
-    <arcgis-compass slot="top-left"> </arcgis-compass>
-  </arcgis-scene>
+      <!-- Acciones del lado derecho: toggle y escala -->
+      <div slot="content-end" id="toolbar-actions">
+        <!--
+          toolbar.js enlaza este botón a mapManager.toggleVista().
+          El id es el contrato entre index.html y toolbar.js.
+        -->
+        <calcite-chip id="chip-escala" kind="neutral" icon="measure">Escala: —</calcite-chip>
+        <calcite-button
+          id="btn-toggle-vista"
+          icon-start="globe"
+          appearance="outline-fill"
+          kind="neutral"
+        >Cambiar a 3D</calcite-button>
+      </div>
+    </calcite-navigation>
 
- 
-<!-- PANEL -->
-  <div id="panel">
-    <p class="panel-label">Capas</p>
-    <arcgis-layer-list 
-        ID = "layer-list"    
-        reference-element="my-map">
-    </arcgis-layer-list>
 
-    <p class="panel-label">Leyenda</p>
-    <div id="legend"></div>
-    <!-- <arcgis-legend id = "legend" reference-element="my-map"> </arcgis-legend> -->
-  </div>
+    <!-- ═══════════════════════════════════════════════
+         PANEL LATERAL IZQUIERDO — 300 px
+         width-scale="m" ≈ 300 px en Calcite.
+         Los módulos ui/*.js renderizan dentro de los contenedores div.
+    ═══════════════════════════════════════════════ -->
+    <calcite-shell-panel slot="panel-start" width-scale="m" collapsed="false">
+      <calcite-panel heading="Capas y herramientas">
 
+        <calcite-tabs layout="center">
+          <calcite-tab-nav slot="title-group">
+            <calcite-tab-title icon-start="layers"  selected>Capas</calcite-tab-title>
+            <calcite-tab-title icon-start="basemap"         >Mapa base</calcite-tab-title>
+            <calcite-tab-title icon-start="legend"          >Leyenda</calcite-tab-title>
+          </calcite-tab-nav>
+
+          <!-- TAB 1: Árbol de capas
+               layerTree.js (pendiente) reemplazará arcgis-layer-list.
+               Por ahora arcgis-layer-list actúa como fallback funcional. -->
+          <calcite-tab id="tab-capas" selected>
+            <div id="layer-tree-container">
+              <arcgis-layer-list
+                id="layer-list"
+                reference-element="my-map"
+              ></arcgis-layer-list>
+            </div>
+          </calcite-tab>
+
+          <!-- TAB 2: Mapa base
+               basemapSelector.js renderiza aquí un grupo de radio buttons. -->
+          <calcite-tab id="tab-basemap">
+            <div id="basemap-selector-container">
+              <!-- basemapSelector.js monta aquí -->
+            </div>
+          </calcite-tab>
+
+          <!-- TAB 3: Leyenda
+               legendPanel.js (pendiente) reemplazará arcgis-legend.
+               Por ahora arcgis-legend actúa como fallback funcional. -->
+          <calcite-tab id="tab-leyenda">
+            <div id="legend-container">
+              <arcgis-legend
+                id="legend"
+                reference-element="my-map"
+              ></arcgis-legend>
+            </div>
+          </calcite-tab>
+
+        </calcite-tabs>
+      </calcite-panel>
+    </calcite-shell-panel>
+
+
+    <!-- ═══════════════════════════════════════════════
+         ÁREA DEL MAPA
+         Ambos elementos conviven en el DOM siempre.
+         NO usamos display:none — si la vista no está en el DOM/sin dimensiones,
+         el SDK no inicializa correctamente la SceneView.
+         La ocultación se hace con CSS: opacity + z-index (ver styles.css).
+    ═══════════════════════════════════════════════ -->
+
+    <!-- Vista 2D — activa por defecto -->
+    <arcgis-map
+      id="my-map"
+      basemap="osm"
+      center="-1.6457,42.6954"
+      zoom="13"
+    >
+      <arcgis-zoom       position="top-right"></arcgis-zoom>
+      <arcgis-compass    position="top-right"></arcgis-compass>
+      <arcgis-scale-bar  position="bottom-right" unit="metric"></arcgis-scale-bar>
+    </arcgis-map>
+
+    <!--
+      Vista 3D — clase "map-hidden" la mantiene invisible pero renderizada.
+      SIN item-id: el Web Component arranca sin Map propio.
+      mapManager.js asignará mapView.map a esta scene tras la inicialización.
+    -->
+    <arcgis-scene
+      id="my-scene"
+      ground="world-elevation"
+      class="map-hidden"
+    >
+      <arcgis-zoom               position="top-right"></arcgis-zoom>
+      <arcgis-navigation-toggle  position="top-right"></arcgis-navigation-toggle>
+      <arcgis-compass            position="top-right"></arcgis-compass>
+    </arcgis-scene>
+
+  </calcite-shell>
+
+  <!-- Entry point ES Module de la aplicación -->
   <script type="module" src="main.js"></script>
+
 </body>
 
 </html>

@@ -1,156 +1,71 @@
-/* ESTRUCTURA VISUAL DE LA APP */
-
-/* ── Reset base para que padding y border no rompan el layout y todo se mantenga en el tamaño esperado────────── */
-*, *::before, *::after {
-  box-sizing: border-box;
-}
-
-/* la app ocupa toda la pantalla */
+/* ─── Reset y layout global ─────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
 html, body {
   margin: 0;
   padding: 0;
   height: 100%;
-  font-family: "Segoe UI", sans-serif;
-  background: #1a1a2e;
+  width: 100%;
+  overflow: hidden; /* El mapa ocupa toda la pantalla */
 }
 
-#view-container {
-  position: absolute;
-  top: 48px;
-  left: 0;
-  right: 300px;
-  bottom: 0;
+calcite-shell {
+  height: 100%;
 }
 
-
-/* ── Barra fija superior ───────────────────────────────────── */
-#toolbar {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 48px;
-  background: #0d47a1;
-  display: flex;
-  align-items: center;
-  padding: 0 16px;
-  gap: 12px;
-  z-index: 10;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.4); 
-}
-
-/* Ocupa espacio disponible, empujando todo lo demás a la derecha. 
-Si no tuviera flex:1, el título se ajustaría al texto y el botón estaría pegado a él, 
-sin importar el tamaño de la ventana. */
-#toolbar h1 {
-  color: white;
-  font-size: 15px;
-  font-weight: 600;
-  margin: 0;
-  letter-spacing: 0.3px;
-  flex: 1;
-}
-
-
-/* switch de vista, en este caso 2d, 3d */
-#btn-toggle-view {
-  background: white;
-  color: #0d47a1;
-  border: none;
-  padding: 7px 16px;
-  border-radius: 4px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.2s, color 0.2s;
-}
-
-/* efecto del toggle al pasar el ratón por encima */
-#btn-toggle-view:hover {
-  background: #e3f2fd;
-}
-
-
-/* ── Mapas ─────────────────────────────────────── */
-/* ── Vistas: transición suave entre 2D y 3D ─────────────── */
+/* ─── Contenedor del mapa (slot por defecto de calcite-shell) ─── */
+/*
+  Ambas vistas se posicionan absolutas sobre el mismo espacio.
+  NO se usa display:none porque el SDK necesita que la SceneView
+  tenga dimensiones reales para inicializarse correctamente.
+*/
 arcgis-map,
 arcgis-scene {
   position: absolute;
-  top: 48px;
-  left: 0;
-  right: 300px;
-  bottom: 0;
-
-  /* Estado por defecto: oculto sin ocupar espacio visual    */
-  opacity: 0;
-  visibility: hidden;
-  transition:
-    opacity     400ms ease,
-    visibility  400ms ease;
-}
-
-/* Clase añadida/retirada por JS para mostrar la vista activa */
-arcgis-map.visible,
-arcgis-scene.visible {
-  opacity: 1;
-  visibility: visible;
-}
-
-/* ── Panel lateral fijo a la derecha────────────────────────────── */
-#panel {
-  position: absolute;
-  top: 48px;
-  right: 0;
-  width: 300px;
-  bottom: 0;
-  background: #f0f4f8;
-  display: flex;
-  /*flex-direction: column: los elementos dentro del panel se apilan verticalmente: */
-  flex-direction: column;
-  gap: 8px;
-  padding: 12px;
-  overflow-y: auto;
-  /* para separar claramente del mapa: */
-  border-left: 1px solid #cfd8dc;
-}
-
-/* ── Etiquetas de sección ───────────────────────────────── */
-.panel-label {
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.8px;
-  color: #546e7a;
-  padding: 4px 0 2px;
-  border-bottom: 1px solid #b0bec5;
-  margin-bottom: 4px;
-}
-
-/* ── Web Components de Esri: que ocupen todo el ancho del panel───── */
-arcgis-layer-list,
-arcgis-legend,
-arcgis-expand {
+  inset: 0;
   width: 100%;
+  height: 100%;
+  transition: opacity 0.25s ease;
 }
 
-/* ── Responsive: en móvil el panel va abajo ─────────────── */
-@media (max-width: 600px) {
-  arcgis-map,
-  arcgis-scene {
-    right: 0;
-    bottom: 220px;
-  }
-
-  #panel {
-    top: auto;
-    right: 0;
-    left: 0;
-    width: 100%;
-    height: 220px;
-    border-left: none;
-    border-top: 1px solid #cfd8dc;
-    flex-direction: row;
-    overflow-x: auto;
-  }
+/* Vista activa */
+arcgis-map:not(.map-hidden),
+arcgis-scene:not(.map-hidden) {
+  opacity: 1;
+  z-index: 1;
+  pointer-events: auto;
 }
 
+/* Vista oculta: invisible pero renderizada (el SDK la mantiene viva) */
+.map-hidden {
+  opacity: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* ─── Panel lateral ─────────────────────────────────── */
+calcite-shell-panel {
+  --calcite-shell-panel-width: 300px;
+}
+
+/* ─── Árbol de capas: arcgis-layer-list ocupa el panel ─ */
+#layer-tree-container arcgis-layer-list,
+#legend-container arcgis-legend {
+  width: 100%;
+  min-height: 200px;
+}
+
+/* ─── Toolbar: chips y botones alineados ─────────────── */
+#toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding-inline-end: 0.75rem;
+}
+
+/* ─── Responsive móvil (<768px) ──────────────────────── */
+@media (max-width: 768px) {
+  calcite-shell-panel {
+    --calcite-shell-panel-height: 40%;
+  }
+
+}

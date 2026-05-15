@@ -1,20 +1,22 @@
-// main.js
+// main.js - Orquestador de la aplicación GIS Municipal
 // ============================================================
-// ARQUITECTURA: Dos mapas completamente independientes.
-//
-//   map2D ──► arcgis-map   (MapView)   → capas WMS + basemap
-//   map3D ──► arcgis-scene (SceneView) → solo basemap + elevación
-//
-// Por qué dos mapas separados:
-//   WMSLayer no es compatible con SceneView en muchos servicios
-//   públicos. Compartir el mismo Map propaga ese fallo a la vista 3D.
-//   Con mapas independientes cada vista es estable por sí sola.
-// ============================================================
+//  Responsabilidad ÚNICA: importar módulos y conectarlos.
+//  Sin lógica propia de mapa, capas ni DOM.
+//  
+//  Principio arquitectónico: este archivo debe poder leerse
+//  como un índice de lo que hace la app, no como implementación.
+//  ============================================================
 
-import { CAPAS_CONFIG } from "./core/layers.js";
-import { crearCapa }    from "./core/layerFactory.js";
-import { initLegend }   from "./core/legendManager.js"; 
-import { inicializarCapa } from "./core/layerInitializer.js";
+
+import { initMap }             from './core/mapManager.js';
+import { CAPAS_CONFIG }        from './config/municipio.js';
+import { renderToolbar }       from './ui/toolbar.js';
+import { renderBasemapSelector } from './ui/basemapSelector.js';
+import { renderLayerTree }     from './ui/layerTree.js';
+import { initLegend }          from './ui/legendPanel.js';
+
+
+
 
 
 // ── REFERENCIAS DOM ─────────────────────────────────────
