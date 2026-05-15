@@ -1,5 +1,6 @@
 /* ─── Reset y layout global ─────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; }
+
 html, body {
   margin: 0;
   padding: 0;
@@ -67,5 +68,4 @@ calcite-shell-panel {
   calcite-shell-panel {
     --calcite-shell-panel-height: 40%;
   }
-
 }

@@ -12,7 +12,7 @@
 //   ccaa_code  → código CCAA INE (2 dígitos)
 //   bbox       → [xmin, ymin, xmax, ymax] WGS84 — no existe en INE, viene de IGN
 
-export const MUNICIPIOS = [
+export const municipioData = [
   {
     codigo_ine:       "31201",              // CPRO(31) + CMUN(201)
     nombre:           "Pamplona/Iruña",     // NOMBRE INE
