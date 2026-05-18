@@ -1,0 +1,2670 @@
+[
+  {
+    "id": "fega-mapa-servicio-wms-en-la-nube-sigpac-wms",
+    "title": "Servicio WMS en la Nube SIGPAC",
+    "bloque_tematico": "Agricultura",
+    "subtema": "Parcelario agrícola PAC",
+    "proveedor": "FEGA - MAPA",
+    "tipo": "WMS",
+    "url": "https://sigpac-hubcloud.es/wms",
+    "capabilities_url": "https://sigpac-hubcloud.es/wms?request=GetCapabilities&service=WMS",
+    "formato": "",
+    "inspire": "Land Use - LU / Area Management/Restriction/Regulation Zones - AM",
+    "notas": "Permite visualizar las capas de recintos  elementos del paisaje y líneas de declaración; tres capas catalogadas como conjuntos de datos de alto valor (HVD) por el Reglamento (UE) 2023/138. Operación GetFeatureInfo permite consultar propiedades del recinto en HTML o JSON. Imprescindible para análisis municipal del parcelario agrícola y usos PAC.",
+    "referencia": "https://idee.es/web/idee/segun-tipo-de-servicio",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 2,
+      "cobertura": 2,
+      "fuente": 2,
+      "tecnica": 2,
+      "total": 8
+    },
+    "prioridad": "P0 - MVP",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "mapama-grupos-de-accion-local-gal-wms",
+    "title": "Grupos de Acción Local (GAL)",
+    "bloque_tematico": "Agricultura",
+    "subtema": "Grupos de acción",
+    "proveedor": "MAPAMA",
+    "tipo": "WMS",
+    "url": "https://wms.mapama.gob.es/sig/DesarrolloRural/GruposAccionLocal",
+    "capabilities_url": "https://wms.mapama.gob.es/sig/DesarrolloRural/GruposAccionLocal?request=GetCapabilities&service=WMS",
+    "formato": "",
+    "inspire": "Area Management/Restriction/Regulation Zones - AM",
+    "notas": "Conjunto de datos de los Grupos de Acción Local (GAL) o Grupos de Desarrollo Rural (GDR) impulsores del desarrollo del programa y del desarrollo socioeconómico de sus comarcas. Útil municipal para identificar pertenencia a GAL/GDR (LEADER/FEADER) y oportunidades de financiación.",
+    "referencia": "https://idee.es/web/idee/segun-tipo-de-servicio",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 1,
+      "cobertura": 2,
+      "fuente": 2,
+      "tecnica": 1,
+      "total": 6
+    },
+    "prioridad": "P1 - Alta",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "mapa-industria-agroalimentaria-wms",
+    "title": "Industria Agroalimentaria",
+    "bloque_tematico": "Agricultura",
+    "subtema": "Industria agroalimentaria",
+    "proveedor": "MAPA",
+    "tipo": "WMS",
+    "url": "https://wms.mapama.gob.es/sig/Alimentacion/IndustriasAgroalimentarias",
+    "capabilities_url": "https://wms.mapama.gob.es/sig/Alimentacion/IndustriasAgroalimentarias?request=GetCapabilities&service=WMS",
+    "formato": "",
+    "inspire": "Production and Industrial Facilities - PF",
+    "notas": "Visualización y consulta de la localización de industrias agroalimentarias a nivel nacional. Útil municipal para inventariar tejido industrial agroalimentario. Limitación: posible desactualización de localizaciones.",
+    "referencia": "https://idee.es/web/idee/segun-tipo-de-servicio",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 1,
+      "cobertura": 2,
+      "fuente": 2,
+      "tecnica": 1,
+      "total": 6
+    },
+    "prioridad": "P1 - Alta",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "mapa-estaciones-agroclimaticas-siar-wms",
+    "title": "Estaciones agroclimáticas (SIAR)",
+    "bloque_tematico": "Agricultura",
+    "subtema": "Información agroclimática",
+    "proveedor": "MAPA",
+    "tipo": "WMS",
+    "url": "https://wms.mapama.gob.es/sig/DesarrolloRural/InfoAgroclimatica/Estaciones",
+    "capabilities_url": "https://wms.mapama.gob.es/sig/DesarrolloRural/InfoAgroclimatica/Estaciones?request=GetCapabilities&service=WMS",
+    "formato": "",
+    "inspire": "Environmental Monitoring Facilities - EF",
+    "notas": "Visualización de la red de estaciones agroclimáticas del SIAR (Sistema de Información Agroclimática para el Regadío). Útil municipal como referencia para datos meteorológicos y de riego en zonas agrícolas. Limitación: dependerá de la cercanía de estaciones al municipio.",
+    "referencia": "https://idee.es/web/idee/segun-tipo-de-servicio",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 1,
+      "cobertura": 2,
+      "fuente": 2,
+      "tecnica": 1,
+      "total": 6
+    },
+    "prioridad": "P1 - Alta",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "mapa-necesidades-de-riego-wms",
+    "title": "Necesidades de riego",
+    "bloque_tematico": "Agricultura",
+    "subtema": "Información agroclimática",
+    "proveedor": "MAPA",
+    "tipo": "WMS",
+    "url": "https://wms.mapama.gob.es/sig/desarrollorural/InfoAgroclimatica/NecesidadesRiego",
+    "capabilities_url": "https://wms.mapama.gob.es/sig/desarrollorural/InfoAgroclimatica/NecesidadesRiego?request=GetCapabilities&service=WMS",
+    "formato": "",
+    "inspire": "Meteorological geographical features - MF",
+    "notas": "Visualización de necesidades de riego derivadas de balances hídricos agroclimáticos. Útil municipal para planificación hídrica agrícola. Limitación: resolución limitada por interpolación a partir de estaciones.",
+    "referencia": "https://idee.es/web/idee/segun-tipo-de-servicio",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 1,
+      "cobertura": 2,
+      "fuente": 2,
+      "tecnica": 1,
+      "total": 6
+    },
+    "prioridad": "P1 - Alta",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "mapa-obras-de-regadio-2008-2022-wms",
+    "title": "Obras de Regadío (2008-2022)",
+    "bloque_tematico": "Agricultura",
+    "subtema": "Regadíos",
+    "proveedor": "MAPA",
+    "tipo": "WMS",
+    "url": "https://wms.mapama.gob.es/sig/desarrollorural/Regadios/obras",
+    "capabilities_url": "https://wms.mapama.gob.es/sig/desarrollorural/Regadios/obras?request=GetCapabilities&service=WMS",
+    "formato": "",
+    "inspire": "Utility and Governmental Services - US",
+    "notas": "Visualización y consulta de obras de modernización de regadíos desde el inicio del Plan Nacional de Regadíos H-2008 hasta septiembre de 2022 con el objetivo de conocer su ubicación, superficie y estado. Útil municipal para identificar inversiones en infraestructura de regadío. Limitación: solo obras del PNR.",
+    "referencia": "https://idee.es/web/idee/segun-tipo-de-servicio",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 1,
+      "cobertura": 2,
+      "fuente": 2,
+      "tecnica": 1,
+      "total": 6
+    },
+    "prioridad": "P1 - Alta",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "mapa-usos-del-suelo-en-regadio-wms",
+    "title": "Usos del suelo en regadío",
+    "bloque_tematico": "Agricultura",
+    "subtema": "Usos del suelo agrícola",
+    "proveedor": "MAPA",
+    "tipo": "WMS",
+    "url": "https://wms.mapama.gob.es/sig/desarrollorural/InfoAgroclimatica/usosueloregadio",
+    "capabilities_url": "https://wmts.mapama.gob.es/sig/desarrollorural/usos_suelo_regadio/ows?request=getcapabilities&service=wms",
+    "formato": "",
+    "inspire": "Land Use - LU",
+    "notas": "Visualización de los usos de suelo bajo regadío a nivel nacional. Útil municipal para diagnóstico del regadío y planificación agraria local. Hay zonas sin datos",
+    "referencia": "https://idee.es/web/idee/segun-tipo-de-servicio",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 1,
+      "cobertura": 2,
+      "fuente": 2,
+      "tecnica": 1,
+      "total": 6
+    },
+    "prioridad": "P1 - Alta",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "mapa-caracterizacion-agroclimatica-wms",
+    "title": "Caracterización Agroclimática",
+    "bloque_tematico": "Agricultura",
+    "subtema": "Variables agroclimáticas",
+    "proveedor": "MAPA",
+    "tipo": "WMS",
+    "url": "https://wms.mapama.gob.es/sig/Agricultura/CaractAgroClimaticas",
+    "capabilities_url": "https://wms.mapama.gob.es/sig/Agricultura/CaractAgroClimaticas?request=GetCapabilities&service=WMS",
+    "formato": "",
+    "inspire": "Meteorological geographical features - MF",
+    "notas": "Visualización y consulta de variables agroclimáticas (Aridez\t Pluviometría\t Evapotranspiración\t Factor de Erosión\t Tª máxima\t etc.) producidas por interpolación geoestadística (kriging) a partir de estaciones AEMET)",
+    "referencia": "https://idee.es/web/idee/segun-tipo-de-servicio",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 1,
+      "cobertura": 2,
+      "fuente": 2,
+      "tecnica": 1,
+      "total": 6
+    },
+    "prioridad": "P1 - Alta",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "mapa-zonas-de-calidad-diferenciada-vinos-wms",
+    "title": "Zonas de Calidad Diferenciada - Vinos",
+    "bloque_tematico": "Agricultura",
+    "subtema": "Calidad diferenciada DOP/IGP",
+    "proveedor": "MAPA",
+    "tipo": "WMS",
+    "url": "https://wms.mapama.gob.es/sig/Alimentacion/CDVinos",
+    "capabilities_url": "https://wms.mapama.gob.es/sig/Alimentacion/CDVinos?request=GetCapabilities&service=WMS",
+    "formato": "",
+    "inspire": "Area Management/Restriction/Regulation Zones - AM",
+    "notas": "Visualización y consulta de zonas geográficas DOP/IGP de Vinos. Útil municipal para identificar pertenencia a denominaciones de origen vinícolas. Limitación: cobertura solo zonas amparadas.",
+    "referencia": "https://idee.es/web/idee/segun-tipo-de-servicio",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 1,
+      "cobertura": 1,
+      "fuente": 2,
+      "tecnica": 1,
+      "total": 5
+    },
+    "prioridad": "P1 - Alta",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "mapa-comarcas-agrarias-wms",
+    "title": "Comarcas Agrarias",
+    "bloque_tematico": "Agricultura",
+    "subtema": "Comarcalización agraria",
+    "proveedor": "MAPA",
+    "tipo": "WMS",
+    "url": "https://wms.mapama.gob.es/sig/Agricultura/ComarcasAgrarias",
+    "capabilities_url": "https://wms.mapama.gob.es/sig/Agricultura/ComarcasAgrarias?request=GetCapabilities&service=WMS",
+    "formato": "",
+    "inspire": "Agricultural and Aquaculture Facilities - AF",
+    "notas": "Delimitación de comarcas agrarias a nivel nacional. Útil como capa de contexto territorial supramunicipal para análisis agrarios. No aporta detalle a escala municipal pero permite ubicar el municipio en su comarca agraria.",
+    "referencia": "https://idee.es/web/idee/segun-tipo-de-servicio",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 1,
+      "cobertura": 1,
+      "fuente": 2,
+      "tecnica": 1,
+      "total": 5
+    },
+    "prioridad": "P1 - Alta",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "mapa-zonas-regables-de-interes-nacional-wms",
+    "title": "Zonas Regables de Interés Nacional",
+    "bloque_tematico": "Agricultura",
+    "subtema": "Regadíos",
+    "proveedor": "MAPA",
+    "tipo": "WMS",
+    "url": "https://wms.mapama.gob.es/sig/DesarrolloRural/Regadios/ZIN",
+    "capabilities_url": "https://wms.mapama.gob.es/sig/DesarrolloRural/Regadios/ZIN?request=GetCapabilities&service=WMS",
+    "formato": "",
+    "inspire": "Area Management/Restriction/Regulation Zones - AM",
+    "notas": "Visualización y consulta de zonas regables declaradas de interés nacional. Útil municipal para identificar superficie regable bajo planes estatales. Limitación: solo zonas de interés nacional,  no incluye regadíos privados.",
+    "referencia": "https://idee.es/web/idee/segun-tipo-de-servicio",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 1,
+      "cobertura": 1,
+      "fuente": 2,
+      "tecnica": 1,
+      "total": 5
+    },
+    "prioridad": "P1 - Alta",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "mapa-zonas-de-calidad-diferenciada-aceites-de-oliva-virgen-w",
+    "title": "Zonas de Calidad Diferenciada - Aceites de Oliva Virgen",
+    "bloque_tematico": "Agricultura",
+    "subtema": "Calidad diferenciada DOP/IGP",
+    "proveedor": "MAPA",
+    "tipo": "WMS",
+    "url": "https://wms.mapama.gob.es/sig/Alimentacion/CDAceiteOliva",
+    "capabilities_url": "https://wms.mapama.gob.es/sig/Alimentacion/CDAceiteOliva?request=GetCapabilities&service=WMS",
+    "formato": "",
+    "inspire": "Area Management/Restriction/Regulation Zones - AM",
+    "notas": "Visualización y consulta de zonas geográficas de la familia de productos Aceites de Oliva Virgen amparadas por DOP e IGP. Útil municipal para identificar pertenencia a DOP/IGP de aceite. Limitación: cobertura solo zonas donde el cultivo es pertinente",
+    "referencia": "https://idee.es/web/idee/segun-tipo-de-servicio",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 0,
+      "cobertura": 1,
+      "fuente": 2,
+      "tecnica": 1,
+      "total": 4
+    },
+    "prioridad": "P2 - Media",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "mapa-zonas-de-calidad-diferenciada-aceitunas-wms",
+    "title": "Zonas de Calidad Diferenciada - Aceitunas",
+    "bloque_tematico": "Agricultura",
+    "subtema": "Calidad diferenciada DOP/IGP",
+    "proveedor": "MAPA",
+    "tipo": "WMS",
+    "url": "https://wms.mapama.gob.es/sig/Alimentacion/CDAceitunas",
+    "capabilities_url": "https://wms.mapama.gob.es/sig/Alimentacion/CDAceitunas?request=GetCapabilities&service=WMS",
+    "formato": "",
+    "inspire": "Area Management/Restriction/Regulation Zones - AM",
+    "notas": "Visualización y consulta de zonas geográficas de la familia de productos Aceitunas amparadas por DOP e IGP. Útil municipal para identificar pertenencia a DOP/IGP de aceitunas. Limitación: cobertura solo zonas amparadas.",
+    "referencia": "https://idee.es/web/idee/segun-tipo-de-servicio",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 0,
+      "cobertura": 1,
+      "fuente": 2,
+      "tecnica": 1,
+      "total": 4
+    },
+    "prioridad": "P2 - Media",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "mapa-zonas-de-calidad-diferenciada-arroces-y-otros-cereales-",
+    "title": "Zonas de Calidad Diferenciada - Arroces y Otros Cereales",
+    "bloque_tematico": "Agricultura",
+    "subtema": "Calidad diferenciada DOP/IGP",
+    "proveedor": "MAPA",
+    "tipo": "WMS",
+    "url": "https://wms.mapama.gob.es/sig/Alimentacion/CDArroces",
+    "capabilities_url": "https://wms.mapama.gob.es/sig/Alimentacion/CDArroces?request=GetCapabilities&service=WMS",
+    "formato": "",
+    "inspire": "Area Management/Restriction/Regulation Zones - AM",
+    "notas": "Visualización y consulta de zonas geográficas DOP/IGP de Arroces y Otros Cereales. Útil municipal para identificar pertenencia a figuras de calidad. Limitación: cobertura solo zonas amparadas.",
+    "referencia": "https://idee.es/web/idee/segun-tipo-de-servicio",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 0,
+      "cobertura": 1,
+      "fuente": 2,
+      "tecnica": 1,
+      "total": 4
+    },
+    "prioridad": "P2 - Media",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "mapa-zonas-de-calidad-diferenciada-bebidas-espirituosas-wms",
+    "title": "Zonas de Calidad Diferenciada - Bebidas Espirituosas",
+    "bloque_tematico": "Agricultura",
+    "subtema": "Calidad diferenciada DOP/IGP",
+    "proveedor": "MAPA",
+    "tipo": "WMS",
+    "url": "https://wms.mapama.gob.es/sig/Alimentacion/CDBebidasEspirituosas",
+    "capabilities_url": "https://wms.mapama.gob.es/sig/Alimentacion/CDBebidasEspirituosas?request=GetCapabilities&service=WMS",
+    "formato": "",
+    "inspire": "Area Management/Restriction/Regulation Zones - AM",
+    "notas": "Visualización y consulta de zonas geográficas DOP/IGP de Bebidas Espirituosas. Útil municipal para identificar pertenencia a IG protegidas. Limitación: cobertura solo zonas amparadas.",
+    "referencia": "https://idee.es/web/idee/segun-tipo-de-servicio",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 0,
+      "cobertura": 1,
+      "fuente": 2,
+      "tecnica": 1,
+      "total": 4
+    },
+    "prioridad": "P2 - Media",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "mapa-zonas-de-calidad-diferenciada-carnes-frescas-wms",
+    "title": "Zonas de Calidad Diferenciada - Carnes Frescas",
+    "bloque_tematico": "Agricultura",
+    "subtema": "Calidad diferenciada DOP/IGP",
+    "proveedor": "MAPA",
+    "tipo": "WMS",
+    "url": "https://wms.mapama.gob.es/sig/Alimentacion/CDCarnesFrescas",
+    "capabilities_url": "https://wms.mapama.gob.es/sig/Alimentacion/CDCarnesFrescas?request=GetCapabilities&service=WMS",
+    "formato": "",
+    "inspire": "Area Management/Restriction/Regulation Zones - AM",
+    "notas": "Visualización y consulta de zonas geográficas DOP/IGP de Carnes Frescas. Útil municipal para identificar pertenencia a figuras de calidad. Limitación: cobertura solo zonas amparadas.",
+    "referencia": "https://idee.es/web/idee/segun-tipo-de-servicio",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 0,
+      "cobertura": 1,
+      "fuente": 2,
+      "tecnica": 1,
+      "total": 4
+    },
+    "prioridad": "P2 - Media",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "mapa-zonas-de-calidad-diferenciada-condimentos-y-especias-wm",
+    "title": "Zonas de Calidad Diferenciada - Condimentos y Especias",
+    "bloque_tematico": "Agricultura",
+    "subtema": "Calidad diferenciada DOP/IGP",
+    "proveedor": "MAPA",
+    "tipo": "WMS",
+    "url": "https://wms.mapama.gob.es/sig/Alimentacion/CDCondimentosEspecias",
+    "capabilities_url": "https://wms.mapama.gob.es/sig/Alimentacion/CDCondimentosEspecias?request=GetCapabilities&service=WMS",
+    "formato": "",
+    "inspire": "Area Management/Restriction/Regulation Zones - AM",
+    "notas": "Visualización y consulta de las zonas geográficas disponibles para la familia de productos Condimentos y Especias amparadas por DOP e IGP. Útil municipal para identificar pertenencia. Limitación: cobertura solo zonas amparadas.",
+    "referencia": "https://idee.es/web/idee/segun-tipo-de-servicio",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 0,
+      "cobertura": 1,
+      "fuente": 2,
+      "tecnica": 1,
+      "total": 4
+    },
+    "prioridad": "P2 - Media",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "mapa-zonas-de-calidad-diferenciada-embutidos-y-productos-car",
+    "title": "Zonas de Calidad Diferenciada - Embutidos y Productos Cárnicos",
+    "bloque_tematico": "Agricultura",
+    "subtema": "Calidad diferenciada DOP/IGP",
+    "proveedor": "MAPA",
+    "tipo": "WMS",
+    "url": "https://wms.mapama.gob.es/sig/Alimentacion/CDEmbutidos",
+    "capabilities_url": "https://wms.mapama.gob.es/sig/Alimentacion/CDEmbutidos?request=GetCapabilities&service=WMS",
+    "formato": "",
+    "inspire": "Area Management/Restriction/Regulation Zones - AM",
+    "notas": "Visualización y consulta de zonas geográficas DOP/IGP de Embutidos y Productos Cárnicos. Útil municipal para identificar pertenencia. Limitación: cobertura solo zonas amparadas.",
+    "referencia": "https://idee.es/web/idee/segun-tipo-de-servicio",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 0,
+      "cobertura": 1,
+      "fuente": 2,
+      "tecnica": 1,
+      "total": 4
+    },
+    "prioridad": "P2 - Media",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "mapa-zonas-de-calidad-diferenciada-frutas-wms",
+    "title": "Zonas de Calidad Diferenciada - Frutas",
+    "bloque_tematico": "Agricultura",
+    "subtema": "Calidad diferenciada DOP/IGP",
+    "proveedor": "MAPA",
+    "tipo": "WMS",
+    "url": "https://wms.mapama.gob.es/sig/Alimentacion/CDFrutas",
+    "capabilities_url": "https://wms.mapama.gob.es/sig/Alimentacion/CDFrutas?request=GetCapabilities&service=WMS",
+    "formato": "",
+    "inspire": "Area Management/Restriction/Regulation Zones - AM",
+    "notas": "Visualización y consulta de zonas geográficas DOP/IGP de Frutas. Útil municipal para identificar pertenencia. Limitación: cobertura solo zonas amparadas.",
+    "referencia": "https://idee.es/web/idee/segun-tipo-de-servicio",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 0,
+      "cobertura": 1,
+      "fuente": 2,
+      "tecnica": 1,
+      "total": 4
+    },
+    "prioridad": "P2 - Media",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "mapa-zonas-de-calidad-diferenciada-hortalizas-y-verduras-wms",
+    "title": "Zonas de Calidad Diferenciada - Hortalizas y Verduras",
+    "bloque_tematico": "Agricultura",
+    "subtema": "Calidad diferenciada DOP/IGP",
+    "proveedor": "MAPA",
+    "tipo": "WMS",
+    "url": "https://wms.mapama.gob.es/sig/Alimentacion/CDHortalizas",
+    "capabilities_url": "https://wms.mapama.gob.es/sig/Alimentacion/CDHortalizas?request=GetCapabilities&service=WMS",
+    "formato": "",
+    "inspire": "Area Management/Restriction/Regulation Zones - AM",
+    "notas": "Visualización y consulta de las zonas geográficas disponibles para la familia de productos Hortalizas amparadas por DOP e IGP. Útil municipal para identificar pertenencia. Limitación: cobertura solo zonas amparadas.",
+    "referencia": "https://idee.es/web/idee/segun-tipo-de-servicio",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 0,
+      "cobertura": 1,
+      "fuente": 2,
+      "tecnica": 1,
+      "total": 4
+    },
+    "prioridad": "P2 - Media",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "mapa-zonas-de-calidad-diferenciada-jamones-wms",
+    "title": "Zonas de Calidad Diferenciada - Jamones",
+    "bloque_tematico": "Agricultura",
+    "subtema": "Calidad diferenciada DOP/IGP",
+    "proveedor": "MAPA",
+    "tipo": "WMS",
+    "url": "https://wms.mapama.gob.es/sig/Alimentacion/CDJamones",
+    "capabilities_url": "https://wms.mapama.gob.es/sig/Alimentacion/CDJamones?request=GetCapabilities&service=WMS",
+    "formato": "",
+    "inspire": "Area Management/Restriction/Regulation Zones - AM",
+    "notas": "Visualización y consulta de las zonas geográficas disponibles para la familia de productos Jamones amparadas por DOP e IGP. Útil municipal para identificar pertenencia. Limitación: cobertura solo zonas amparadas.",
+    "referencia": "https://idee.es/web/idee/segun-tipo-de-servicio",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 0,
+      "cobertura": 1,
+      "fuente": 2,
+      "tecnica": 1,
+      "total": 4
+    },
+    "prioridad": "P2 - Media",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "mapa-zonas-de-calidad-diferenciada-legumbres-wms",
+    "title": "Zonas de Calidad Diferenciada - Legumbres",
+    "bloque_tematico": "Agricultura",
+    "subtema": "Calidad diferenciada DOP/IGP",
+    "proveedor": "MAPA",
+    "tipo": "WMS",
+    "url": "https://wms.mapama.gob.es/sig/Alimentacion/CDLegumbres",
+    "capabilities_url": "https://wms.mapama.gob.es/sig/Alimentacion/CDLegumbres?request=GetCapabilities&service=WMS",
+    "formato": "",
+    "inspire": "Area Management/Restriction/Regulation Zones - AM",
+    "notas": "Visualización y consulta de las zonas geográficas disponibles para la familia de productos Legumbres amparadas por DOP e IGP. Útil municipal para identificar pertenencia. Limitación: cobertura solo zonas amparadas.",
+    "referencia": "https://idee.es/web/idee/segun-tipo-de-servicio",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 0,
+      "cobertura": 1,
+      "fuente": 2,
+      "tecnica": 1,
+      "total": 4
+    },
+    "prioridad": "P2 - Media",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "mapa-zonas-de-calidad-diferenciada-mieles-wms",
+    "title": "Zonas de Calidad Diferenciada - Mieles",
+    "bloque_tematico": "Agricultura",
+    "subtema": "Calidad diferenciada DOP/IGP",
+    "proveedor": "MAPA",
+    "tipo": "WMS",
+    "url": "https://wms.mapama.gob.es/sig/Alimentacion/CDMieles",
+    "capabilities_url": "https://wms.mapama.gob.es/sig/Alimentacion/CDMieles?request=GetCapabilities&service=WMS",
+    "formato": "",
+    "inspire": "Area Management/Restriction/Regulation Zones - AM",
+    "notas": "Visualización y consulta de zonas geográficas DOP/IGP de Mieles. Útil municipal para identificar pertenencia. Limitación: cobertura solo zonas amparadas.",
+    "referencia": "https://idee.es/web/idee/segun-tipo-de-servicio",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 0,
+      "cobertura": 1,
+      "fuente": 2,
+      "tecnica": 1,
+      "total": 4
+    },
+    "prioridad": "P2 - Media",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "mapa-zonas-de-calidad-diferenciada-pescados-moluscos-y-crust",
+    "title": "Zonas de Calidad Diferenciada - Pescados Moluscos y Crustáceos",
+    "bloque_tematico": "Agricultura",
+    "subtema": "Calidad diferenciada DOP/IGP",
+    "proveedor": "MAPA",
+    "tipo": "WMS",
+    "url": "https://wms.mapama.gob.es/sig/Alimentacion/CDPescado",
+    "capabilities_url": "https://wms.mapama.gob.es/sig/Alimentacion/CDPescado?request=GetCapabilities&service=WMS",
+    "formato": "",
+    "inspire": "Area Management/Restriction/Regulation Zones - AM",
+    "notas": "Visualización y consulta de zonas geográficas DOP/IGP de Pescados Moluscos y Crustáceos. Útil municipal en zonas costeras para identificar pertenencia. Limitación: cobertura solo zonas amparadas.",
+    "referencia": "https://idee.es/web/idee/segun-tipo-de-servicio",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 0,
+      "cobertura": 1,
+      "fuente": 2,
+      "tecnica": 1,
+      "total": 4
+    },
+    "prioridad": "P2 - Media",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "mapa-zonas-de-calidad-diferenciada-productos-de-panaderia-pa",
+    "title": "Zonas de Calidad Diferenciada - Productos de Panadería Pastelería Repostería",
+    "bloque_tematico": "Agricultura",
+    "subtema": "Calidad diferenciada DOP/IGP",
+    "proveedor": "MAPA",
+    "tipo": "WMS",
+    "url": "https://wms.mapama.gob.es/sig/Alimentacion/CDPanaderia",
+    "capabilities_url": "https://wms.mapama.gob.es/sig/Alimentacion/CDPanaderia?request=GetCapabilities&service=WMS",
+    "formato": "",
+    "inspire": "Area Management/Restriction/Regulation Zones - AM",
+    "notas": "Visualización y consulta de zonas geográficas DOP/IGP de Productos de Panadería, Pastelería y Repostería. Útil municipal para identificar pertenencia. Limitación: cobertura solo zonas amparadas.",
+    "referencia": "https://idee.es/web/idee/segun-tipo-de-servicio",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 0,
+      "cobertura": 1,
+      "fuente": 2,
+      "tecnica": 1,
+      "total": 4
+    },
+    "prioridad": "P2 - Media",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "mapa-zonas-de-calidad-diferenciada-quesos-y-mantequillas-wms",
+    "title": "Zonas de Calidad Diferenciada - Quesos y Mantequillas",
+    "bloque_tematico": "Agricultura",
+    "subtema": "Calidad diferenciada DOP/IGP",
+    "proveedor": "MAPA",
+    "tipo": "WMS",
+    "url": "https://wms.mapama.gob.es/sig/Alimentacion/CDQuesos",
+    "capabilities_url": "https://wms.mapama.gob.es/sig/Alimentacion/CDQuesos?request=GetCapabilities&service=WMS",
+    "formato": "",
+    "inspire": "Area Management/Restriction/Regulation Zones - AM",
+    "notas": "Visualización y consulta de las zonas geográficas disponibles para la familia de productos Quesos y Mantequillas amparadas por DOP e IGP. Útil municipal para identificar pertenencia. Limitación: cobertura solo zonas amparadas.",
+    "referencia": "https://idee.es/web/idee/segun-tipo-de-servicio",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 0,
+      "cobertura": 1,
+      "fuente": 2,
+      "tecnica": 1,
+      "total": 4
+    },
+    "prioridad": "P2 - Media",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "mapa-zonas-de-calidad-diferenciada-sidra-wms",
+    "title": "Zonas de Calidad Diferenciada - Sidra",
+    "bloque_tematico": "Agricultura",
+    "subtema": "Calidad diferenciada DOP/IGP",
+    "proveedor": "MAPA",
+    "tipo": "WMS",
+    "url": "https://wms.mapama.gob.es/sig/Alimentacion/CDSidra",
+    "capabilities_url": "https://wms.mapama.gob.es/sig/Alimentacion/CDSidra?request=GetCapabilities&service=WMS",
+    "formato": "",
+    "inspire": "Area Management/Restriction/Regulation Zones - AM",
+    "notas": "Visualización y consulta de las zonas geográficas disponibles para la familia de productos Sidra amparadas por DOP e IGP. Útil municipal para identificar pertenencia. Limitación: cobertura solo zonas amparadas.",
+    "referencia": "https://idee.es/web/idee/segun-tipo-de-servicio",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 0,
+      "cobertura": 1,
+      "fuente": 2,
+      "tecnica": 1,
+      "total": 4
+    },
+    "prioridad": "P2 - Media",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "mapa-zonas-de-calidad-diferenciada-vinagres-wms",
+    "title": "Zonas de Calidad Diferenciada - Vinagres",
+    "bloque_tematico": "Agricultura",
+    "subtema": "Calidad diferenciada DOP/IGP",
+    "proveedor": "MAPA",
+    "tipo": "WMS",
+    "url": "https://wms.mapama.gob.es/sig/Alimentacion/CDVinagres",
+    "capabilities_url": "https://wms.mapama.gob.es/sig/Alimentacion/CDVinagres?request=GetCapabilities&service=WMS",
+    "formato": "",
+    "inspire": "Area Management/Restriction/Regulation Zones - AM",
+    "notas": "Visualización y consulta de las zonas geográficas disponibles para la familia de productos Vinagres amparadas por DOP e IGP. Útil municipal para identificar pertenencia. Limitación: cobertura solo zonas amparadas.",
+    "referencia": "https://idee.es/web/idee/segun-tipo-de-servicio",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 0,
+      "cobertura": 1,
+      "fuente": 2,
+      "tecnica": 1,
+      "total": 4
+    },
+    "prioridad": "P2 - Media",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "ign-cnig-base-topografica-nacional-xyz",
+    "title": "Base Topográfica Nacional",
+    "bloque_tematico": "Cartografia base e imagenes",
+    "subtema": "Base topográfica",
+    "proveedor": "IGN / CNIG",
+    "tipo": "XYZ",
+    "url": "https://www.ign.es/wmts/primera-edicion-mtn",
+    "capabilities_url": "na",
+    "formato": "",
+    "inspire": "No aplica estrictamente / cartografía histórica",
+    "notas": "Útil para análisis histórico-territorial y comparación con cartografía actual. No es fuente municipal directa.",
+    "referencia": "https://www.ign.es/web/ide-area-nodo-ide-ign",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 2,
+      "cobertura": 2,
+      "fuente": 2,
+      "tecnica": 2,
+      "total": 8
+    },
+    "prioridad": "P0 - MVP",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "ign-cnig-cartografia-raster-de-espana-del-ign-wmts",
+    "title": "Cartografía Ráster de España del IGN",
+    "bloque_tematico": "Cartografia base e imagenes",
+    "subtema": "Cartografía raster",
+    "proveedor": "IGN / CNIG",
+    "tipo": "WMTS",
+    "url": "https://www.ign.es/wmts/mapa-raster",
+    "capabilities_url": "https://www.ign.es/wmts/mapa-raster?request=GetCapabilities&service=WMTS",
+    "formato": "",
+    "inspire": "Base cartográfica",
+    "notas": "Muy útil como capa base general para carga más rápida",
+    "referencia": "Infraestructuras de Datos Espaciales - Instituto Geográfico Nacional",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 2,
+      "cobertura": 2,
+      "fuente": 2,
+      "tecnica": 2,
+      "total": 8
+    },
+    "prioridad": "P0 - MVP",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "ign-cnig-cartografia-raster-de-espana-del-ign-xyz",
+    "title": "Cartografía Ráster de España del IGN",
+    "bloque_tematico": "Cartografia base e imagenes",
+    "subtema": "Cartografía raster",
+    "proveedor": "IGN / CNIG",
+    "tipo": "XYZ",
+    "url": "https://tms-mapa-raster.ign.es/1.0.0/mapa-raster/{z}/{x}/{-y}.jpeg",
+    "capabilities_url": "na",
+    "formato": "",
+    "inspire": "Base cartográfica",
+    "notas": "Muy útil como capa base general para carga más rápida",
+    "referencia": "Infraestructuras de Datos Espaciales - Instituto Geográfico Nacional",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 2,
+      "cobertura": 2,
+      "fuente": 2,
+      "tecnica": 2,
+      "total": 8
+    },
+    "prioridad": "P0 - MVP",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "ign-cnig-idee-mapa-base-de-espana-ignbasetodo-xyz-raster-til",
+    "title": "Mapa Base de España - IGNBaseTodo",
+    "bloque_tematico": "Cartografia base e imagenes",
+    "subtema": "Mapa base completo",
+    "proveedor": "IGN / CNIG / IDEE",
+    "tipo": "XYZ raster tiles",
+    "url": "https://tms-ign-base.idee.es/1.0.0/IGNBaseTodo/{z}/{x}/{-y}.jpeg",
+    "capabilities_url": "na",
+    "formato": "",
+    "inspire": "Nombres geográficos; unidades administrativas; redes de transporte; hidrografía; elevación",
+    "notas": "Mapa base ráster completo para visualización; usa coordenada {-y}; requiere cliente compatible con TMS/XYZ invertido; atribución IGN-CNIG/IDEE obligatoria",
+    "referencia": "https://www.ign.es/web/ide-area-nodo-ide-ign | https://www.ign.es/web/ign/portal/politica-datos",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 2,
+      "cobertura": 2,
+      "fuente": 2,
+      "tecnica": 2,
+      "total": 8
+    },
+    "prioridad": "P0 - MVP",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "ign-cnig-idee-mapa-base-de-espana-ignbaseorto-xyztms-raster-",
+    "title": "Mapa Base de España - IGNBaseOrto",
+    "bloque_tematico": "Cartografia base e imagenes",
+    "subtema": "Mapa base con ortofoto",
+    "proveedor": "IGN / CNIG / IDEE",
+    "tipo": "XYZ/TMS raster tiles",
+    "url": "https://tms-ign-base.idee.es/1.0.0/IGNBaseOrto/{z}/{x}/{-y}.png",
+    "capabilities_url": "na",
+    "formato": "",
+    "inspire": "Ortoimágenes; nombres geográficos; redes de transporte; unidades administrativas",
+    "notas": "Mapa base ráster orientado a visualización sobre ortofoto; usa coordenada {-y}; requiere cliente compatible con TMS/XYZ invertido; atribución IGN-CNIG/IDEE obligatoria",
+    "referencia": "https://www.ign.es/web/ide-area-nodo-ide-ign | https://www.ign.es/web/ign/portal/politica-datos",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 2,
+      "cobertura": 2,
+      "fuente": 2,
+      "tecnica": 2,
+      "total": 8
+    },
+    "prioridad": "P0 - MVP",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "ign-cnig-idee-mapa-base-de-espana-ignbasesimplificado-xyztms",
+    "title": "Mapa Base de España - IGNBaseSimplificado",
+    "bloque_tematico": "Cartografia base e imagenes",
+    "subtema": "Mapa base simplificado",
+    "proveedor": "IGN / CNIG / IDEE",
+    "tipo": "XYZ/TMS raster tiles",
+    "url": "https://tms-ign-base.idee.es/1.0.0/IGNBaseSimplificado/{z}/{x}/{-y}.png",
+    "capabilities_url": "na",
+    "formato": "",
+    "inspire": "Nombres geográficos; unidades administrativas; redes de transporte; hidrografía",
+    "notas": "Mapa base ráster simplificado para visualización; usa coordenada {-y}; requiere cliente compatible con TMS/XYZ invertido; atribución IGN-CNIG/IDEE obligatoria",
+    "referencia": "https://www.ign.es/web/ide-area-nodo-ide-ign | https://www.ign.es/web/ign/portal/politica-datos",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 2,
+      "cobertura": 2,
+      "fuente": 2,
+      "tecnica": 2,
+      "total": 8
+    },
+    "prioridad": "P0 - MVP",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "ign-cnig-mapa-base-de-espana-wmts",
+    "title": "Mapa Base de España",
+    "bloque_tematico": "Cartografia base e imagenes",
+    "subtema": "Mapa base vectorial",
+    "proveedor": "IGN / CNIG",
+    "tipo": "WMTS",
+    "url": "https://www.ign.es/wmts/ign-base",
+    "capabilities_url": "https://www.ign.es/wmts/ign-base?request=GetCapabilities&service=WMTS",
+    "formato": "",
+    "inspire": "Base cartográfica",
+    "notas": "Teselas vectoriales",
+    "referencia": "Infraestructuras de Datos Espaciales - Instituto Geográfico Nacional",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 2,
+      "cobertura": 2,
+      "fuente": 2,
+      "tecnica": 2,
+      "total": 8
+    },
+    "prioridad": "P0 - MVP",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "sistema-cartografico-nacional-idee-ign-cnig-mapa-ciudadano-x",
+    "title": "Mapa Ciudadano",
+    "bloque_tematico": "Cartografia base e imagenes",
+    "subtema": "Mapa base vectorial",
+    "proveedor": "Sistema Cartográfico Nacional / IDEE / IGN-CNIG",
+    "tipo": "XYZ vector tiles / MVT",
+    "url": "https://vt-mapabase.idee.es/1.0.0/mapabase/{z}/{x}/{y}.pbf",
+    "capabilities_url": "na",
+    "formato": "",
+    "inspire": "Varios: unidades administrativas, redes de transporte, hidrografía, nombres geográficos, elevación",
+    "notas": "Servicio de teselas vectoriales para visualización; requiere cliente compatible MVT y estilo; atribución IGN-CNIG/SCN; no es un endpoint de descarga masiva ni de consulta alfanumérica",
+    "referencia": "https://www.ign.es/web/ide-area-nodo-ide-ign",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 2,
+      "cobertura": 2,
+      "fuente": 2,
+      "tecnica": 2,
+      "total": 8
+    },
+    "prioridad": "P0 - MVP",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "ign-cnig-idee-modelo-digital-de-elevaciones-de-espana-xyz-ra",
+    "title": "Modelo Digital de Elevaciones de España",
+    "bloque_tematico": "Cartografia base e imagenes",
+    "subtema": "Modelos digitales de elevaciones",
+    "proveedor": "IGN-CNIG / IDEE",
+    "tipo": "XYZ raster tiles",
+    "url": "https://xyz-mdt.idee.es/1.0.0/raster-dem/{z}/{x}/{y}.png",
+    "capabilities_url": "na",
+    "formato": "",
+    "inspire": "Elevation - EL",
+    "notas": "Servicio ráster de visualización derivado de modelos digitales de elevación; usa esquema XYZ estándar con {y}; no sustituye a la descarga de MDT/MDE para análisis cuantitativo; atribución IGN-CNIG obligatoria",
+    "referencia": "https://www.ign.es/web/ide-area-nodo-ide-ign",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 2,
+      "cobertura": 2,
+      "fuente": 2,
+      "tecnica": 2,
+      "total": 8
+    },
+    "prioridad": "P0 - MVP",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "ign-cnig-modelo-digital-del-terreno-de-espana-wmts",
+    "title": "Modelo Digital del Terreno de España",
+    "bloque_tematico": "Cartografia base e imagenes",
+    "subtema": "Modelos digitales de elevaciones",
+    "proveedor": "IGN / CNIG",
+    "tipo": "WMTS",
+    "url": "https://servicios.idee.es/wmts/mdt",
+    "capabilities_url": "https://wmts-mapa-lidar.idee.es/lidar?request=GetCapabilities&service=WMTS",
+    "formato": "",
+    "inspire": "Elevation - EL",
+    "notas": "Útil para altitud, relieve, sombreado, pendientes y análisis territorial. El WMS sirve para visualización; GetFeature disponible. Para análisis se requiere MDT descargable o WCS/API Coverages.",
+    "referencia": "https://www.ign.es/web/ide-area-nodo-ide-ign",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 2,
+      "cobertura": 2,
+      "fuente": 2,
+      "tecnica": 2,
+      "total": 8
+    },
+    "prioridad": "P0 - MVP",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "ign-cnig-pnoa-ortoimagenes-de-espana-satelite-sentinel2-y-or",
+    "title": "Ortoimágenes de España (satélite Sentinel2 y ortofotos del PNOA máxima actualidad y ortoimágenes verdaderas núcleos urbanos)",
+    "bloque_tematico": "Cartografia base e imagenes",
+    "subtema": "Ortofotos",
+    "proveedor": "IGN / CNIG / PNOA",
+    "tipo": "WMTS",
+    "url": "https://www.ign.es/wmts/pnoa-ma",
+    "capabilities_url": "https://www.ign.es/wmts/pnoa-ma?request=GetCapabilities&service=WMTS",
+    "formato": "",
+    "inspire": "Orthoimagery - OI",
+    "notas": "Ortoimagen, zonas de delimitación, imagen de fondo",
+    "referencia": "https://www.ign.es/web/ide-area-nodo-ide-ign",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 2,
+      "cobertura": 2,
+      "fuente": 2,
+      "tecnica": 2,
+      "total": 8
+    },
+    "prioridad": "P0 - MVP",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "ign-cnig-idee-pnoa-ortoimagenes-ma-de-espana-sentinel2-y-pno",
+    "title": "Ortoimágenes MA de España - Sentinel2 y PNOA MA",
+    "bloque_tematico": "Cartografia base e imagenes",
+    "subtema": "Ortofotos",
+    "proveedor": "IGN-CNIG / IDEE / PNOA",
+    "tipo": "XYZ/TMS raster tiles",
+    "url": "https://tms-pnoa-ma.idee.es/1.0.0/pnoa-ma/{z}/{x}/{-y}.jpeg",
+    "capabilities_url": "na",
+    "formato": "",
+    "inspire": "Orthoimagery - OI",
+    "notas": "Servicio de visualización de ortoimágenes de máxima actualidad; combina disponibilidad de PNOA MA y Sentinel-2 según escala/zona; usa coordenada {-y}; atribución IGN-CNIG/PNOA obligatoria",
+    "referencia": "https://www.ign.es/web/ide-area-nodo-ide-ign",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 2,
+      "cobertura": 2,
+      "fuente": 2,
+      "tecnica": 2,
+      "total": 8
+    },
+    "prioridad": "P0 - MVP",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "ign-cnig-cartografia-raster-de-espana-del-ign-wms",
+    "title": "Cartografía Ráster de España del IGN",
+    "bloque_tematico": "Cartografia base e imagenes",
+    "subtema": "Cartografía raster",
+    "proveedor": "IGN / CNIG",
+    "tipo": "WMS",
+    "url": "https://www.ign.es/wms-inspire/mapa-raster",
+    "capabilities_url": "ign.es/wms-inspire/mapa-raster?request=GetCapabilities&service=WMS",
+    "formato": "",
+    "inspire": "Base cartográfica",
+    "notas": "Muy útil como capa base general.",
+    "referencia": "Infraestructuras de Datos Espaciales - Instituto Geográfico Nacional",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 2,
+      "cobertura": 2,
+      "fuente": 2,
+      "tecnica": 1,
+      "total": 7
+    },
+    "prioridad": "P0 - MVP",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "ign-cnig-mapa-base-de-espana-wms-descarga",
+    "title": "Mapa Base de España",
+    "bloque_tematico": "Cartografia base e imagenes",
+    "subtema": "Mapa base vectorial",
+    "proveedor": "IGN / CNIG",
+    "tipo": "WMS / Descarga",
+    "url": "https://www.ign.es/wms-inspire/ign-base",
+    "capabilities_url": "ign.es/wms-inspire/ign-base?request=GetCapabilities&service=WMS",
+    "formato": "",
+    "inspire": "Base cartográfica",
+    "notas": "Servicio nacional de teselas vectoriales. No permite consulta directa por municipio; la adaptación municipal se realiza centrando el visor en el bbox/geometría del municipio y superponiendo su límite administrativo",
+    "referencia": "Infraestructuras de Datos Espaciales - Instituto Geográfico Nacional",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 2,
+      "cobertura": 2,
+      "fuente": 2,
+      "tecnica": 1,
+      "total": 7
+    },
+    "prioridad": "P0 - MVP",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "ign-cnig-modelo-digital-del-terreno-de-espana-wms",
+    "title": "Modelo Digital del Terreno de España",
+    "bloque_tematico": "Cartografia base e imagenes",
+    "subtema": "Modelos digitales de elevaciones",
+    "proveedor": "IGN / CNIG",
+    "tipo": "WMS",
+    "url": "https://servicios.idee.es/wms-inspire/mdt",
+    "capabilities_url": "https://servicios.idee.es/wms-inspire/mdt?request=GetCapabilities&service=WMS",
+    "formato": "",
+    "inspire": "Elevation - EL",
+    "notas": "Útil para altitud, relieve, sombreado, pendientes y análisis territorial. El WMS sirve para visualización; GetFeature disponible. Para análisis se requiere MDT descargable o WCS/API Coverages.",
+    "referencia": "https://www.ign.es/web/ide-area-nodo-ide-ign",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 2,
+      "cobertura": 2,
+      "fuente": 2,
+      "tecnica": 1,
+      "total": 7
+    },
+    "prioridad": "P0 - MVP",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "ign-cnig-pnoa-ortoimagenes-de-espana-satelite-sentinel2-y-or-1",
+    "title": "Ortoimágenes de España (satélite Sentinel2 y ortofotos del PNOA máxima actualidad y ortoimágenes verdaderas núcleos urbanos)",
+    "bloque_tematico": "Cartografia base e imagenes",
+    "subtema": "Ortofotos",
+    "proveedor": "IGN / CNIG / PNOA",
+    "tipo": "WMS",
+    "url": "https://www.ign.es/wms-inspire/pnoa-ma",
+    "capabilities_url": "https://www.ign.es/wms-inspire/pnoa-ma?request=GetCapabilities&service=WMS",
+    "formato": "",
+    "inspire": "Orthoimagery - OI",
+    "notas": "Ortoimagen, zonas de delimitación, imagen de fondo",
+    "referencia": "https://www.ign.es/web/ide-area-nodo-ide-ign",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 2,
+      "cobertura": 2,
+      "fuente": 2,
+      "tecnica": 1,
+      "total": 7
+    },
+    "prioridad": "P0 - MVP",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "ign-cnig-idee-relieve-del-terreno-de-espana-mdt-25-m-xyztms-",
+    "title": "Relieve del terreno de España - MDT 25 m",
+    "bloque_tematico": "Cartografia base e imagenes",
+    "subtema": "Relieve del terreno",
+    "proveedor": "IGN-CNIG / IDEE",
+    "tipo": "XYZ/TMS raster tiles",
+    "url": "https://tms-relieve.idee.es/1.0.0/relieve/{z}/{x}/{-y}.jpeg",
+    "capabilities_url": "na",
+    "formato": "",
+    "inspire": "Elevación",
+    "notas": "Servicio ráster de visualización del relieve derivado del MDT con paso de malla 25 m; usa coordenada {-y}; adecuado como capa de contexto, no como dato analítico de elevación; atribución IGN-CNIG obligatoria",
+    "referencia": "https://www.ign.es/web/ide-area-nodo-ide-ign",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 1,
+      "cobertura": 2,
+      "fuente": 2,
+      "tecnica": 2,
+      "total": 7
+    },
+    "prioridad": "P0 - MVP",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "idee-modelo-digital-de-superficies-lidar-de-espana-wmts-desc",
+    "title": "Modelo Digital de Superficies LiDAR de España",
+    "bloque_tematico": "Cartografia base e imagenes",
+    "subtema": "Modelos digitales de elevaciones",
+    "proveedor": "IDEE",
+    "tipo": "WMTS / Descarga",
+    "url": "https://wmts-mapa-lidar.idee.es/lidar",
+    "capabilities_url": "https://wmts-mapa-lidar.idee.es/lidar?request=GetCapabilities&service=WMTS",
+    "formato": "",
+    "inspire": "Elevaciones",
+    "notas": "A partir de las nubes de puntos LiDAR correspondientes a la primera cobertura del proyecto PNOA-LiDAR",
+    "referencia": "https://www.ign.es/web/ide-area-nodo-ide-ign",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 1,
+      "cobertura": 2,
+      "fuente": 2,
+      "tecnica": 1,
+      "total": 6
+    },
+    "prioridad": "P1 - Alta",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "ign-cnig-pnoa-ortofotos-historicas-de-espana-y-pnoa-anual-wm",
+    "title": "Ortofotos históricas de España y PNOA anual",
+    "bloque_tematico": "Cartografia base e imagenes",
+    "subtema": "Ortofotos",
+    "proveedor": "IGN / CNIG / PNOA",
+    "tipo": "WMS",
+    "url": "https://www.ign.es/wms/pnoa-historico",
+    "capabilities_url": "https://www.ign.es/wms/pnoa-historico?request=GetCapabilities&service=WMS",
+    "formato": "",
+    "inspire": "Orthoimagery - OI",
+    "notas": "Puede no estar disponible homogéneamente en todo el territorio.",
+    "referencia": "https://www.ign.es/web/ide-area-nodo-ide-ign",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 1,
+      "cobertura": 2,
+      "fuente": 2,
+      "tecnica": 1,
+      "total": 6
+    },
+    "prioridad": "P1 - Alta",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "ign-cnig-idee-modelo-digital-de-pendientes-de-espana-ogc-wcs",
+    "title": "Modelo Digital de Pendientes de España",
+    "bloque_tematico": "Cartografia base e imagenes",
+    "subtema": "Pendientes",
+    "proveedor": "IGN-CNIG / IDEE",
+    "tipo": "OGC WCS 2.0.1",
+    "url": "https://wcs-pendientes.idee.es/pendientes",
+    "capabilities_url": "https://wcs-pendientes.idee.es/pendientes?request=GetCapabilities&service=WCS&version=2.0.1",
+    "formato": "",
+    "inspire": "Elevation - EL",
+    "notas": "Servicio de descarga de coberturas ráster. El MDP05 tiene paso de malla de 5 m y almacena el valor de la pendiente en grados sexagesimales; derivado del MDT-LiDAR de 1ª cobertura. Requiere cliente compatible WCS; no es un servicio vectorial ni de consulta alfanumérica municipal",
+    "referencia": "https://www.ign.es/web/ide-area-nodo-ide-ign",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 1,
+      "cobertura": 2,
+      "fuente": 2,
+      "tecnica": 1,
+      "total": 6
+    },
+    "prioridad": "P1 - Alta",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "ign-cnig-modelo-digital-de-pendientes-mdp05wms-wms",
+    "title": "Modelo Digital de Pendientes MDP05WMS",
+    "bloque_tematico": "Cartografia base e imagenes",
+    "subtema": "Pendientes",
+    "proveedor": "IGN / CNIG",
+    "tipo": "WMS",
+    "url": "https://wms-pendientes.idee.es/pendientes",
+    "capabilities_url": "https://wms-pendientes.idee.es/pendientes?request=GetCapabilities&service=WMS",
+    "formato": "",
+    "inspire": "Elevation - EL",
+    "notas": "Útil para análisis territorial, accesibilidad, riesgos y planeamiento. Como WMS es visual; para análisis cuantitativo se requiere raster o servicio de coberturas asociado.",
+    "referencia": "https://www.ign.es/web/ide-area-nodo-ide-ign",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 1,
+      "cobertura": 2,
+      "fuente": 2,
+      "tecnica": 1,
+      "total": 6
+    },
+    "prioridad": "P1 - Alta",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "ign-cnig-minutas-del-mapa-topografico-nacional-150000-catast",
+    "title": "Minutas del Mapa Topográfico Nacional 1:50.000 (catastrones) 1910-1970",
+    "bloque_tematico": "Cartografia base e imagenes",
+    "subtema": "Base topográfica",
+    "proveedor": "IGN / CNIG",
+    "tipo": "WMS",
+    "url": "https://www.ign.es/wms/primera-edicion-mtn",
+    "capabilities_url": "https://www.ign.es/wms/primera-edicion-mtn?request=GetCapabilities&service=WMS",
+    "formato": "",
+    "inspire": "No aplica estrictamente / cartografía histórica",
+    "notas": "Útil para análisis histórico-territorial y comparación con cartografía actual. No es fuente municipal directa.",
+    "referencia": "https://www.ign.es/web/ide-area-nodo-ide-ign",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 0,
+      "cobertura": 2,
+      "fuente": 2,
+      "tecnica": 1,
+      "total": 5
+    },
+    "prioridad": "P1 - Alta",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "ign-cnig-cuadriculas-cartograficas-wms",
+    "title": "Cuadrículas cartográficas",
+    "bloque_tematico": "Cartografia base e imagenes",
+    "subtema": "Cuadrículas cartográficas",
+    "proveedor": "IGN / CNIG",
+    "tipo": "WMS",
+    "url": "https://www.ign.es/wms-inspire/cuadriculas",
+    "capabilities_url": "ign.es/wms-inspire/cuadriculas?request=GetCapabilities&service=WMS",
+    "formato": "",
+    "inspire": "Geographical Grid Systems - GG",
+    "notas": "Útil para mostrar hojas, cuadrículas o marcos cartográficos de referencia. No es una fuente municipal directa.",
+    "referencia": "Infraestructuras de Datos Espaciales - Instituto Geográfico Nacional",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 0,
+      "cobertura": 2,
+      "fuente": 2,
+      "tecnica": 1,
+      "total": 5
+    },
+    "prioridad": "P1 - Alta",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "ign-cnig-fototeca-wms",
+    "title": "Fototeca",
+    "bloque_tematico": "Cartografia base e imagenes",
+    "subtema": "Fototeca / vuelos fotogramétricos históricos",
+    "proveedor": "IGN / CNIG",
+    "tipo": "WMS",
+    "url": "https://wms-fototeca.idee.es/fototeca",
+    "capabilities_url": "https://wms-fototeca.idee.es/fototeca?request=GetCapabilities&service=WMS",
+    "formato": "",
+    "inspire": "Orthoimagery - OI",
+    "notas": "Permite visualizar coberturas/vuelos históricos disponibles. La disponibilidad temporal y espacial puede variar según zona.",
+    "referencia": "https://www.ign.es/web/ide-area-nodo-ide-ign",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 0,
+      "cobertura": 2,
+      "fuente": 2,
+      "tecnica": 1,
+      "total": 5
+    },
+    "prioridad": "P1 - Alta",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "ign-cnig-idee-redes-geodesicas-del-ign-de-espana-wms",
+    "title": "Redes Geodésicas del IGN de España",
+    "bloque_tematico": "Cartografia base e imagenes",
+    "subtema": "Geodesia y sistemas de referencia",
+    "proveedor": "IGN / CNIG / IDEE",
+    "tipo": "WMS",
+    "url": "https://www.ign.es/wms-inspire/redes-geodesicas",
+    "capabilities_url": "https://www.ign.es/wms-inspire/redes-geodesicas?request=GetCapabilities&service=WMS",
+    "formato": "",
+    "inspire": "Coordinate Reference Systems - RS / Geographical Grid Systems - GG",
+    "notas": "Útil para aplicaciones técnicas, topografía y referencia geodésica. No suele ser prioritaria para un visor municipal generalista.",
+    "referencia": "https://www.ign.es/web/ide-area-nodo-ide-ign",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 0,
+      "cobertura": 2,
+      "fuente": 2,
+      "tecnica": 1,
+      "total": 5
+    },
+    "prioridad": "P1 - Alta",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "ign-cnig-mosaicos-de-satelite-historicos-de-espana-wms",
+    "title": "Mosaicos de Satélite históricos de España",
+    "bloque_tematico": "Cartografia base e imagenes",
+    "subtema": "Mosaicos de satélite históricos",
+    "proveedor": "IGN / CNIG",
+    "tipo": "WMS",
+    "url": "https://wms-satelites-historicos.idee.es/satelites-historicos",
+    "capabilities_url": "https://wms-satelites-historicos.idee.es/satelites-historicos?request=GetCapabilities&service=wms",
+    "formato": "",
+    "inspire": "Orthoimagery - OI / Environmental Monitoring Facilities - EF",
+    "notas": "Útil para análisis temporal y visualización histórica del territorio. La disponibilidad temporal puede variar.",
+    "referencia": "https://www.ign.es/web/ide-area-nodo-ide-ign",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 0,
+      "cobertura": 2,
+      "fuente": 2,
+      "tecnica": 1,
+      "total": 5
+    },
+    "prioridad": "P1 - Alta",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "ign-cnig-planimetrias-de-espana1870-1950-wms",
+    "title": "Planimetrías de España(1870-1950)",
+    "bloque_tematico": "Cartografia base e imagenes",
+    "subtema": "Planimetrías y minutas cartográficas",
+    "proveedor": "IGN / CNIG",
+    "tipo": "WMS",
+    "url": "https://www.ign.es/wms/minutas-cartograficas",
+    "capabilities_url": "https://www.ign.es/wms/minutas-cartograficas?request=GetCapabilities&service=WMS",
+    "formato": "",
+    "inspire": "No aplica estrictamente / cartografía histórica",
+    "notas": "Útil para patrimonio, evolución urbana e historia territorial. La disponibilidad y calidad puede variar por zona.",
+    "referencia": "https://www.ign.es/web/ide-area-nodo-ide-ign",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 0,
+      "cobertura": 2,
+      "fuente": 2,
+      "tecnica": 1,
+      "total": 5
+    },
+    "prioridad": "P1 - Alta",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "ign-cnig-pnoa-wms-de-ortofotos-expeditas-y-rapidas-provision",
+    "title": "WMS de ortofotos expeditas y rápidas (provisionales) del PNOA de España",
+    "bloque_tematico": "Cartografia base e imagenes",
+    "subtema": "Ortofotos",
+    "proveedor": "IGN / CNIG / PNOA",
+    "tipo": "WMS",
+    "url": "https://wms-pnoa.idee.es/pnoa-provisionales",
+    "capabilities_url": "https://wms-pnoa.idee.es/pnoa-provisionales?&service=WMS&request=GetCapabilities",
+    "formato": "",
+    "inspire": "Orthoimagery - OI",
+    "notas": "No disponible homogéneamente en todo el territorio.",
+    "referencia": "https://www.ign.es/web/ide-area-nodo-ide-ign",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 0,
+      "cobertura": 1,
+      "fuente": 2,
+      "tecnica": 1,
+      "total": 4
+    },
+    "prioridad": "P2 - Media",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "cartociudad-ign-cnig-direcciones-ogc-wfs-wfs-inspire",
+    "title": "Direcciones",
+    "bloque_tematico": "Catastro y edificación",
+    "subtema": "Callejero y direcciones",
+    "proveedor": "CartoCiudad / IGN-CNIG",
+    "tipo": "OGC WFS / WFS INSPIRE",
+    "url": "https://www.cartociudad.es/wfs-inspire/direcciones",
+    "capabilities_url": "https://www.cartociudad.es/wfs-inspire/direcciones?service=WFS&request=GetCapabilities",
+    "formato": "",
+    "inspire": "Addresses - AD",
+    "notas": "decuado para descarga y consulta de objetos geográficos; para usos masivos conviene acotar por bbox/filtros. Requiere cliente compatible WFS. Atribución obligatoria según condiciones IGN-CNIG/CartoCiudad",
+    "referencia": "https://www.cartociudad.es/wfs-inspire/direcciones | https://www.ign.es/web/ide-area-nodo-ide-ign | https://www.cartociudad.es/web/portal/direcciones-postales",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 2,
+      "cobertura": 2,
+      "fuente": 2,
+      "tecnica": 2,
+      "total": 8
+    },
+    "prioridad": "P0 - MVP",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "idee-direcciones-wfs",
+    "title": "Direcciones",
+    "bloque_tematico": "Catastro y edificación",
+    "subtema": "Callejero y direcciones",
+    "proveedor": "IDEE",
+    "tipo": "WFS",
+    "url": "https://www.cartociudad.es/wfs-inspire/direcciones",
+    "capabilities_url": "https://www.cartociudad.es/wfs-inspire/direcciones?request=GetCapabilities&service=WFS",
+    "formato": "",
+    "inspire": "Addresses - AD",
+    "notas": "Fuente esencial para geocodificación y localización de portales; permite consulta de atributos.",
+    "referencia": "https://idee.es/segun-tipo-de-servicio",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 2,
+      "cobertura": 2,
+      "fuente": 2,
+      "tecnica": 2,
+      "total": 8
+    },
+    "prioridad": "P0 - MVP",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "idee-direcciones-y-codigos-postales-de-espana-wms",
+    "title": "Direcciones y códigos postales de España",
+    "bloque_tematico": "Catastro y edificación",
+    "subtema": "Callejero y direcciones",
+    "proveedor": "IDEE",
+    "tipo": "WMS",
+    "url": "https://www.cartociudad.es/wms-inspire/direcciones-ccpp",
+    "capabilities_url": "cartociudad.es/wms-inspire/direcciones-ccpp?request=GetCapabilities&service=WMS",
+    "formato": "",
+    "inspire": "Addresses - AD",
+    "notas": "Muy útil para contexto urbano, direcciones y códigos postales. Como WMS es principalmente visual; para explotación analítica conviene revisar WFS/API de CartoCiudad.",
+    "referencia": "Infraestructuras de Datos Espaciales - Instituto Geográfico Nacional",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 2,
+      "cobertura": 2,
+      "fuente": 2,
+      "tecnica": 1,
+      "total": 7
+    },
+    "prioridad": "P0 - MVP",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "dgc-direcciones-wfs",
+    "title": "Direcciones",
+    "bloque_tematico": "Catastro y edificación",
+    "subtema": "Callejero y direcciones",
+    "proveedor": "DGC",
+    "tipo": "WFS",
+    "url": "https://ovc.catastro.meh.es/INSPIRE/wfsAD.aspx",
+    "capabilities_url": "https://ovc.catastro.meh.es/INSPIRE/wfsAD.aspx?request=GetCapabilities&service=WFS",
+    "formato": "",
+    "inspire": "Addresses - AD",
+    "notas": "Direcciones oficiales vinculadas a la referencia catastral; requiere tratamiento de GML INSPIRE.",
+    "referencia": "https://idee.es/segun-tipo-de-servicio",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 2,
+      "cobertura": 2,
+      "fuente": 2,
+      "tecnica": 2,
+      "total": 8
+    },
+    "prioridad": "P0 - MVP",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "dgc-edificaciones-wfs",
+    "title": "Edificaciones",
+    "bloque_tematico": "Catastro y edificación",
+    "subtema": "Edificaciones catastrales",
+    "proveedor": "DGC",
+    "tipo": "WFS",
+    "url": "https://ovc.catastro.meh.es/INSPIRE/wfsBU.aspx",
+    "capabilities_url": "ovc.catastro.meh.es/INSPIRE/wfsBU.aspx?request=GetCapabilities&service=WFS",
+    "formato": "",
+    "inspire": "Buildings - BU",
+    "notas": "WMS INSPIRE de edificaciones catastrales; soporta GetFeatureInfo. Cobertura peninsular e insular; excluye territorios forales.",
+    "referencia": "https://idee.es/web/idee/segun-tipo-de-servicio",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 2,
+      "cobertura": 2,
+      "fuente": 2,
+      "tecnica": 2,
+      "total": 8
+    },
+    "prioridad": "P0 - MVP",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "dgc-edificaciones-atom",
+    "title": "Edificaciones",
+    "bloque_tematico": "Catastro y edificación",
+    "subtema": "Edificaciones catastrales",
+    "proveedor": "DGC",
+    "tipo": "ATOM",
+    "url": "https://www.catastro.hacienda.gob.es/INSPIRE/buildings/ES.SDGC.bu.atom.xml",
+    "capabilities_url": "https://www.catastro.hacienda.gob.es/INSPIRE/buildings/ES.SDGC.bu.atom.xml",
+    "formato": "",
+    "inspire": "Buildings - BU",
+    "notas": "ATOM feed de edificaciones catastrales filtrable por municipio (código INE). Ideal para ETL municipal. Excluye territorios forales.",
+    "referencia": "Geoportal IDEE",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "FILTRABLE",
+    "puntuacion": {
+      "tematica": 2,
+      "cobertura": 2,
+      "fuente": 2,
+      "tecnica": 2,
+      "total": 8
+    },
+    "prioridad": "P0 - MVP",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "dgc-cartografia-catastral-wms",
+    "title": "Cartografía catastral",
+    "bloque_tematico": "Catastro y edificación",
+    "subtema": "Parcelario catastral",
+    "proveedor": "DGC",
+    "tipo": "WMS",
+    "url": "http://ovc.catastro.meh.es/Cartografia/WMS/ServidorWMS.aspx",
+    "capabilities_url": "ovc.catastro.meh.es/Cartografia/WMS/ServidorWMS.aspx?request=GetCapabilities&service=WMS",
+    "formato": "",
+    "inspire": "Cadastral Parcels - CP",
+    "notas": "Parcelas catastrales; soporta GetFeatureInfo por referencia catastral. Cobertura peninsular e insular; excluye Navarra y País Vasco.",
+    "referencia": "https://idee.es/web/idee/segun-tipo-de-servicio",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 2,
+      "cobertura": 2,
+      "fuente": 2,
+      "tecnica": 2,
+      "total": 8
+    },
+    "prioridad": "P0 - MVP",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "dgc-parcelas-catastrales-atom",
+    "title": "Parcelas Catastrales",
+    "bloque_tematico": "Catastro y edificación",
+    "subtema": "Parcelario catastral",
+    "proveedor": "DGC",
+    "tipo": "ATOM",
+    "url": "https://www.catastro.hacienda.gob.es/INSPIRE/CadastralParcels/ES.SDGC.CP.Atom.xml",
+    "capabilities_url": "https://www.catastro.hacienda.gob.es/INSPIRE/CadastralParcels/ES.SDGC.CP.Atom.xml",
+    "formato": "",
+    "inspire": "Cadastral Parcels - CP",
+    "notas": "ATOM feed de parcelas catastrales filtrable por código INE de municipio. Ideal para ETL municipal. Excluye territorios forales.",
+    "referencia": "Geoportal IDEE",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "FILTRABLE",
+    "puntuacion": {
+      "tematica": 2,
+      "cobertura": 2,
+      "fuente": 2,
+      "tecnica": 2,
+      "total": 8
+    },
+    "prioridad": "P0 - MVP",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "aemet-aemet-opendata-api-rest",
+    "title": "AEMET OpenData",
+    "bloque_tematico": "Clima y meteorología",
+    "subtema": "Datos meteorológicos y climatológicos",
+    "proveedor": "AEMET",
+    "tipo": "API REST",
+    "url": "https://opendata.aemet.es/centrodedescargas/inicio",
+    "capabilities_url": "AEMET OpenData",
+    "formato": "",
+    "inspire": "Meteorological Geographical Features - MF",
+    "notas": "Acceso vía portal para desarrolladores. Requiere API Key para peticiones GET.",
+    "referencia": "AEMET OpenData - Agencia Estatal de Meteorología - AEMET. Gobierno de España",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "FILTRABLE",
+    "puntuacion": {
+      "tematica": 1,
+      "cobertura": 2,
+      "fuente": 2,
+      "tecnica": 1,
+      "total": 6
+    },
+    "prioridad": "P1 - Alta",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "ine-unidad-de-infraestructura-de-datos-espaciales-seccionado",
+    "title": "Seccionado Estadístico de España",
+    "bloque_tematico": "Demografía",
+    "subtema": "Secciones censales",
+    "proveedor": "INE - Unidad de Infraestructura de Datos Espaciales",
+    "tipo": "WFS / Descarga directa",
+    "url": "https://www.ine.es/geoserver/WMS_INE_SECCIONES_G01/wms",
+    "capabilities_url": "ine.es/geoserver/WMS_INE_SECCIONES_G01/wms?service=WFS&request=GetCapabilities",
+    "formato": "",
+    "inspire": "Statistical Units - SU",
+    "notas": "Descarga de geometria de secciones censales por provincia o conjunto nacional. Imprescindible para visualización demográfica inframunicipal. Requiere unión tabular de la geometría con datos INE por código de sección para tener indicadores demográficos . Actualización anual.",
+    "referencia": "Inicio / Datos Abiertos /Cartografía secciones censales",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "DIRECTA",
+    "puntuacion": {
+      "tematica": 2,
+      "cobertura": 2,
+      "fuente": 2,
+      "tecnica": 2,
+      "total": 8
+    },
+    "prioridad": "P0 - MVP",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "ine-series-estadisticas-municipales-api-rest",
+    "title": "Series estadísticas municipales",
+    "bloque_tematico": "Demografía",
+    "subtema": "Estadísticas municipales",
+    "proveedor": "INE",
+    "tipo": "API REST",
+    "url": "https://servicios.ine.es/wstempus/js/{idioma}/{función}/{input}[?parámetros]",
+    "capabilities_url": "na",
+    "formato": "",
+    "inspire": "Population Distribution - PD",
+    "notas": "API para consulta de series estadísticas del INE por municipio; cubre padrón",
+    "referencia": "Inicio / Datos abiertos / API JSON /API JSON",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "FILTRABLE",
+    "puntuacion": {
+      "tematica": 2,
+      "cobertura": 2,
+      "fuente": 2,
+      "tecnica": 2,
+      "total": 8
+    },
+    "prioridad": "P0 - MVP",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "ign-cnig-potencial-solar-de-los-edificios-wms",
+    "title": "Potencial Solar de los edificios",
+    "bloque_tematico": "Energía e infraestructura",
+    "subtema": "Potencial solar fotovoltaico de edificios",
+    "proveedor": "IGN / CNIG",
+    "tipo": "WMS",
+    "url": "https://wms-potencial-solar.idee.es/potencial-solar",
+    "capabilities_url": "https://wms-potencial-solar.idee.es/potencial-solar?request=GetCapabilities&service=WMS",
+    "formato": "",
+    "inspire": "Energy resources - ER",
+    "notas": "Capa vectorial (puntos) con la capacidad fotovoltaica por edificio y malla puntual de 2 m para identificar la mejor ubicación de placas solares. Generada con edificios de Catastro (+ Navarra y País Vasco), MDS de 2 m del IGN derivado de LiDAR y radiación solar de PVGIS. Muy útil a escala municipal para planes de transición energética. Limitación: el resultado es estimación no vinculante; servicio de visualización (sin WFS público), requiere consulta GetFeatureInfo o procesos OGC API asociados para extraer valores.",
+    "referencia": "https://idee.es/web/idee/segun-tipo-de-servicio",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 1,
+      "cobertura": 2,
+      "fuente": 2,
+      "tecnica": 1,
+      "total": 6
+    },
+    "prioridad": "P1 - Alta",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "mapa-comarcas-ganaderas-wms",
+    "title": "Comarcas Ganaderas",
+    "bloque_tematico": "Ganadería",
+    "subtema": "Comarcalización ganadera",
+    "proveedor": "MAPA",
+    "tipo": "WMS",
+    "url": "https://wms.mapama.gob.es/sig/Ganaderia/ComarcasGanaderas",
+    "capabilities_url": "https://wms.mapama.gob.es/sig/Ganaderia/ComarcasGanaderas?request=GetCapabilities&service=WMS",
+    "formato": "",
+    "inspire": "Agricultural and Aquaculture Facilities - AF",
+    "notas": "Delimitación de comarcas ganaderas a nivel nacional. Útil como capa de contexto territorial supramunicipal para análisis ganaderos. Limitación: agregación supramunicipal.  no aporta detalle al interior del municipio.",
+    "referencia": "https://idee.es/web/idee/segun-tipo-de-servicio",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 0,
+      "cobertura": 1,
+      "fuente": 2,
+      "tecnica": 1,
+      "total": 4
+    },
+    "prioridad": "P2 - Media",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "ign-cnig-idee-hidrografia-de-espana-de-aguas-fisicas-y-del-m",
+    "title": "Hidrografía de España de Aguas Físicas y del Modelo de Red",
+    "bloque_tematico": "Hidrografía",
+    "subtema": "Red hidrográfica y aguas superficiales",
+    "proveedor": "IGN-CNIG / IDEE",
+    "tipo": "OGC WFS / WFS INSPIRE",
+    "url": "https://servicios.idee.es/wfs-inspire/hidrografia",
+    "capabilities_url": "https://servicios.idee.es/wfs-inspire/hidrografia?service=WFS&request=GetCapabilities",
+    "formato": "",
+    "inspire": "Hydrography - HY",
+    "notas": "Incluye elementos hidrográficos naturales y artificiales, aguas superficiales, red hidrográfica, cuencas y otros objetos relacionados. Para descargas amplias se recomienda usar filtros espaciales o servicios de descarga alternativos",
+    "referencia": "https://servicios.idee.es/wfs-inspire/hidrografia | https://www.ign.es/web/ide-area-nodo-ide-ign | https://www.ign.es/web/seccion-hidrografia",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 2,
+      "cobertura": 2,
+      "fuente": 2,
+      "tecnica": 2,
+      "total": 8
+    },
+    "prioridad": "P0 - MVP",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "ign-cnig-hidrografia-de-espana-de-aguas-fisicas-y-del-modelo",
+    "title": "Hidrografía de España de Aguas Físicas y del Modelo de Red",
+    "bloque_tematico": "Hidrografía",
+    "subtema": "Red hidrográfica y aguas superficiales",
+    "proveedor": "IGN / CNIG",
+    "tipo": "WMS",
+    "url": "https://servicios.idee.es/wms-inspire/hidrografia",
+    "capabilities_url": "https://servicios.idee.es/wms-inspire/hidrografia?request=GetCapabilities&service=WMS",
+    "formato": "",
+    "inspire": "Hydrography - HY",
+    "notas": "Fuente de referencia para ríos, cauces y elementos hidrográficos. Para análisis espacial municipal conviene usar WFS/descarga si está disponible.",
+    "referencia": "https://www.ign.es/web/ide-area-nodo-ide-ign",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 2,
+      "cobertura": 2,
+      "fuente": 2,
+      "tecnica": 1,
+      "total": 7
+    },
+    "prioridad": "P0 - MVP",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "mapa-sg-pesca-talud-continental-wms",
+    "title": "Talud Continental",
+    "bloque_tematico": "Hidrografía",
+    "subtema": "Batimetría marina",
+    "proveedor": "MAPA - SG Pesca",
+    "tipo": "WMS",
+    "url": "https://wms.mapama.gob.es/sig/Pesca/CartoTalud",
+    "capabilities_url": "https://wms.mapama.gob.es/sig/Pesca/CartoTalud?request=GetCapabilities&service=WMS",
+    "formato": "",
+    "inspire": "Elevation - EL / Sea Regions - SR",
+    "notas": "Modelo digital de elevaciones del talud continental español adquirido durante las Cartas de Pesca del Mediterráneo realizadas por la SG de Pesca del MAPA.  sirve de apoyo a estudios y trabajos en el medio marino. Píxel 50 m. Útil municipal solo para municipios costeros con jurisdicción marina.",
+    "referencia": "https://idee.es/web/idee/segun-tipo-de-servicio",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 0,
+      "cobertura": 1,
+      "fuente": 2,
+      "tecnica": 1,
+      "total": 4
+    },
+    "prioridad": "P2 - Media",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "mapa-sg-pesca-plataforma-continental-wms",
+    "title": "Plataforma Continental",
+    "bloque_tematico": "Hidrografía",
+    "subtema": "Cartografia marina",
+    "proveedor": "MAPA - SG Pesca",
+    "tipo": "WMS",
+    "url": "https://wms.mapama.gob.es/sig/Pesca/CartoPlataforma",
+    "capabilities_url": "https://wms.mapama.gob.es/sig/Pesca/CartoPlataforma?request=GetCapabilities&service=WMS",
+    "formato": "",
+    "inspire": "Elevation - EL / Sea Regions - SR",
+    "notas": "Visualización del modelo digital de elevaciones y sombreado del terreno de la plataforma continental español; batimetría y localización de los puntos de toma de muestras de sedimento del fondo marino . Útil municipal solo para municipios costeros.",
+    "referencia": "https://idee.es/web/idee/segun-tipo-de-servicio",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 0,
+      "cobertura": 1,
+      "fuente": 2,
+      "tecnica": 1,
+      "total": 4
+    },
+    "prioridad": "P2 - Media",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "openstreetmap-foundation-openstreetmap-standard-tiles-xyz-ra",
+    "title": "OpenStreetMap Standard Tiles",
+    "bloque_tematico": "Mapas base",
+    "subtema": "Callejero OSM",
+    "proveedor": "OpenStreetMap Foundation",
+    "tipo": "XYZ raster",
+    "url": "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+    "capabilities_url": null,
+    "formato": "",
+    "inspire": "Redes transporte, nombres geográficos",
+    "notas": "Atribución obligatoria; no scraping ni descargas masivas; no ideal para producción con alto tráfico. operations.osmfounda...",
+    "referencia": null,
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 1,
+      "cobertura": 2,
+      "fuente": 1,
+      "tecnica": 2,
+      "total": 6
+    },
+    "prioridad": "P1 - Alta",
+    "cobertura": {
+      "tipo": "desconocida"
+    }
+  },
+  {
+    "id": "openmaptiles-maptiler-openmaptiles-tileserver-gl-descarga-se",
+    "title": "OpenMapTiles + TileServer GL",
+    "bloque_tematico": "Mapas base",
+    "subtema": "Vector OSM self-host",
+    "proveedor": "OpenMapTiles / MapTiler",
+    "tipo": "Descarga + servidor propio",
+    "url": "MBTiles + TileServer GL / /styles/{style}/style.json",
+    "capabilities_url": null,
+    "formato": "",
+    "inspire": "Transporte, nombres, edificios, hidrografía",
+    "notas": "Mejor opción si se desea control, offline o evitar dependencia de APIs. OpenMapTiles",
+    "referencia": "Open-source map styles – OpenMapTiles",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 1,
+      "cobertura": 2,
+      "fuente": 1,
+      "tecnica": 1,
+      "total": 5
+    },
+    "prioridad": "P1 - Alta",
+    "cobertura": {
+      "tipo": "desconocida"
+    }
+  },
+  {
+    "id": "miteco-red-natura-2000-wms",
+    "title": "Red Natura 2000",
+    "bloque_tematico": "Medio ambiente",
+    "subtema": "Espacios protegidos Red Natura 2000",
+    "proveedor": "MITECO",
+    "tipo": "WMS",
+    "url": "https://wms.mapama.gob.es/sig/Biodiversidad/RedNatura",
+    "capabilities_url": "https://wms.mapama.gob.es/sig/Biodiversidad/RedNatura?request=GetCapabilities&service=WMS",
+    "formato": "",
+    "inspire": "Protected Sites - PS",
+    "notas": "WMS con capas LIC/ZEC y ZEPA de la Red Natura 2000. Esencial para análisis ambiental y planeamiento municipal. Soporta GetFeatureInfo",
+    "referencia": "https://idee.es/segun-tipo-de-servicio",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 2,
+      "cobertura": 2,
+      "fuente": 2,
+      "tecnica": 2,
+      "total": 8
+    },
+    "prioridad": "P0 - MVP",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "miteco-espacios-naturales-protegidos-enp-wms",
+    "title": "Espacios Naturales Protegidos (ENP)",
+    "bloque_tematico": "Medio ambiente",
+    "subtema": "Espacios protegidos",
+    "proveedor": "MITECO",
+    "tipo": "WMS",
+    "url": "https://wms.mapama.gob.es/sig/Biodiversidad/ENP",
+    "capabilities_url": "https://wms.mapama.gob.es/sig/Biodiversidad/ENP?request=GetCapabilities&service=WMS",
+    "formato": "",
+    "inspire": "Protected Sites - PS",
+    "notas": "Fuente oficial de espacios protegidos (Ley 42/2007). Esencial para licencias y planeamiento. Permite GetFeatureInfo.",
+    "referencia": "https://wms.mapama.gob.es/sig/Biodiversidad/ENP",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 2,
+      "cobertura": 2,
+      "fuente": 2,
+      "tecnica": 1,
+      "total": 7
+    },
+    "prioridad": "P0 - MVP",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "copernicus-land-monitoring-service-idee-copernicus-land-moni",
+    "title": "Copernicus Land Monitoring Service",
+    "bloque_tematico": "Medio ambiente",
+    "subtema": "Copernicus Land Monitoring Service",
+    "proveedor": "Copernicus Land Monitoring Service / IDEE",
+    "tipo": "WMS",
+    "url": "https://servicios.idee.es/wms/copernicus-landservice-spain",
+    "capabilities_url": "servicios.idee.es/wms/copernicus-landservice-spain?request=GetCapabilities&service=WMS",
+    "formato": "",
+    "inspire": "Cubierta terrestre",
+    "notas": "Servicio de visualización de productos Copernicus relacionados con cobertura y monitorización terrestre. Para análisis detallado puede requerir descarga del producto original.",
+    "referencia": "Infraestructuras de Datos Espaciales - Instituto Geográfico Nacional",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 1,
+      "cobertura": 2,
+      "fuente": 2,
+      "tecnica": 1,
+      "total": 6
+    },
+    "prioridad": "P1 - Alta",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "ign-informacion-sismica-wms",
+    "title": "Información sísmica",
+    "bloque_tematico": "Medio ambiente",
+    "subtema": "Sismicidad / información geofísica",
+    "proveedor": "IGN",
+    "tipo": "WMS",
+    "url": "https://www.ign.es/wms-inspire/geofisica",
+    "capabilities_url": "https://www.ign.es/wms-inspire/geofisica?request=GetCapabilities&service=WMS",
+    "formato": "",
+    "inspire": "Natural Risk Zones - NZ / Geology - GE",
+    "notas": "Útil para visores con componente de riesgos naturales o contexto geofísico. No es fuente municipal directa.",
+    "referencia": "https://www.ign.es/web/ide-area-nodo-ide-ign",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 0,
+      "cobertura": 2,
+      "fuente": 2,
+      "tecnica": 1,
+      "total": 5
+    },
+    "prioridad": "P1 - Alta",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "ign-red-de-vigilancia-volcanica-del-ign-wms",
+    "title": "Red de Vigilancia Volcánica del IGN",
+    "bloque_tematico": "Medio ambiente",
+    "subtema": "Volcanología / vigilancia volcánica",
+    "proveedor": "IGN",
+    "tipo": "WMS",
+    "url": "https://wms-volcanologia.ign.es/volcanologia",
+    "capabilities_url": "https://wms-volcanologia.ign.es/volcanologia?service=WMS&request=GetCapabilities",
+    "formato": "",
+    "inspire": "Natural Risk Zones - NZ / Geology - GE",
+    "notas": "No aplica de forma homogénea a todos los municipios. Muy relevante para municipios de Canarias u otras zonas con interés volcánico.",
+    "referencia": "https://www.ign.es/web/ide-area-nodo-ide-ign",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "CONDICIONAL",
+    "puntuacion": {
+      "tematica": 0,
+      "cobertura": 1,
+      "fuente": 2,
+      "tecnica": 1,
+      "total": 4
+    },
+    "prioridad": "P2 - Media",
+    "cobertura": {
+      "tipo": "desconocida"
+    }
+  },
+  {
+    "id": "ign-cnig-idee-ocupacion-del-suelo-de-espana-ogc-wfs-wfs-insp",
+    "title": "Ocupación del Suelo de España",
+    "bloque_tematico": "Ocupación y cobertura del suelo",
+    "subtema": "Ocupación del suelo",
+    "proveedor": "IGN-CNIG / IDEE",
+    "tipo": "OGC WFS / WFS INSPIRE",
+    "url": "https://servicios.idee.es/wfs-inspire/ocupacion-suelo",
+    "capabilities_url": "https://servicios.idee.es/wfs-inspire/ocupacion-suelo?service=WFS&request=GetCapabilities",
+    "formato": "",
+    "inspire": "Land Cover - LC",
+    "notas": "Adecuado para consulta de entidades vectoriales; en zonas extensas las respuestas pueden ser voluminosas, por lo que se recomienda filtrar espacialmente",
+    "referencia": "https://servicios.idee.es/wfs-inspire/ocupacion-suelo | https://www.ign.es/web/ide-area-nodo-ide-ign",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 2,
+      "cobertura": 2,
+      "fuente": 2,
+      "tecnica": 2,
+      "total": 8
+    },
+    "prioridad": "P0 - MVP",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "ign-cnig-siose-ocupacion-del-suelo-de-espana-wmts",
+    "title": "Ocupación del Suelo de España",
+    "bloque_tematico": "Ocupación y cobertura del suelo",
+    "subtema": "Ocupación del suelo",
+    "proveedor": "IGN / CNIG / SIOSE",
+    "tipo": "WMTS",
+    "url": "https://servicios.idee.es/wmts/ocupacion-suelo",
+    "capabilities_url": "https://servicios.idee.es/wmts/ocupacion-suelo?request=GetCapabilities&service=WMTS",
+    "formato": "",
+    "inspire": "Land Cover - LC",
+    "notas": "Fuente clave para análisis territorial municipal: urbano, agrícola, forestal, artificial, etc. Para análisis conviene usar datos descargables o servicios vectoriales asociados.",
+    "referencia": "https://www.ign.es/web/ide-area-nodo-ide-ign",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 2,
+      "cobertura": 2,
+      "fuente": 2,
+      "tecnica": 2,
+      "total": 8
+    },
+    "prioridad": "P0 - MVP",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "ign-cnig-siose-ocupacion-del-suelo-de-espana-wms",
+    "title": "Ocupación del Suelo de España",
+    "bloque_tematico": "Ocupación y cobertura del suelo",
+    "subtema": "Ocupación del suelo",
+    "proveedor": "IGN / CNIG / SIOSE",
+    "tipo": "WMS",
+    "url": "https://servicios.idee.es/wms-inspire/ocupacion-suelo",
+    "capabilities_url": "https://servicios.idee.es/wms-inspire/ocupacion-suelo?request=GetCapabilities&service=WMS",
+    "formato": "",
+    "inspire": "Land Cover - LC",
+    "notas": "Fuente clave para análisis territorial municipal: urbano, agrícola, forestal, artificial, etc. Para análisis conviene usar datos descargables o servicios vectoriales asociados.",
+    "referencia": "https://www.ign.es/web/ide-area-nodo-ide-ign",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 2,
+      "cobertura": 2,
+      "fuente": 2,
+      "tecnica": 1,
+      "total": 7
+    },
+    "prioridad": "P0 - MVP",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "ign-cnig-siose-ocupacion-de-suelo-historico-wms",
+    "title": "Ocupación de Suelo histórico",
+    "bloque_tematico": "Ocupación y cobertura del suelo",
+    "subtema": "Ocupación del suelo",
+    "proveedor": "IGN / CNIG / SIOSE",
+    "tipo": "WMS",
+    "url": "https://servicios.idee.es/wms-inspire/ocupacion-suelo-historico",
+    "capabilities_url": "https://servicios.idee.es/wms-inspire/ocupacion-suelo-historico?request=GetCapabilities&service=WMS",
+    "formato": "",
+    "inspire": "Land Cover - LC",
+    "notas": "Útil para análisis de evolución de la ocupación del suelo. Como WMS es visual; para análisis municipal descarga y recorte espacial.",
+    "referencia": "https://www.ign.es/web/ide-area-nodo-ide-ign",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 1,
+      "cobertura": 2,
+      "fuente": 2,
+      "tecnica": 1,
+      "total": 6
+    },
+    "prioridad": "P1 - Alta",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "ign-cnig-nomenclator-geografico-basico-de-espana-ogc-wfs-wfs",
+    "title": "Nomenclátor Geográfico Básico de España",
+    "bloque_tematico": "Toponimia",
+    "subtema": "Topónimos oficiales y nomenclátor",
+    "proveedor": "IGN-CNIG",
+    "tipo": "OGC WFS / WFS INSPIRE",
+    "url": "https://www.ign.es/wfs-inspire/ngbe",
+    "capabilities_url": "https://www.ign.es/wfs-inspire/ngbe?service=WFS&request=GetCapabilities",
+    "formato": "",
+    "inspire": "Geographical Names - GN",
+    "notas": "Contiene nombres geográficos y atributos asociados. Para consultas por municipio puede ser necesario filtrar espacialmente o cruzar con unidades administrativas",
+    "referencia": "https://www.ign.es/wfs-inspire/ngbe | https://www.ign.es/web/ide-area-nodo-ide-ign",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 2,
+      "cobertura": 2,
+      "fuente": 2,
+      "tecnica": 2,
+      "total": 8
+    },
+    "prioridad": "P0 - MVP",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "ign-cnig-nombres-geograficos-wms",
+    "title": "Nombres Geográficos",
+    "bloque_tematico": "Toponimia",
+    "subtema": "Topónimos oficiales y nomenclátor",
+    "proveedor": "IGN / CNIG",
+    "tipo": "WMS",
+    "url": "https://www.ign.es/wms-inspire/ngbe",
+    "capabilities_url": "https://www.ign.es/wms-inspire/ngbe?request=GetCapabilities&service=WMS",
+    "formato": "",
+    "inspire": "Geographical Names - GN",
+    "notas": "Servicio de visualización del Nomenclátor Geográfico Básico. Para buscador de topónimos o explotación de atributos conviene usar WFS/API Features asociado.",
+    "referencia": "https://www.ign.es/web/ide-area-nodo-ide-ign",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 2,
+      "cobertura": 2,
+      "fuente": 2,
+      "tecnica": 1,
+      "total": 7
+    },
+    "prioridad": "P0 - MVP",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "ign-cnig-idee-redes-de-transporte-de-espana-ogc-wfs-wfs-insp",
+    "title": "Redes de transporte de España",
+    "bloque_tematico": "Transporte y movilidad",
+    "subtema": "Redes de transporte",
+    "proveedor": "IGN-CNIG / IDEE",
+    "tipo": "OGC WFS / WFS INSPIRE",
+    "url": "https://servicios.idee.es/wfs-inspire/transportes",
+    "capabilities_url": "https://servicios.idee.es/wfs-inspire/transportes?service=WFS&request=GetCapabilities",
+    "formato": "",
+    "inspire": "Transport Networks - TN",
+    "notas": "Puede incluir distintos modos de transporte y elementos asociados. conviene acotar consultas por bbox/filtros para evitar respuestas pesadas",
+    "referencia": "https://servicios.idee.es/wfs-inspire/transportes | https://www.ign.es/web/ide-area-nodo-ide-ign",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 2,
+      "cobertura": 2,
+      "fuente": 2,
+      "tecnica": 2,
+      "total": 8
+    },
+    "prioridad": "P0 - MVP",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "ign-cnig-sistema-cartografico-nacional-redes-de-transporte-d",
+    "title": "Redes de transporte de España",
+    "bloque_tematico": "Transporte y movilidad",
+    "subtema": "Redes de transporte",
+    "proveedor": "IGN / CNIG / Sistema Cartográfico Nacional",
+    "tipo": "WMS",
+    "url": "https://servicios.idee.es/wms-inspire/transportes",
+    "capabilities_url": "https://servicios.idee.es/wms-inspire/transportes?request=GetCapabilities&service=WMS",
+    "formato": "",
+    "inspire": "Transport Networks - TN",
+    "notas": "Fuente importante para contexto urbano, red viaria, transporte y accesibilidad. Para análisis municipal conviene usar WFS o descarga vectorial si está disponible.",
+    "referencia": "https://www.ign.es/web/ide-area-nodo-ide-ign",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 2,
+      "cobertura": 2,
+      "fuente": 2,
+      "tecnica": 1,
+      "total": 7
+    },
+    "prioridad": "P0 - MVP",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "idee-spain-by-bike-wms",
+    "title": "Spain by Bike",
+    "bloque_tematico": "Transporte y movilidad",
+    "subtema": "Infraestructura ciclista y cicloturismo (rutas - etapas - puertos)",
+    "proveedor": "IDEE",
+    "tipo": "WMS",
+    "url": "https://wms-spainbybike.idee.es/spainbybike",
+    "capabilities_url": "https://wms-spainbybike.idee.es/spainbybike?request=GetCapabilities&service=WMS",
+    "formato": "",
+    "inspire": "Transport Networks - TN",
+    "notas": "Capas de etapas cicloturistas, tipos de vía, espacios BTT y puertos de montaña a partir del portal Spain by Bike (Vías Verdes, Caminos Naturales, EuroVelo, Camino del Cid, Pirinexus, Rural Bike). Soporta GetFeatureInfo. Útil para movilidad sostenible y turismo activo a escala municipal. Limitación: WMS de visualización (no WFS), datos heterogéneos al integrar múltiples fuentes; cobertura de rutas no exhaustiva por municipio (depende de proveedores integrados).",
+    "referencia": "https://idee.es/web/idee/segun-tipo-de-servicio",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 0,
+      "cobertura": 1,
+      "fuente": 2,
+      "tecnica": 1,
+      "total": 4
+    },
+    "prioridad": "P2 - Media",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "mapama-sigmapama-caminos-naturales-wms",
+    "title": "Caminos Naturales",
+    "bloque_tematico": "Turismo y patrimonio cultural",
+    "subtema": "Senderos y rutas",
+    "proveedor": "MAPAMA - SIGMAPAMA",
+    "tipo": "WMS",
+    "url": "https://wms.mapama.gob.es/sig/desarrollorural/ccnn_etapas",
+    "capabilities_url": "https://wms.mapama.gob.es/sig/desarrollorural/ccnn_etapas?request=getcapabilities&service=wms",
+    "formato": "",
+    "inspire": "Transport Networks - TN",
+    "notas": "Capa de etapas de Caminos Naturales de España. Útil municipal para inventariar rutas senderistas que cruzan el término municipal e integrarlas en oferta turística. Limitación: solo caminos del programa nacional.",
+    "referencia": "https://idee.es/web/idee/segun-tipo-de-servicio",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 1,
+      "cobertura": 1,
+      "fuente": 2,
+      "tecnica": 1,
+      "total": 5
+    },
+    "prioridad": "P1 - Alta",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "mapama-sigmapama-caminos-naturales-puntos-de-interes-wms",
+    "title": "Caminos Naturales - Puntos de Interés",
+    "bloque_tematico": "Turismo y patrimonio cultural",
+    "subtema": "Puntos de interés",
+    "proveedor": "MAPAMA - SIGMAPAMA",
+    "tipo": "WMS",
+    "url": "https://wms.mapama.gob.es/sig/desarrollorural/ccnn_ptosinteres",
+    "capabilities_url": "https://wms.mapama.gob.es/sig/desarrollorural/ccnn_ptosinteres?request=getcapabilities&service=wms",
+    "formato": "",
+    "inspire": "Transport Networks - TN",
+    "notas": "Puntos de interés asociados a la Red de Caminos Naturales. Útil municipal para enriquecer la oferta turística con hitos a lo largo de los caminos. Limitación: solo POI ligados a Caminos Naturales nacionales.",
+    "referencia": "https://idee.es/web/idee/segun-tipo-de-servicio",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 0,
+      "cobertura": 1,
+      "fuente": 2,
+      "tecnica": 1,
+      "total": 4
+    },
+    "prioridad": "P2 - Media",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "ign-camino-de-santiago-wms-descarga",
+    "title": "Camino de Santiago",
+    "bloque_tematico": "Turismo y patrimonio cultural",
+    "subtema": "Rutas culturales / Camino de Santiago",
+    "proveedor": "IGN",
+    "tipo": "WMS / Descarga",
+    "url": "https://www.ign.es/wms-inspire/camino-santiago",
+    "capabilities_url": "ign.es/wms-inspire/camino-santiago?request=GetCapabilities&service=WMS",
+    "formato": "",
+    "inspire": "Sin tema INSPIRE directo asignado",
+    "notas": "Para una app municipal se usa el bbox/geometría del municipio. Permite consulta de información sobre etapas mediante WMS/GetFeatureInfo",
+    "referencia": "Infraestructuras de Datos Espaciales - Instituto Geográfico Nacional",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 0,
+      "cobertura": 1,
+      "fuente": 2,
+      "tecnica": 1,
+      "total": 4
+    },
+    "prioridad": "P2 - Media",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  }
+]
