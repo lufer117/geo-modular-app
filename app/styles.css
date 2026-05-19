@@ -1,71 +1,167 @@
-/* ─── Reset y layout global ─────────────────────────── */
-*, *::before, *::after { box-sizing: border-box; }
+/* ═══════════════════════════════════════════════════════════════════════
+   styles.css
+   Solo layout y overrides de Calcite. Sin lógica de negocio.
 
-html, body {
+   PRINCIPIO: este archivo no sabe nada del dominio GIS.
+   Cualquier estado visual (visible/oculto, activo/inactivo) se gestiona
+   con clases CSS añadidas/eliminadas desde JS — nunca con display:none
+   inline — para respetar el shadow DOM de los Web Components de Calcite.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── Reset ───────────────────────────────────────────────────────────────── */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
   margin: 0;
   padding: 0;
   height: 100%;
   width: 100%;
-  overflow: hidden; /* El mapa ocupa toda la pantalla */
+  overflow: hidden;
+  font-family: var(--calcite-font-family, "Avenir Next", "Helvetica Neue", sans-serif);
 }
+
+/* ── Shell ───────────────────────────────────────────────────────────────── */
 
 calcite-shell {
+  display: block;
+  height: 100vh;
+  width: 100vw;
+}
+
+/* ── Contenedor del mapa ─────────────────────────────────────────────────── */
+
+#map-container {
+  position: relative;
+  width: 100%;
   height: 100%;
 }
 
-/* ─── Contenedor del mapa (slot por defecto de calcite-shell) ─── */
-/*
-  Ambas vistas se posicionan absolutas sobre el mismo espacio.
-  NO se usa display:none porque el SDK necesita que la SceneView
-  tenga dimensiones reales para inicializarse correctamente.
-*/
 arcgis-map,
 arcgis-scene {
-  position: absolute;
-  inset: 0;
+  display: block;
   width: 100%;
   height: 100%;
-  transition: opacity 0.25s ease;
 }
 
-/* Vista activa */
-arcgis-map:not(.map-hidden),
-arcgis-scene:not(.map-hidden) {
-  opacity: 1;
-  z-index: 1;
-  pointer-events: auto;
+/* ── Utilidad: ocultar (Web Components first) ───────────────────────────────
+   Usamos clase en lugar de display:none inline para no interferir
+   con el ciclo de renderizado de los Web Components de ArcGIS/Calcite.
+   mapManager usa: element.classList.add/remove("hidden")              */
+
+.hidden {
+  display: none !important;
 }
 
-/* Vista oculta: invisible pero renderizada (el SDK la mantiene viva) */
-.map-hidden {
-  opacity: 0;
-  z-index: 0;
-  pointer-events: none;
-}
+/* ── Cabecera: selector de municipio ────────────────────────────────────── */
 
-/* ─── Panel lateral ─────────────────────────────────── */
-calcite-shell-panel {
-  --calcite-shell-panel-width: 300px;
-}
-
-/* ─── Árbol de capas: arcgis-layer-list ocupa el panel ─ */
-#layer-tree-container arcgis-layer-list,
-#legend-container arcgis-legend {
-  width: 100%;
-  min-height: 200px;
-}
-
-/* ─── Toolbar: chips y botones alineados ─────────────── */
-#toolbar-actions {
+#municipio-selector-container calcite-label {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding-inline-end: 0.75rem;
+  margin: 0;
+  color: var(--calcite-color-text-inverse, #fff);
+  font-size: var(--calcite-font-size--1, 0.875rem);
 }
 
-/* ─── Responsive móvil (<768px) ──────────────────────── */
-@media (max-width: 768px) {
-  calcite-shell-panel {
-    --calcite-shell-panel-height: 40%;
-  }
+#municipio-selector-container calcite-select {
+  min-width: 280px;
+}
+
+/* ── Cabecera: toolbar end ───────────────────────────────────────────────── */
+
+.toolbar-end {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding-right: 0.75rem;
+}
+
+/* ── Panel lateral: secciones ───────────────────────────────────────────── */
+
+calcite-block {
+  border-top: none;
+}
+
+#basemap-selector-container {
+  padding: 0.25rem 0.5rem 0.75rem;
+}
+
+#basemap-selector-container calcite-select {
+  width: 100%;
+}
+
+/* ── Árbol de capas ──────────────────────────────────────────────────────── */
+
+#layer-tree-container {
+  padding: 0.25rem 0;
+}
+
+/* Mensaje cuando no hay capas */
+.layer-tree-empty {
+  margin: 1rem;
+  color: var(--calcite-color-text-3, #6b7280);
+  font-style: italic;
+  font-size: var(--calcite-font-size--1, 0.875rem);
+  text-align: center;
+}
+
+/* Grupos temáticos (nivel 1 y 2 del árbol, sin checkbox) */
+.layer-group-label {
+  font-weight: var(--calcite-font-weight-medium, 500);
+  color: var(--calcite-color-text-1, #2b2b2b);
+  font-size: var(--calcite-font-size-0, 0.9375rem);
+}
+
+/* Wrapper de cada capa hoja (nivel 3: checkbox + label + badges) */
+.layer-item-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  padding: 0.1rem 0;
+}
+
+/* Etiqueta de la capa */
+.layer-label {
+  cursor: pointer;
+  font-size: var(--calcite-font-size--1, 0.875rem);
+  color: var(--calcite-color-text-2, #404040);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Panel de leyenda ────────────────────────────────────────────────────── */
+
+#legend-container {
+  overflow-y: auto;
+  max-height: calc(100vh - 140px);
+}
+
+#legend-container arcgis-legend {
+  padding: 0.5rem;
+}
+
+/* ── Banner de error fatal ───────────────────────────────────────────────── */
+
+.app-error-banner {
+  position: fixed;
+  bottom: 1.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--calcite-color-status-danger, #d83020);
+  color: #ffffff;
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.5rem;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  z-index: 9999;
+  max-width: 80%;
+  text-align: center;
+  font-size: var(--calcite-font-size--1, 0.875rem);
 }

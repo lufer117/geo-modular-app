@@ -1,84 +1,209 @@
-// core/layerInitializer.js
-// ============================================================
-// RESPONSABILIDAD:
-// Aplicar comportamiento runtime a capas ya creadas.
-// layerInitializer  → configura estado dinámico (load, sublayers, etc.)
-// Estado: ⚠️ parcial - solo WMS implementado
-// ============================================================
+/**
+ * core/layerInitializer.js
+ *
+ * Aplica comportamiento runtime a capas ya creadas por layerFactory.
+ *
+ * ── RESPONSABILIDAD ──────────────────────────────────────────────────────
+ * Dado el campo "disponibilidad_municipal" del catálogo y los datos del
+ * municipio activo, configura cada capa para mostrar solo los datos
+ * del municipio seleccionado.
+ *
+ * ── ESTRATEGIAS DE FILTRADO ──────────────────────────────────────────────
+ *
+ * BBOX — WMS:
+ *   El recorte visual lo gestiona la máscara de mapManager.
+ *   Aquí no se hace nada adicional sobre la capa WMS; el servidor
+ *   responde con datos para el viewport visible y la máscara recorta
+ *   visualmente el exterior del municipio.
+ *   Para FeatureLayer/WFS con BBOX: se aplica un featureEffect con
+ *   filtro geométrico para limitar las entidades al bbox del municipio.
+ *   Para GeoJSON con BBOX: la carga completa es inevitable en cliente
+ *   sin backend; la máscara gestiona el recorte visual.
+ *
+ * FILTRABLE — WMS con soporte CQL_FILTER (GeoServer):
+ *   Se añaden customLayerParameters con CQL_FILTER al WMSLayer.
+ *   El servidor retorna solo la geometría del municipio → eficiente en
+ *   ancho de banda y además la máscara visual es redundante (pero actúa
+ *   como seguridad adicional).
+ *   Para FeatureLayer FILTRABLE: definitionExpression con el campo de filtro.
+ *
+ * DIRECTA:
+ *   La URL o el servicio ya incorpora el ámbito municipal. Sin filtro extra.
+ *
+ * CONSULTA:
+ *   La capa se usa solo para GetFeatureInfo / identify. Se carga sin filtro.
+ */
 
-const INITIALIZERS = {
-  WMS: inicializarWMS,
-  WMTS: null,
-  WFS: null,
-  GEOJSON: null,
-  ArcGIS_REST: null,
-  GRUPO: inicializarGrupo
-};
+// ─── API pública ──────────────────────────────────────────────────────────
 
-// ───────────────────────────────────────────────────────────
-// API pública
-// ───────────────────────────────────────────────────────────
-export async function inicializarCapa(layer, config) {
+/**
+ * Inicializa una capa aplicando los filtros correspondientes al municipio.
+ *
+ * @param {Layer}  layer         - Instancia Esri creada por layerFactory
+ * @param {Object} config        - Configuración de la capa en el catálogo
+ * @param {Object} municipioData - Datos del municipio activo (de municipios.js)
+ * @returns {Promise<void>}
+ */
+export async function inicializarCapa(layer, config, municipioData) {
+  if (!layer || !config || !municipioData) return;
 
-  const initializer = INITIALIZERS[config.tipo];
+  try {
+    switch (config.disponibilidad_municipal) {
 
-  // Si no hay inicializador, no hacemos nada
-  if (!initializer) return;
+      case "BBOX":
+        await _estrategiaBbox(layer, config, municipioData);
+        break;
 
-  await initializer(layer, config);
+      case "FILTRABLE":
+        await _estrategiaFiltrable(layer, config, municipioData);
+        break;
 
-  // Importante: si es grupo, inicializar hijos recursivamente
-  if (config.tipo === "GRUPO") {
-    await inicializarHijosGrupo(layer, config);
+      case "DIRECTA":
+        // El servicio responde directamente al ámbito municipal.
+        // No se aplica filtro adicional.
+        console.info(`[layerInitializer] "${config.id}" DIRECTA — sin filtro extra`);
+        break;
+
+      case "CONSULTA":
+        // Solo para GetFeatureInfo / identify.
+        console.info(`[layerInitializer] "${config.id}" CONSULTA — visible, sin filtro espacial`);
+        break;
+
+      default:
+        console.warn(
+          `[layerInitializer] disponibilidad_municipal desconocida: ` +
+          `"${config.disponibilidad_municipal}" en "${config.id}"`
+        );
+    }
+  } catch (err) {
+    console.error(`[layerInitializer] Error al inicializar capa "${config.id}":`, err);
   }
 }
 
-// ───────────────────────────────────────────────────────────
-// WMS
-// ───────────────────────────────────────────────────────────
-async function inicializarWMS(layer, config) {
+/**
+ * Recarga una capa (útil al cambiar de municipio sin recrear la instancia).
+ * Solo aplica a tipos que implementan refresh() (WMSLayer, FeatureLayer...).
+ * @param {Layer} layer
+ */
+export function recargarCapa(layer) {
+  if (typeof layer?.refresh === "function") {
+    layer.refresh();
+    console.info(`[layerInitializer] Capa "${layer.id}" recargada`);
+  }
+}
 
-  try {
-    await layer.load();
-  } catch (err) {
+/**
+ * Tipos de capa con soporte de inicialización implementado.
+ * @returns {string[]}
+ */
+export function getTiposImplementados() {
+  return ["WMS", "WFS", "FEATURE", "GEOJSON"];
+}
+
+// ─── Estrategias privadas ─────────────────────────────────────────────────
+
+/**
+ * Estrategia BBOX:
+ *   - WMS: la máscara de mapManager gestiona el recorte visual. Sin acción aquí.
+ *   - FeatureLayer/WFS: aplicar featureEffect con filtro geométrico al bbox.
+ *   - GeoJSON: sin filtro extra en cliente (máscara gestiona lo visual).
+ */
+async function _estrategiaBbox(layer, config, municipioData) {
+  const [xmin, ymin, xmax, ymax] = municipioData.bbox;
+  const tipo = config.tipo;
+
+  if (tipo === "WMS") {
+    // WMS: la máscara visual lo cubre. El servidor WMS sirve los tiles del
+    // viewport, que tras el zoom al municipio solo incluye datos del área.
+    // Sin acción adicional en la capa.
+    console.info(
+      `[layerInitializer] WMS BBOX "${config.id}" → recorte visual delegado a máscara municipal`
+    );
+
+  } else if (tipo === "FEATURE" || tipo === "WFS") {
+    // FeatureLayer/WFS: aplicar featureEffect para mostrar solo las entidades
+    // que intersecten con el bbox del municipio.
+    // Esto es eficiente: el SDK no descarga las entidades fuera del área.
+    try {
+      await layer.load();
+
+      const [Extent, FeatureFilter] = await Promise.all([
+        $arcgis.import("esri/geometry/Extent"),
+        $arcgis.import("esri/layers/support/FeatureFilter")
+      ]);
+
+      const extent = new Extent({
+        xmin, ymin, xmax, ymax,
+        spatialReference: { wkid: 4326 }
+      });
+
+      // featureEffect: ocultar entidades fuera del bbox
+      layer.featureEffect = {
+        filter:             new FeatureFilter({ geometry: extent, spatialRelationship: "intersects" }),
+        excludedEffect:     "opacity(0)",  // Entidades fuera: invisibles
+        includedEffect:     ""             // Entidades dentro: render normal
+      };
+
+      console.info(`[layerInitializer] Feature/WFS BBOX aplicado a "${config.id}"`);
+
+    } catch (err) {
+      console.warn(
+        `[layerInitializer] No se pudo aplicar featureEffect a "${config.id}":`, err
+      );
+    }
+
+  } else if (tipo === "GEOJSON") {
+    // GeoJSON: en cliente sin backend no es posible filtrar la descarga.
+    // La carga es completa; la máscara gestiona el recorte visual.
+    console.info(
+      `[layerInitializer] GeoJSON BBOX "${config.id}" → carga completa, recorte visual vía máscara`
+    );
+  }
+}
+
+/**
+ * Estrategia FILTRABLE:
+ *   - WMS con soporte CQL_FILTER (GeoServer): pasar filtro por municipio.
+ *     El servidor devuelve solo la geometría del municipio → eficiente.
+ *   - FeatureLayer: definitionExpression con el campo_filtro del catálogo.
+ *     El servidor filtra en origen antes de enviar datos.
+ */
+async function _estrategiaFiltrable(layer, config, municipioData) {
+  const campoFiltro = config.campo_filtro;
+
+  if (!campoFiltro) {
     console.warn(
-      `[layerInitializer] Error cargando WMS "${config.id}"`,
-      err
+      `[layerInitializer] Capa "${config.id}" es FILTRABLE pero no tiene campo_filtro en el catálogo`
     );
     return;
   }
 
-  // Apagar sublayers si así está definido en config
-  if (config.subLayersVisible === false) {
+  const tipo = config.tipo;
 
-    layer.sublayers.forEach((sublayer) => {
-      sublayer.visible = false;
-    });
-  }
-}
+  if (tipo === "WMS") {
+    // WMS con CQL_FILTER (servidores GeoServer/GeoServer-compatible).
+    // Catastro soporta filtros por municipio mediante parámetros específicos.
+    // Se aplica como customLayerParameters que WMSLayer incluye en cada tile request.
+    layer.customLayerParameters = {
+      CQL_FILTER: `${campoFiltro}='${municipioData.codigo_ine}'`
+    };
+    console.info(
+      `[layerInitializer] WMS CQL_FILTER "${campoFiltro}='${municipioData.codigo_ine}'" → "${config.id}"`
+    );
 
-// ───────────────────────────────────────────────────────────
-// GRUPO (opcional lógica futura del grupo en sí)
-// ───────────────────────────────────────────────────────────
-async function inicializarGrupo(layer, config) {
-  // actualmente no necesita lógica propia
-  // reservado para futuras reglas (ej: expand/collapse, filtros globales)
-}
-
-// ───────────────────────────────────────────────────────────
-// Inicialización recursiva de hijos en grupos
-// ───────────────────────────────────────────────────────────
-async function inicializarHijosGrupo(groupLayer, config) {
-
-  if (!groupLayer?.layers || !config?.capas) return;
-
-  for (let i = 0; i < config.capas.length; i++) {
-
-    const childConfig = config.capas[i];
-    const childLayer  = groupLayer.layers.getItemAt(i);
-
-    if (!childLayer) continue;
-
-    await inicializarCapa(childLayer, childConfig);
+  } else if (tipo === "FEATURE" || tipo === "WFS") {
+    // FeatureLayer/WFS: definitionExpression filtra en el servidor.
+    // El SDK solo descarga las entidades que cumplan la expresión.
+    try {
+      await layer.load();
+      layer.definitionExpression = `${campoFiltro} = '${municipioData.codigo_ine}'`;
+      console.info(
+        `[layerInitializer] definitionExpression "${layer.definitionExpression}" → "${config.id}"`
+      );
+    } catch (err) {
+      console.warn(
+        `[layerInitializer] No se pudo aplicar definitionExpression a "${config.id}":`, err
+      );
+    }
   }
 }

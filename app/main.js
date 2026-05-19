@@ -1,193 +1,111 @@
-// main.js - Orquestador de la aplicación GIS Municipal
-// ============================================================
-//  Responsabilidad ÚNICA: importar módulos y conectarlos.
-//  Sin lógica propia de mapa, capas ni DOM.
-//  
-//  Principio arquitectónico: este archivo debe poder leerse
-//  como un índice de lo que hace la app, no como implementación.
-//
-//  Sigue patrón de esperar primero lo crítico y 
-//  luego inicializar el resto en paralelo.
-//  ============================================================
+/**
+ * main.js
+ *
+ * Punto de entrada y orquestador de la aplicación GIS Municipal.
+ *
+ * ── RESPONSABILIDAD ÚNICA ────────────────────────────────────────────────
+ * Arrancar la app en el orden correcto:
+ *   1. Registrar el adaptador de datos (Repository Pattern)
+ *   2. Inicializar el mapa
+ *   3. Montar los módulos de UI
+ * Sin lógica de negocio propia. Todo está delegado a los módulos especializados.
+ *
+ * ── LA ÚNICA DECISIÓN QUE TOMA main.js ───────────────────────────────────
+ * Qué adaptador usar. Para cambiar de fuente de datos solo hay que cambiar
+ * esta línea:
+ *   setAdaptador(new LocalJsonAdapter(...))
+ *    →  setAdaptador(new RestApiAdapter("https://api.ejemplo.com/capas"))
+ *    →  setAdaptador(new PostGISAdapter(config))
+ * Ningún otro archivo cambia.
+ */
 
-// funciones app
-import { initMap }             from './core/mapManager.js';
-import { CAPAS_CONFIG }        from './config/municipio.js';
-import { renderToolbar }       from './ui/toolbar.js'; 
-import { renderBasemapSelector } from './ui/basemapSelector.js'; 
-import { renderLayerTree }     from './ui/layerTree.js'; 
-import { initLegend }          from './ui/legendPanel.js'; 
+// ── Config ──────────────────────────────────────────────────────────────
+import { LocalJsonAdapter }        from "../config/adapters/LocalJsonAdapter.js";
+import { setAdaptador }            from "../config/configEngine.js";
 
+// ── Core ─────────────────────────────────────────────────────────────────
+import { initMap }                 from "../core/mapManager.js";
 
+// ── UI ────────────────────────────────────────────────────────────────────
+import { renderMunicipioSelector } from "../ui/municipioSelector.js";
+import { initLayerTree }           from "../ui/layerTree.js";
+import { initLegendPanel }         from "../ui/legendPanel.js";
+import { renderBasemapSelector }   from "../ui/basemapSelector.js";
+import { initToolbar }             from "../ui/toolbar.js";
 
-//  Función principal async.
-//  asincronica, que inicializa un mapa 2D y una escena 3D, asegurando que todo esté listo antes de continuar.
-//  Usamos top-level async/await en un ES Module para claridad.
-//  El catch garantiza que los errores de arranque sean visibles.
+// ─── Bootstrap ────────────────────────────────────────────────────────────
+
+/**
+ * Espera a que el SDK de ArcGIS esté disponible (window.$arcgis).
+ *
+ * POR QUÉ es necesario:
+ * Aunque el SDK se carga con type="module" (lo que garantiza que su script
+ * termina antes de que main.js ejecute), el SDK puede hacer dynamic imports
+ * internos asincrónicos para registrar $arcgis. En ese caso $arcgis todavía
+ * no está disponible al inicio de main().
+ *
+ * Este guard sondea cada 50ms hasta 5 segundos. En condiciones normales
+ * resuelve en el primer o segundo intento (<100ms). Si supera el timeout,
+ * lanza un error descriptivo en lugar del críptico "is not defined".
+ *
+ * @param {number} maxWaitMs
+ * @returns {Promise<void>}
+ */
+async function waitForArcGISSDK(maxWaitMs = 5000) {
+  if (window.$arcgis) return; // Camino rápido: ya está disponible
+  const start = Date.now();
+  return new Promise((resolve, reject) => {
+    const interval = setInterval(() => {
+      if (window.$arcgis) {
+        clearInterval(interval);
+        resolve();
+      } else if (Date.now() - start > maxWaitMs) {
+        clearInterval(interval);
+        reject(new Error(
+          "ArcGIS SDK no disponible tras 5s. " +
+          "Verifica que el <script type=\"module\" src=\"https://js.arcgis.com/5.0/\"> " +
+          "está en el <head> antes de main.js."
+        ));
+      }
+    }, 50);
+  });
+}
  
+
 async function main() {
   try {
-    // ── 1. MAPA ────────────────────────────────────────────────────────
-    // initMap devuelve una promesa que resuelve cuando el mapa 2D
-    // está listo, las capas están cargadas y el Map está compartido
-    // con la SceneView 3D. Todo lo demás puede arrancar después.
+    console.info("=== GIS Municipal — Arrancando... ===");
+
+    // 1. Registrar adaptador de datos antes de cualquier operación de catálogo
+    setAdaptador(new LocalJsonAdapter("../data/catalogo-capas-ne.json"));
+
+    // 2. Inicializar el Map único con sus dos vistas (2D y 3D)
     await initMap({
-      mapElementId:   'my-map',
-      sceneElementId: 'my-scene',
-      capasConfig:    CAPAS_CONFIG,
+      mapContainerId:   "map-view",
+      sceneContainerId: "scene-view"
     });
 
-    // ── 2. UI ──────────────────────────────────────────────────────────
-    // Cada módulo de UI recibe solo el contenedor que le corresponde.
-    // No saben nada del mapa directamente — se comunican vía eventBus.
+    // 3. Montar UI
+    // El orden importa: la toolbar y el selector están en la cabecera (visibles de entrada).
+    // El árbol y la leyenda se construyen cuando "municipio-cargado" se emite.
+    renderMunicipioSelector("#municipio-selector-container");
+    renderBasemapSelector("#basemap-selector-container");
+    initLayerTree("#layer-tree-container");
+    initLegendPanel("#legend-container", "map-view");  // referencia inicial: 2D
+    initToolbar("#toolbar-container");
 
+    console.info("=== GIS Municipal — Listo ===");
 
-    //Renderiza botones como: zoom, medir, dibujar, seleccionar, etc
-    //No recibe el mapa → usará eventos para interactuar con él
-    renderToolbar(document.getElementById('toolbar-actions')); 
+  } catch (err) {
+    console.error("[main] Error fatal al inicializar:", err);
 
-    //Renderiza un selector para cambiar el fondo del mapa (callejero, satélite, topográfico, etc.)
-    //Al hacer clic en una opción, emitirá un evento: 'basemap:change'c
-    renderBasemapSelector(document.getElementById('basemap-selector-container'));
-
-
-    // Renderiza una estructura jerárquica de capas 
-    //Permite: activar/desactivar capas, cambiar orden, ver legend, etc.
-    renderLayerTree(
-      document.getElementById('layer-tree-container'),
-      CAPAS_CONFIG,
-    );
-
-    initLegend(document.getElementById('legend-container'));
-
-    console.info('[App] Visor GIS iniciado correctamente.');
-
-  } catch (error) {
-    console.error('[App] Error crítico al iniciar:', error);
-    // TODO: mostrar mensaje de error al usuario (calcite-notice)
+    const errEl = document.getElementById("app-error");
+    if (errEl) {
+      errEl.textContent = `Error al inicializar: ${err.message}`;
+      errEl.classList.remove("hidden");
+    }
   }
 }
 
-main();
-
-
-
-
-// // ── REFERENCIAS DOM ─────────────────────────────────────
-// const mapEl = document.getElementById("my-map");
-// const sceneEl = document.getElementById("my-scene");
-// const btnToggle = document.getElementById("btn-toggle");
-// const layerListEl = document.getElementById("layer-list");
-// const legendEl = document.getElementById("legend");
-
-// // ── ESPERAR QUE AMBAS VISTAS ESTÉN LISTAS─────────────────────────────
-
-// await mapEl.viewOnReady();
-// await sceneEl.viewOnReady();
-
-
-
-// // ── CREAR CAPAS ─────────────────────────────
-
-// const capas2D = [];
-// const capas3D = [];
-
-
-// for (const cfg of CAPAS_CONFIG) {
-
-//   const capa2D = crearCapa(cfg);
-
-//   if (!capa2D) continue;
-
-//   // ── Inicialización runtime ───────────────────────────
-//   await inicializarCapa(capa2D, cfg);
-
-//   // ── Añadir a colección 2D ────────────────────────────
-//   capas2D.push(capa2D);
-
-//   // ── Capas compatibles con 3D ─────────────────────────
-//   const compatibleCon3D = cfg.compatibleCon3D ?? false;
-
-//   if (compatibleCon3D) {
-
-//     // nunca compartir instancia entre vistas
-//     const capa3D = capa2D.clone();
-
-//     await inicializarCapa(capa3D, cfg);
-
-//     capas3D.push(capa3D);
-//   }
-// }
-
-// // ── AÑADIR CAPAS A CADA MAPA ───────────────────────────
-// mapEl.view.map.addMany(capas2D);
-
-// sceneEl.view.map.addMany(capas3D);
-
-// // ── LEYENDA DINÁMICA ────────────────────────────────────────
-// // legendManager escucha cambios de visibilidad por sí solo.
-// // main.js no necesita saber cómo se dibuja la leyenda.
-// await initLegend(legendEl, mapEl.view);
-
-// // ── CORRECCIÓN DE ESCALA WEB MERCATOR ───────────────────
-// // MapView usa proyección Web Mercator (EPSG:3857) que distorsiona
-// // la escala en función de la latitud. .
-// const getScaleFactor = (viewpoint) =>
-//   Math.cos((viewpoint.targetGeometry.latitude * Math.PI) / 180);
-
-// // ── 5. SHOW/HIDE CON CSS TRANSITION ────────────────────────
-// // CSS maneja la transición (opacity + visibility en styles.css).
-// const mostrarVista = (mostrar, ocultar) => {
-//   mostrar.classList.add("visible");
-//   ocultar.classList.remove("visible");
-// };
-
-// // ── 6. ESTADO ──────────────────────────────────────────────
-// let is2D = true;
-
-// // ── 7. TOGGLE 2D / 3D ──────────────────────────────────────
-// btnToggle.addEventListener("click", () => {
-
-//   // Clonar el viewpoint de la vista activa antes de modificarlo.
-//   const viewpoint = is2D
-//     ? mapEl.viewpoint.clone()
-//     : sceneEl.viewpoint.clone();
-
-//   const factor = getScaleFactor(viewpoint);
-
-//   if (is2D) {
-//     // ── 2D → 3D ──────────────────────────────────────────
-//     // Reducir escala para compensar la distorsión Mercator.
-//     // (zoom in hasta reflejar la distancia real en el terreno)
-//     viewpoint.scale *= factor;
-
-//     // Asignación directa: instantánea y precisa (no animada).
-//     sceneEl.viewpoint = viewpoint;
-
-//     mostrarVista(sceneEl, mapEl);
-
-//     // Redirigir widgets a la escena 3D
-//     // layerListEl.setAttribute("reference-element", "my-scene");
-//     // legendEl.setAttribute("reference-element", "my-scene");
-
-//     btnToggle.textContent = "2D";
-
-//   } else {
-//     // ── 3D → 2D ──────────────────────────────────────────
-//     // Aumentar escala para compensar la distorsión inversa.
-//     viewpoint.scale /= factor;
-
-//     mapEl.viewpoint = viewpoint;
-
-//     mostrarVista(mapEl, sceneEl);
-
-//     // Redirigir widgets al mapa 2D
-//     layerListEl.setAttribute("reference-element", "my-map");
-//     legendEl.setAttribute("reference-element", "my-map");
-
-//     btnToggle.textContent = "3D";
-//   }
-
-//   is2D = !is2D;
-// });
-
+// Garantizar que el DOM está listo antes de acceder a los elementos
+document.addEventListener("DOMContentLoaded", main);
