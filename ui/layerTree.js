@@ -3,38 +3,41 @@
  *
  * Árbol de capas jerárquico basado en Calcite Tree Web Components.
  *
- * ── ESTRUCTURA DEL ÁRBOL ─────────────────────────────────────────────────
+ * ── ESTRUCTURA DEL ÁRBOL ──────────────────────────────────────────────────
  *   bloque_tematico → nivel 1  (SIN checkbox, expandible, negrita)
  *   subtema         → nivel 2  (SIN checkbox, expandible)
- *   title (capa)    → nivel 3  (CON checkbox → activa/desactiva la capa)
+ *   title (capa)    → nivel 3  (seleccionable → activa/desactiva la capa)
  *
- * ── POR QUÉ calcite-tree ─────────────────────────────────────────────────
- * Calcite Tree gestiona expand/collapse, teclado y ARIA de forma nativa.
- * Seguimos el patrón "Web Components first" del SDK v5: sin DOM clásico
- * manual para la jerarquía visual.
+ * ── POR QUÉ selection-mode="ancestors" y NO calcite-checkbox manual ───────
+ * calcite-tree-item intercepta todos los pointer events para su mecanismo
+ * de selección nativo. Añadir calcite-checkbox como hijo provoca que el
+ * click lo consuma el item antes de llegar al checkbox →
+ * calciteCheckboxChange nunca se dispara.
  *
- * ── SLOTS CRÍTICOS DE CALCITE TREE-ITEM (v2) ─────────────────────────────
- *   slot="children"       → árbol hijo (calcite-tree anidado)
- *   slot="actions-start"  → acciones al inicio del item (checkbox aquí)
- * Si el árbol hijo se añade como hijo directo sin slot, Calcite lo ignora
- * y renderiza los items como tarjetas apiladas — bug visual que corregimos aquí.
+ * La solución correcta: usar el mecanismo nativo de Calcite Tree.
+ *   - selection-mode="ancestors" → emite calciteTreeItemSelect en cada cambio
+ *   - Un listener único en el árbol raíz (delegación de eventos)
+ *   - data-layer-id + data-layer-index identifican qué capa toglear
+ *   - Los grupos (nivel 1 y 2) no tienen data-layer-id → el listener los ignora
  *
- * ── REACTIVIDAD ──────────────────────────────────────────────────────────
+ * ── REACTIVIDAD ───────────────────────────────────────────────────────────
  * El árbol se reconstruye completamente al recibir "municipio-cargado".
  * Árbol limpio por municipio → sin riesgo de estado inconsistente.
  */
 
-import { on, emit } from "../utils/eventBus.js";
-import { clearContainer } from "../utils/domUtils.js";
+import { on, emit }        from "../utils/eventBus.js";
+import { clearContainer }  from "../utils/domUtils.js";
 
 let _containerEl = null;
 
-// ─── Inicialización ───────────────────────────────────────────────────────
+// Referencias al estado del municipio activo.
+// Se actualizan en cada "municipio-cargado" para que el listener
+// del árbol siempre opere sobre las capas correctas.
+let _layersRef  = [];
+let _configsRef = [];
 
-/**
- * Inicializa el árbol en el contenedor dado y suscribe los eventos necesarios.
- * @param {HTMLElement|string} container - Elemento o selector CSS del contenedor
- */
+// ─── Inicialización ────────────────────────────────────────────────────────
+
 export function initLayerTree(container) {
   _containerEl = typeof container === "string"
     ? document.querySelector(container)
@@ -45,7 +48,6 @@ export function initLayerTree(container) {
     return;
   }
 
-  // El árbol se reconstruye cada vez que carga un nuevo municipio
   on("municipio-cargado", ({ layers, configs }) => {
     _renderTree(layers, configs);
   });
@@ -53,15 +55,12 @@ export function initLayerTree(container) {
 
 // ─── Renderizado principal ─────────────────────────────────────────────────
 
-/**
- * Reconstruye el árbol de capas completo.
- * Limpia el contenedor antes de renderizar para evitar duplicados.
- *
- * @param {Layer[]}  layers  - Instancias Esri en el mismo orden que configs
- * @param {Object[]} configs - Configs del catálogo correspondientes
- */
 function _renderTree(layers, configs) {
   clearContainer(_containerEl);
+
+  // Actualizar refs del municipio activo
+  _layersRef  = layers;
+  _configsRef = configs;
 
   if (!configs || configs.length === 0) {
     const msg = document.createElement("p");
@@ -73,33 +72,58 @@ function _renderTree(layers, configs) {
 
   const grupos = _agrupar(configs, layers);
 
-  // ── Árbol Calcite raíz ──
-  // "lines" activa las líneas de conexión visual entre niveles (como IDENA)
-  // "selection-mode=none" porque la selección la gestionamos con checkboxes propios
+  // ── Árbol Calcite raíz ─────────────────────────────────────────────────
+  // selection-mode="ancestors": al seleccionar una hoja, el árbol marca
+  // automáticamente los nodos padre (visual). Emite calciteTreeItemSelect.
   const tree = document.createElement("calcite-tree");
-  tree.setAttribute("selection-mode", "none");
+  tree.setAttribute("selection-mode", "ancestors");
   tree.setAttribute("lines", "");
 
-  grupos.forEach(({ bloque, subtemas }) => {
+  // ── Listener único por delegación ─────────────────────────────────────
+  // POR QUÉ en el árbol raíz y no en cada item:
+  //   - Un solo handler cubre todos los items del árbol
+  //   - closest() filtra solo items de capa (tienen data-layer-id)
+  //   - Los grupos (nivel 1 y 2) no tienen el atributo → se ignoran
+  tree.addEventListener("calciteTreeItemSelect", e => {
+    const item = e.target.closest("calcite-tree-item[data-layer-id]");
+    if (!item) return;
+    
+    console.log("selected attr:", item.hasAttribute("selected"));
+    console.log("e.detail:", JSON.stringify(e.detail));
+    console.log("layer.visible antes:", _layersRef[parseInt(item.dataset.layerIndex)].visible);
 
-    // ── Nivel 1: bloque temático ──────────────────────────────────────────
+    const layerIndex = parseInt(item.dataset.layerIndex, 10);
+    const layerId    = item.dataset.layerId;
+
+    // Calcite ya actualizó "selected" antes de emitir el evento
+    const visible = !item.hasAttribute("selected"); //para evitar desfase tempora. Check activa, sin él la interacción queda invertida
+
+    const layer  = _layersRef[layerIndex];
+    const config = _configsRef[layerIndex];
+
+    if (!layer) {
+      console.warn(`[layerTree] Layer no encontrada para índice ${layerIndex}`);
+      return;
+    }
+
+    layer.visible = visible;
+    emit(visible ? "capa-activada" : "capa-desactivada", { layerId, layer, config });
+    console.info(`[layerTree] "${layerId}" → visible: ${visible}`);
+  });
+
+  grupos.forEach(({ bloque, subtemas }) => {
     const bloqueItem     = _crearItemGrupo(bloque, true);
     const bloqueChildren = document.createElement("calcite-tree");
-
-    // CRÍTICO: el árbol hijo debe estar en slot="children"
-    // Sin esto, Calcite no reconoce la jerarquía y apila los items como tarjetas
-    bloqueChildren.slot = "children";
+    bloqueChildren.slot  = "children";
 
     subtemas.forEach(({ subtema, pares }) => {
-
-      // ── Nivel 2: subtema ────────────────────────────────────────────────
       const subtemaItem     = _crearItemGrupo(subtema, false);
       const subtemaChildren = document.createElement("calcite-tree");
-      subtemaChildren.slot  = "children"; // mismo patrón: slot obligatorio
+      subtemaChildren.slot  = "children";
 
       pares.forEach(({ config, layer }) => {
-        // ── Nivel 3: capa individual (hoja con checkbox) ─────────────────
-        subtemaChildren.appendChild(_crearItemCapa(config, layer));
+        const globalIndex = configs.indexOf(config);
+        subtemaChildren.appendChild(_crearItemCapa(config, layer, globalIndex));
       });
 
       subtemaItem.appendChild(subtemaChildren);
@@ -114,22 +138,16 @@ function _renderTree(layers, configs) {
   console.info(`[layerTree] Árbol renderizado: ${configs.length} capas`);
 }
 
-// ─── Construcción de items ────────────────────────────────────────────────
+// ─── Construcción de items ─────────────────────────────────────────────────
 
-/**
- * Crea un calcite-tree-item de grupo (sin checkbox, solo expansión).
- * Los grupos organizan visualmente; no actúan directamente sobre capas.
- *
- * @param {string}  label    - Texto del grupo
- * @param {boolean} negrita  - true → bloque temático (nivel 1), negrita
- * @returns {HTMLElement}
- */
 function _crearItemGrupo(label, negrita) {
   const item = document.createElement("calcite-tree-item");
-  item.setAttribute("expanded", ""); // expandido por defecto al cargar
+  item.setAttribute("expanded", "");
 
   const span = document.createElement("span");
-  span.className   = negrita ? "layer-group-label layer-group-bloque" : "layer-group-label";
+  span.className   = negrita
+    ? "layer-group-label layer-group-bloque"
+    : "layer-group-label";
   span.textContent = label;
   item.appendChild(span);
 
@@ -137,50 +155,31 @@ function _crearItemGrupo(label, negrita) {
 }
 
 /**
- * Crea un calcite-tree-item de capa hoja (CON checkbox).
+ * Crea un calcite-tree-item de capa hoja.
  *
- * ── Por qué checkbox en slot="actions-start" ──────────────────────────
- * Calcite Tree-Item reserva "actions-start" para acciones al inicio del
- * item. Si ponemos el checkbox como hijo directo sin slot, Calcite lo
- * trata como contenido de texto y lo posiciona incorrectamente.
+ * POR QUÉ no hay calcite-checkbox:
+ * El estado activo/inactivo lo representa "selected" en el tree-item.
+ * Calcite lo gestiona visualmente (checkmark nativo). Así evitamos
+ * el conflicto de eventos entre tree-item y checkbox manual.
  *
- * @param {Object} config - Config del catálogo
- * @param {Layer}  layer  - Instancia Esri correspondiente
- * @returns {HTMLElement}
+ * @param {Object} config       - Config del catálogo
+ * @param {Layer}  layer        - Instancia Esri
+ * @param {number} globalIndex  - Índice en el array configs/layers del municipio
  */
-function _crearItemCapa(config, layer) {
+function _crearItemCapa(config, layer, globalIndex) {
   const item = document.createElement("calcite-tree-item");
+  item.dataset.layerId    = config.id;
+  item.dataset.layerIndex = globalIndex;
 
-  // ── Checkbox en slot "actions-start" ──
-  const checkbox = document.createElement("calcite-checkbox");
-  checkbox.id      = `chk-${config.id}`;
-  checkbox.checked = layer.visible;
-  checkbox.slot    = "actions-start"; // slot correcto para Calcite v2
+  if (layer.visible) {
+    item.setAttribute("selected", "");
+  }
 
-  checkbox.addEventListener("calciteCheckboxChange", e => {
-    const visible = e.target.checked;
-    layer.visible = visible;
-
-    emit(visible ? "capa-activada" : "capa-desactivada", {
-      layerId: config.id,
-      layer,
-      config
-    });
-
-    console.info(`[layerTree] "${config.id}" → visible: ${visible}`);
-  });
-
-  // ── Etiqueta de la capa (contenido principal del item) ──
-  // Va directamente en el item, sin wrapper div, para respetar el layout de Calcite
   const span = document.createElement("span");
   span.className   = "layer-label";
   span.textContent = config.title;
+  item.appendChild(span);
 
-  item.appendChild(checkbox); // slot="actions-start" asignado arriba
-  item.appendChild(span);     // contenido principal
-
-  // ── Chips opcionales: P0 e INSPIRE ──
-  // Se añaden después del span para que fluyan a la derecha
   if (config.prioridad === "P0") {
     const badge = document.createElement("calcite-chip");
     badge.setAttribute("scale", "s");
@@ -202,18 +201,6 @@ function _crearItemCapa(config, layer) {
 
 // ─── Agrupación ───────────────────────────────────────────────────────────
 
-/**
- * Agrupa configs + layers por bloque_tematico → subtema.
- *
- * Usa Map (LinkedHashMap) para preservar el orden de inserción,
- * que coincide con el orden de prioridad que devuelve configEngine.
- * Esto garantiza que "Cartografía Base" siempre aparezca antes que
- * "Medio Ambiente" si así viene ordenado, sin lógica de ordenación adicional.
- *
- * @param {Object[]} configs
- * @param {Layer[]}  layers
- * @returns {Array<{ bloque: string, subtemas: Array<{ subtema: string, pares: Array<{config, layer}> }> }>}
- */
 function _agrupar(configs, layers) {
   const bloqueMap = new Map();
 
@@ -221,15 +208,9 @@ function _agrupar(configs, layers) {
     const bloque  = config.bloque_tematico ?? "Sin categoría";
     const subtema = config.subtema         ?? "General";
 
-    if (!bloqueMap.has(bloque)) {
-      bloqueMap.set(bloque, new Map());
-    }
-
+    if (!bloqueMap.has(bloque)) bloqueMap.set(bloque, new Map());
     const subtemaMap = bloqueMap.get(bloque);
-    if (!subtemaMap.has(subtema)) {
-      subtemaMap.set(subtema, []);
-    }
-
+    if (!subtemaMap.has(subtema)) subtemaMap.set(subtema, []);
     subtemaMap.get(subtema).push({ config, layer: layers[i] });
   });
 
