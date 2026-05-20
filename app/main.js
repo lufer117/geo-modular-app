@@ -77,7 +77,7 @@ async function main() {
     console.info("=== GIS Municipal — Arrancando... ===");
 
     // 1. Registrar adaptador de datos antes de cualquier operación de catálogo
-    setAdaptador(new LocalJsonAdapter("../data/catalogo-capas-ne.json"));
+    setAdaptador(new LocalJsonAdapter("../data/catalogo-capas.json"));
 
     // 2. Inicializar el Map único con sus dos vistas (2D y 3D)
     await initMap({

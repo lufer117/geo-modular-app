@@ -8,46 +8,43 @@
  *   - Zoom al municipio seleccionado
  *   - Cambio de basemap
  *
- * ── UN ÚNICO MAP (decisión 14.05.26) ─────────────────────────────────────
+ * ── UN ÚNICO MAP ─────────────────────────────────────────────────────────
  * MapView y SceneView comparten la misma instancia de Map.
- * Las capas se añaden al Map una sola vez. Ambas vistas las renderizan.
- * No hay duplicación de capas ni sincronización manual entre vistas.
+ * Las capas se añaden una sola vez. Ambas vistas las renderizan.
  *
- * ── MÁSCARA MUNICIPAL (recorte visual WMS) ───────────────────────────────
- * WMS es un protocolo de imagen en servidor: el cliente no puede recortar
- * el resultado por un polígono arbitrario sin soporte del servidor.
- * La solución en cliente: superponer un GraphicsLayer con el polígono
- * INVERSO al municipio (mundo - municipio) relleno de gris semitransparente.
- * Resultado visual: solo se ve con nitidez el área del municipio, el resto
- * queda velado. Se preserva contexto geográfico exterior (gris, no blanco).
+ * ── PATRÓN viewOnReady() ─────────────────────────────────────────────────
+ * SDK v5 usa viewOnReady() en lugar del evento arcgisViewReadyChange.
+ * La SceneView se inicializa en background para no bloquear el arranque:
+ * _sceneReadyPromise guarda la promesa y toggleVista() la awaita solo
+ * la primera vez que el usuario activa 3D.
+ *
+ * ── MÁSCARA MUNICIPAL ────────────────────────────────────────────────────
+ * GraphicsLayer con polígono INVERSO al municipio (mundo − municipio),
+ * relleno de gris semitransparente. Preserva contexto geográfico exterior.
  * Técnica: geometryEngine.difference(mundo, municipio) → "donut polygon"
  *
- * ── NOTAS CRÍTICAS DE IMPLEMENTACIÓN ────────────────────────────────────
- * - El callback toggle DEBE ser async (usa await para goTo)
- * - Usar viewpoint para sincronizar posición, NO center + zoom
- * - Al pasar a 3D: verificar tilt y añadir 60° si viene en 0 (plano)
- * - Leer la vista como mapEl.view, NO event.detail.view (llega null en v5)
- * - _capasCreadas: guardia que evita doble carga en arcgisViewReadyChange
+ * ── ORDEN DE CAPAS ───────────────────────────────────────────────────────
+ * ArcGIS renderiza la primera capa del array abajo y la última arriba.
+ * La máscara siempre se reposiciona al final para quedar sobre los datos.
  */
 
-// Estado del módulo (privado)
-let _map       = null;
-let _mapView   = null;
-let _sceneView = null;
-let _vistaActiva = "2D";
-let _maskLayer = null;   // GraphicsLayer de máscara municipal
-let _mapEl     = null;   // Referencia al <arcgis-map>
-let _sceneEl   = null;   // Referencia al <arcgis-scene>
+// ── Estado privado ────────────────────────────────────────────────────────
+let _map               = null;
+let _mapEl             = null;
+let _sceneEl           = null;
+let _vistaActiva       = "2D";
+let _maskLayer         = null;
+let _sceneReadyPromise = null;  // Promesa de inicialización 3D en background
 
 // ─── Inicialización ───────────────────────────────────────────────────────
 
 /**
  * Inicializa el Map único y lo asigna a ambos Web Components.
- * Llama una sola vez desde main.js.
+ * Llama una sola vez desde main.js antes de montar la UI.
  *
  * @param {Object} opts
- * @param {string} opts.mapContainerId   - id del elemento <arcgis-map>
- * @param {string} opts.sceneContainerId - id del elemento <arcgis-scene>
+ * @param {string} opts.mapContainerId   - id del <arcgis-map>
+ * @param {string} opts.sceneContainerId - id del <arcgis-scene>
  * @returns {Promise<void>}
  */
 export async function initMap({ mapContainerId, sceneContainerId }) {
@@ -56,18 +53,16 @@ export async function initMap({ mapContainerId, sceneContainerId }) {
     $arcgis.import("esri/layers/GraphicsLayer")
   ]);
 
-  // GraphicsLayer de máscara municipal.
-  // listMode: "hide" → no aparece en <arcgis-layer-list> ni en layerTree.
-  // Es infraestructura visual, no un dato geográfico.
+  // listMode:"hide" → la máscara no aparece en el árbol de capas ni leyenda.
+  // Es infraestructura visual, no un dato geográfico del municipio.
   _maskLayer = new GraphicsLayer({
     id:       "municipio-mask",
     title:    "Máscara municipal",
     listMode: "hide"
   });
 
-  // El Map único. Sin API Key → basemap "osm".
-  // La máscara se añade ahora; las capas de datos se añadirán después
-  // mediante addCapas(), que siempre reposiciona la máscara al final.
+  // Sin API Key activa → basemap "osm".
+  // La máscara se añade desde el inicio; las capas de datos vienen via addCapas().
   _map = new Map({
     basemap: "osm",
     layers:  [_maskLayer]
@@ -78,85 +73,66 @@ export async function initMap({ mapContainerId, sceneContainerId }) {
 
   if (!_mapEl || !_sceneEl) {
     throw new Error(
-      `[mapManager] Elementos de mapa no encontrados. ` +
-      `Busca id="${mapContainerId}" y id="${sceneContainerId}" en el HTML.`
+      `[mapManager] Elementos no encontrados: "${mapContainerId}", "${sceneContainerId}". ` +
+      `Verifica los id en index.html.`
     );
   }
 
   // Asignar el mismo Map a ambos Web Components.
-  // A partir de aquí cada vista mantiene su propio estado de cámara
-  // pero comparten exactamente el mismo array de capas.
+  // Desde aquí comparten exactamente el mismo array de capas.
   _mapEl.map   = _map;
   _sceneEl.map = _map;
 
-  // Capturar referencias a las vistas cuando cada Web Component esté listo.
-  // IMPORTANTE: en ArcGIS Maps SDK v5, event.detail.view llega null.
-  // Hay que leer la vista como elemento.view, no desde el evento.
-  _mapEl.addEventListener("arcgisViewReadyChange",   _onMapViewReady);
-  _sceneEl.addEventListener("arcgisViewReadyChange", _onSceneViewReady);
-
-  // La vista 3D arranca oculta
-  _sceneEl.classList.add("hidden");
-
-  console.info("[mapManager] Map inicializado. Esperando vistas...");
-}
-
-// ─── Handlers de readiness ────────────────────────────────────────────────
-
-function _onMapViewReady() {
-  // Guardia: el evento puede dispararse antes de que la vista esté asignada
-  if (!_mapEl.view) return;
-  _mapView = _mapEl.view;
+  // viewOnReady() es el patrón correcto en SDK v5.
+  // Esperamos solo la vista 2D para no bloquear el arranque de la app.
+  await _mapEl.viewOnReady();
   console.info("[mapManager] MapView (2D) lista");
+
+  // Vista inicial centrada en España
+  await _mapEl.view.goTo({ center: [-3.7038, 40.4168], zoom: 6 });
+
+  // SceneView en background: se inicializa en paralelo.
+  // toggleVista() awaita esta promesa solo la primera vez que se necesite 3D.
+  _sceneReadyPromise = _sceneEl.viewOnReady().then(() => {
+    console.info("[mapManager] SceneView (3D) lista (background)");
+    _sceneEl.view.viewpoint = _mapEl.view.viewpoint.clone();
+  });
 }
 
-function _onSceneViewReady() {
-  if (!_sceneEl.view) return;
-  _sceneView = _sceneEl.view;
-  console.info("[mapManager] SceneView (3D) lista");
-}
-
-// ─── API pública ──────────────────────────────────────────────────────────
+// ─── Toggle 2D / 3D ──────────────────────────────────────────────────────
 
 /**
  * Alterna entre vista 2D y 3D sincronizando la posición de cámara.
  *
- * Sincronización de viewpoint:
- *   2D → 3D: copiar viewpoint + añadir tilt 60° (el viewpoint 2D llega tilt=0)
- *   3D → 2D: copiar viewpoint directamente (SceneView.goTo acepta Viewpoint)
+ * Patrón basado en el ejemplo oficial Esri SDK v5:
+ * https://developers.arcgis.com/javascript/latest/sample-code/views-switch-2d-3d/
+ * Diferencia: usamos un único Map compartido en lugar de dos mapas independientes.
  *
- * El callback ES async: usa await en goTo() para esperar la animación.
- *
- * @returns {Promise<"2D"|"3D">} nuevo modo activo
+ * @returns {Promise<"2D"|"3D">}
  */
 export async function toggleVista() {
-  if (!_mapView || !_sceneView) {
-    console.warn("[mapManager] Las vistas no están listas aún.");
-    return _vistaActiva;
+  // Esperar SceneView solo la primera vez — después ya está resuelta
+  if (_sceneReadyPromise) {
+    await _sceneReadyPromise;
+    _sceneReadyPromise = null;
   }
 
-  if (_vistaActiva === "2D") {
-    // ── 2D → 3D ──
-    // Copiar viewpoint 2D a SceneView
-    const vp = _mapView.viewpoint.clone();
-    await _sceneView.goTo(vp);
+  const is2D = _vistaActiva === "2D";
 
-    // Si la cámara llegó completamente plana (tilt ≈ 0), inclinar para perspectiva 3D
-    if (_sceneView.camera.tilt < 5) {
-      await _sceneView.goTo({ tilt: 60 }, { animate: true, duration: 800 });
-    }
+  const sourceView = is2D ? _mapEl.view : _sceneEl.view;
+  const targetView = is2D ? _sceneEl.view : _mapEl.view;
 
-    _sceneEl.classList.remove("hidden");
-    _mapEl.classList.add("hidden");
+  // Clonar viewpoint y sincronizar posición antes del cambio visual
+  const vp = sourceView.viewpoint.clone();
+  await targetView.goTo(vp);
+
+  if (is2D) {
+    _sceneEl.classList.add("vista-activa");
+    _mapEl.classList.remove("vista-activa");
     _vistaActiva = "3D";
-
   } else {
-    // ── 3D → 2D ──
-    const vp = _sceneView.viewpoint.clone();
-    await _mapView.goTo(vp);
-
-    _mapEl.classList.remove("hidden");
-    _sceneEl.classList.add("hidden");
+    _mapEl.classList.add("vista-activa");
+    _sceneEl.classList.remove("vista-activa");
     _vistaActiva = "2D";
   }
 
@@ -164,31 +140,32 @@ export async function toggleVista() {
   return _vistaActiva;
 }
 
-/**
- * Devuelve la vista activa (MapView en 2D, SceneView en 3D).
- * @returns {MapView|SceneView|null}
- */
-export function getVistaActiva() {
-  return _vistaActiva === "2D" ? _mapView : _sceneView;
-}
+// ─── Getters ──────────────────────────────────────────────────────────────
 
 /**
- * Devuelve el modo actual.
+ * Devuelve el modo actual como string.
  * @returns {"2D"|"3D"}
  */
-export function getModoActual() {
+export function getVistaActiva() {
   return _vistaActiva;
 }
 
 /**
- * Añade capas al Map compartido.
- * Elimina las capas de datos previas (mantiene la máscara intacta)
- * y reposiciona la máscara al final para que quede siempre encima.
+ * Devuelve el Map compartido.
+ * Útil para módulos que necesiten acceso directo (ej: basemapSelector).
+ * @returns {Map|null}
+ */
+export function getMap() {
+  return _map;
+}
+
+// ─── Gestión de capas ─────────────────────────────────────────────────────
+
+/**
+ * Añade capas al Map compartido eliminando las anteriores.
+ * Mantiene siempre la máscara como última capa (renderiza encima de todo).
  *
- * Orden de renderizado en ArcGIS: la primera capa del array se dibuja
- * abajo y la última arriba. La máscara debe ser la última.
- *
- * @param {Layer[]} capas - Array de instancias Esri
+ * @param {Layer[]} capas - Array de instancias Esri ya inicializadas
  */
 export function addCapas(capas) {
   if (!_map) {
@@ -196,33 +173,31 @@ export function addCapas(capas) {
     return;
   }
 
-  // Retirar solo las capas de datos (nunca la máscara)
+  // Retirar solo capas de datos — nunca la máscara
   const capasPrevias = _map.layers
     .filter(l => l.id !== "municipio-mask")
     .toArray();
   _map.layers.removeMany(capasPrevias);
 
-  // Añadir las nuevas capas de datos
   if (capas.length > 0) {
     _map.layers.addMany(capas);
   }
 
-  // Reposicionar la máscara al final → siempre por encima de todos los datos
+  // Reposicionar máscara al final → siempre por encima de los datos
   _map.layers.remove(_maskLayer);
   _map.layers.add(_maskLayer);
 
   console.info(`[mapManager] ${capas.length} capas añadidas al Map`);
 }
 
+// ─── Máscara municipal ────────────────────────────────────────────────────
+
 /**
- * Actualiza la máscara visual municipal.
+ * Actualiza la máscara visual del municipio seleccionado.
  *
- * TÉCNICA:
- *   1. Crear polígono "mundo" que cubre toda la Tierra (WGS84)
- *   2. Restar el polígono del municipio: geometryEngine.difference()
- *   3. El resultado es el área EXTERIOR al municipio
- *   4. Rellenar con gris semitransparente (0.75) → preserva contexto exterior
- *   5. Borde azul delgado como límite municipal
+ * TÉCNICA: geometryEngine.difference(mundo, municipio) produce el área
+ * exterior al municipio. Se rellena de gris semitransparente para que el
+ * contexto geográfico exterior sea visible pero quede en segundo plano.
  *
  * @param {Object} polygon - { rings, spatialReference } de municipios.js
  * @returns {Promise<void>}
@@ -236,7 +211,6 @@ export async function actualizarMascara(polygon) {
     $arcgis.import("esri/geometry/geometryEngine")
   ]);
 
-  // Polígono que cubre toda la Tierra en WGS84
   const mundo = new Polygon({
     rings: [[
       [-180, -90], [180, -90], [180, 90], [-180, 90], [-180, -90]
@@ -244,14 +218,12 @@ export async function actualizarMascara(polygon) {
     spatialReference: { wkid: 4326 }
   });
 
-  // Polígono del municipio desde municipios.js
   const municipioPoly = new Polygon({
-    rings:             polygon.rings,
-    spatialReference:  polygon.spatialReference ?? { wkid: 4326 }
+    rings:            polygon.rings,
+    spatialReference: polygon.spatialReference ?? { wkid: 4326 }
   });
 
-  // Diferencia: mundo − municipio = área exterior al municipio
-  // geometryEngine es síncrono en ArcGIS SDK
+  // mundo − municipio = área exterior → efecto de recorte visual
   const exterior = geometryEngine.difference(mundo, municipioPoly);
 
   _maskLayer.removeAll();
@@ -260,10 +232,10 @@ export async function actualizarMascara(polygon) {
     _maskLayer.add(new Graphic({
       geometry: exterior,
       symbol: {
-        type:    "simple-fill",
-        color:   [210, 210, 210, 0.75],  // Gris semitransparente: contexto visible
+        type:  "simple-fill",
+        color: [210, 210, 210, 0.75],   // gris semitransparente
         outline: {
-          color: [30, 100, 200, 1],      // Borde azul: límite del municipio
+          color: [30, 100, 200, 1],      // borde azul: límite municipal
           width: 2
         }
       }
@@ -274,21 +246,24 @@ export async function actualizarMascara(polygon) {
 }
 
 /**
- * Elimina la máscara (al inicio o si no hay municipio seleccionado).
+ * Elimina la máscara (útil al resetear el municipio seleccionado).
  */
 export function limpiarMascara() {
   _maskLayer?.removeAll();
 }
 
+// ─── Navegación ───────────────────────────────────────────────────────────
+
 /**
  * Hace zoom al bounding box del municipio en la vista activa.
- * Añade un 20% de margen para mostrar contexto geográfico inmediato.
+ * expand(1.2) añade 20% de margen para mostrar contexto geográfico inmediato.
  *
- * @param {number[]} bbox - [xmin, ymin, xmax, ymax] WGS84
+ * @param {number[]} bbox - [xmin, ymin, xmax, ymax] en WGS84
  * @returns {Promise<void>}
  */
 export async function irAlMunicipio(bbox) {
-  const view = getVistaActiva();
+  const view = _vistaActiva === "2D" ? _mapEl?.view : _sceneEl?.view;
+
   if (!view) {
     console.warn("[mapManager] No hay vista activa para hacer zoom");
     return;
@@ -304,12 +279,13 @@ export async function irAlMunicipio(bbox) {
     spatialReference: { wkid: 4326 }
   });
 
-  // expand(1.2) → 20% de margen alrededor del municipio
   await view.goTo(extent.expand(1.2), { animate: true, duration: 1200 });
 }
 
+// ─── Basemap ──────────────────────────────────────────────────────────────
+
 /**
- * Cambia el basemap del mapa activo.
+ * Cambia el basemap del mapa.
  * @param {string} basemapId - Ej: "osm", "arcgis/satellite", "arcgis/topographic"
  */
 export function setBasemap(basemapId) {

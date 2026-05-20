@@ -64,8 +64,12 @@ function _crearBotonToggle() {
       if (nuevoModo === "3D") {
         btn.textContent = "Vista 2D";
         btn.setAttribute("icon-start", "map");
-        // Leyenda apunta ahora al <arcgis-scene>
-        actualizarReferencia("scene-view");
+        // Reasignar referencia según el modo que acaba de activarse
+        actualizarReferencia(
+          nuevoModo === "3D"
+          ? "scene-view"
+          : "map-view"
+        );
       } else {
         btn.textContent = "Vista 3D";
         btn.setAttribute("icon-start", "globe");
