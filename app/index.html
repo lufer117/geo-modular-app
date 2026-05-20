@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" href="data:,"> 
   <title>GIS Municipal — Visor Adaptativo</title>
 
   <!-- 
@@ -63,12 +64,12 @@
       <calcite-panel heading="Capas" description="Selecciona un municipio para ver sus capas">
 
         <!-- Selector de mapa base -->
-        <calcite-block heading="Mapa base" open>
+        <calcite-block heading="Mapa base" expanded>
           <div id="basemap-selector-container"></div>
         </calcite-block>
 
         <!-- Árbol de capas — construido por layerTree.js al cargar municipio -->
-        <calcite-block id="capas-block" heading="Capas disponibles" open>
+        <calcite-block id="capas-block" heading="Capas disponibles" expanded>
           <div id="layer-tree-container">
             <!-- Estado inicial antes de seleccionar municipio -->
             <p class="layer-tree-empty">Selecciona un municipio para ver las capas disponibles.</p>

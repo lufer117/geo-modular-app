@@ -179,3 +179,52 @@ calcite-block {
   text-align: center;
   font-size: var(--calcite-font-size--1, 0.875rem);
 }
+
+/* ══════════════════════════════════════════════════════════════════
+   ÁRBOL DE CAPAS 
+   ══════════════════════════════════════════════════════════════════ */
+
+/* Nivel 1: bloque temático — negrita y color de acento */
+.layer-group-bloque {
+  font-weight: 700;
+  font-size: 0.875rem;
+  color: var(--calcite-color-text-1);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+/* Nivel 2: subtema — semibold, tono secundario */
+.layer-group-label {
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: var(--calcite-color-text-2);
+}
+
+/* Nivel 3: etiqueta de capa hoja */
+.layer-label {
+  font-size: 0.875rem;
+  color: var(--calcite-color-text-1);
+  cursor: pointer;
+  user-select: none;
+  flex: 1;
+}
+
+/* Alineación horizontal: checkbox + label en la misma línea */
+calcite-tree-item calcite-checkbox {
+  align-self: center;
+  margin-inline-end: 0.25rem;
+}
+
+/* Chips (P0, INSPIRE) separados del texto */
+calcite-tree-item calcite-chip {
+  margin-inline-start: 0.4rem;
+  align-self: center;
+}
+
+/* Estado vacío */
+.layer-tree-empty {
+  padding: 1rem;
+  font-size: 0.875rem;
+  color: var(--calcite-color-text-3);
+  text-align: center;
+}
