@@ -62,15 +62,11 @@ export const MUNICIPIOS = [
     // Polígono simplificado para prototipo (hexágono aproximado sobre casco urbano)
     // rings: array de anillos WGS84 [[lon, lat], ...]
     // El primer anillo es el exterior; debe cerrarse (primer punto = último punto)
-    polygon: {
+     polygon: {
       rings: [[
-        [-1.6852, 42.7648],
-        [-1.5878, 42.7700],
-        [-1.5878, 42.8300],
-        [-1.6200, 42.8388],
-        [-1.6700, 42.8350],
-        [-1.6852, 42.8000],
-        [-1.6852, 42.7648]  // cierre del anillo
+        [-1.683, 42.805], [-1.665, 42.830], [-1.625, 42.835], 
+        [-1.595, 42.820], [-1.590, 42.785], [-1.620, 42.770], 
+        [-1.660, 42.775], [-1.683, 42.805]
       ]],
       spatialReference: { wkid: 4326 }
     }

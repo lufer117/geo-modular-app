@@ -205,10 +205,10 @@ export function addCapas(capas) {
 export async function actualizarMascara(polygon) {
   if (!_maskLayer) return;
 
-  const [Graphic, Polygon, geometryEngine] = await Promise.all([
+  const [Graphic, Polygon, differenceOperator] = await Promise.all([
     $arcgis.import("esri/Graphic"),
     $arcgis.import("esri/geometry/Polygon"),
-    $arcgis.import("esri/geometry/geometryEngine")
+    $arcgis.import("esri/geometry/operators/differenceOperator")
   ]);
 
   const mundo = new Polygon({
@@ -224,7 +224,7 @@ export async function actualizarMascara(polygon) {
   });
 
   // mundo − municipio = área exterior → efecto de recorte visual
-  const exterior = geometryEngine.difference(mundo, municipioPoly);
+  const exterior = differenceOperator.execute(mundo, municipioPoly);
 
   _maskLayer.removeAll();
 
