@@ -107,14 +107,13 @@ export function getTiposImplementados() {
 
 /**
  * Estrategia BBOX:
- *   - WMS: la máscara de mapManager gestiona el recorte visual. Sin acción aquí.
- *   - FeatureLayer/WFS: featureEffect DECLARATIVO — sin layer.load().
- *       POR QUÉ sin load(): layer.load() dispara la descarga completa del WFS
- *       aunque la capa no esté en el mapa ni sea visible. featureEffect es una
- *       propiedad declarativa que el SDK lee en el momento de la carga real
- *       (cuando la capa entra al mapa y el usuario la activa). Asignarlo antes
- *       de map.add() garantiza que el filtro esté activo desde el primer request.
- *   - GeoJSON: sin filtro extra en cliente (máscara gestiona lo visual).
+ *   - WMS: recorte visual delegado a la máscara de mapManager.
+ *   - WFS: customParameters.BBOX → filtro SERVIDOR real (OGC estándar).
+ *       El servicio devuelve solo features del bbox desde el primer request.
+ *   - FEATURE (ArcGIS REST): featureEffect declarativo (filtro cliente).
+ *       El servidor no acepta parámetros OGC; filtro servidor real
+ *       requiere definitionExpression → estrategia FILTRABLE.
+ *   - GeoJSON: carga completa inevitable en cliente sin backend.
  */
 async function _estrategiaBbox(layer, config, municipioData) {
   const [xmin, ymin, xmax, ymax] = municipioData.bbox;
@@ -128,37 +127,42 @@ async function _estrategiaBbox(layer, config, municipioData) {
       `[layerInitializer] WMS BBOX "${config.id}" → recorte visual delegado a máscara municipal`
     );
 
-  } else if (tipo === "FEATURE" || tipo === "WFS") {
+  } else if (tipo === "WFS") {
+    // customParameters.BBOX → filtro SERVIDOR real.
+    // El servicio WFS recibe el bbox en cada GetFeature request
+    // y devuelve solo las features que intersectan esa área.
+    // Es radicalmente más eficiente que featureEffect:
+    //   featureEffect → descarga todo, oculta visualmente lo que sobra
+    //   customParameters.BBOX → el servidor ya no envía lo que sobra
+    // Formato OGC estándar: "xmin,ymin,xmax,ymax,CRS"
+    layer.customParameters = {
+      BBOX: `${xmin},${ymin},${xmax},${ymax},EPSG:4326`
+    };
+    console.info(
+      `[layerInitializer] WFS BBOX servidor "${config.id}" → [${xmin},${ymin},${xmax},${ymax}]`
+    );
+
+  } else if (tipo === "FEATURE") {
+    // FeatureLayer con BBOX: featureEffect declarativo (cliente).
+    // FeatureLayer ArcGIS REST no acepta customParameters OGC;
+    // el filtro servidor real requiere definitionExpression con geometría,
+    // que a su vez requiere layer.load() previo → estrategia FILTRABLE.
+    // featureEffect es el mejor filtro disponible sin load() para este tipo.
     try {
       const [Extent, FeatureFilter] = await Promise.all([
         $arcgis.import("esri/geometry/Extent"),
         $arcgis.import("esri/layers/support/FeatureFilter")
       ]);
-
-      const extent = new Extent({
-        xmin, ymin, xmax, ymax,
-        spatialReference: { wkid: 4326 }
-      });
-
-      // Asignación DECLARATIVA: no requiere layer.load().
-      // El SDK aplica este filtro cuando la capa entra al mapa,
-      // limitando la descarga al bbox desde el primer request WFS.
-      // Sin este patrón, layer.load() dispararía la descarga de las
-      // 45.000+ features nacionales antes de que el usuario active nada.
+      const extent = new Extent({ xmin, ymin, xmax, ymax, spatialReference: { wkid: 4326 } });
       layer.featureEffect = {
         filter:         new FeatureFilter({ geometry: extent, spatialRelationship: "intersects" }),
-        excludedEffect: "opacity(0)",  // Entidades fuera del bbox: invisibles
-        includedEffect: ""             // Entidades dentro: render normal
+        excludedEffect: "opacity(0)",
+        includedEffect: ""
       };
-
-      console.info(`[layerInitializer] WFS/Feature BBOX declarado en "${config.id}" — sin descarga prematura`);
-
+      console.info(`[layerInitializer] FEATURE BBOX declarado en "${config.id}"`);
     } catch (err) {
-      console.warn(
-        `[layerInitializer] No se pudo aplicar featureEffect a "${config.id}":`, err
-      );
+      console.warn(`[layerInitializer] No se pudo aplicar featureEffect a "${config.id}":`, err);
     }
-
   } else if (tipo === "GEOJSON") {
     // GeoJSON: en cliente sin backend no es posible filtrar la descarga.
     // La carga es completa; la máscara gestiona el recorte visual.

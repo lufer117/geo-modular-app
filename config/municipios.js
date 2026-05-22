@@ -56,8 +56,8 @@ export const MUNICIPIOS = [
     ccaa_nombre:      "Comunidad Foral de Navarra",
 
     // Bounding box WGS84 [xmin, ymin, xmax, ymax]
-    // Cubre el término municipal del casco urbano y su entorno inmediato
-    bbox: [-1.6852, 42.7648, -1.5878, 42.8388],
+    // 
+    bbox: [-1.6900, 42.7800, -1.6000, 42.8400],
 
     // Polígono simplificado para prototipo (hexágono aproximado sobre casco urbano)
     // rings: array de anillos WGS84 [[lon, lat], ...]
