@@ -29,35 +29,71 @@
     }
   },
 
-   {
-    "id": "ine-unidad-de-infraestructura-de-datos-espaciales-seccionado",
-    "title": "Seccionado Estadístico de España",
-    "bloque_tematico": "Demografía",
-    "subtema": "Secciones censales",
-    "proveedor": "INE - Unidad de Infraestructura de Datos Espaciales",
+  {
+    "id": "ign-cnig-redes-geodesicas-del-ign-de-espana-wfs",
+    "title": "Redes Geodésicas del IGN de España",
+    "bloque_tematico": "Cartografia base e imagenes",
+    "subtema": "Geodesia y sistemas de referencia",
+    "proveedor": "IGN-CNIG",
     "tipo": "WFS",
-    "url": "https://www.ine.es/geoserver/WMS_INE_SECCIONES_G01/wms",
-    "capabilities_url": "ine.es/geoserver/WMS_INE_SECCIONES_G01/wms?service=WFS&request=GetCapabilities",
+    "url": "https://www.ign.es/wfs/redes-geodesicas",
+    "capabilities_url": "https://www.ign.es/wfs/redes-geodesicas?service=WFS&request=GetCapabilities",
     "formatos_salida": [
-      "SHP",
-      "GeoJSON",
-      "KML",
-      "GML"
+      "GML",
+      "XML",
+      "GeoJSON"
     ],
     "formato_consumo": "GeoJSON",
-    "inspire": "Statistical Units - SU",
-    "notas": "Descarga de geometria de secciones censales por provincia o conjunto nacional. Imprescindible para visualización demográfica inframunicipal. Requiere unión tabular de la geometría con datos INE por código de sección para tener indicadores demográficos . Actualización anual.",
-    "referencia": "Inicio / Datos Abiertos /Cartografía secciones censales",
+    "inspire": "Coordinate Reference Systems - RS / Geographical Grid Systems - GG",
+    "notas": "No usa ruta wfs-inspire, pero la temática se relaciona con los sistemas de referencia y la infraestructura geodésica. Requiere cliente compatible WFS; atribución IGN-CNIG obligatoria",
+    "referencia": "https://www.ign.es/wfs/redes-geodesicas | https://www.ign.es/web/ide-area-nodo-ide-ign",
     "requiere_registro": false,
     "coste": "Gratuita",
     "visible": false,
-    "disponibilidad_municipal": "DIRECTA",
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 0,
+      "cobertura": 2,
+      "fuente": 2,
+      "tecnica": 2,
+      "total": 6
+    },
+    "prioridad": "P1 - Alta",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
+    "id": "mivauv-siose-y-corine-wfs-aurbanas",
+    "name": "OGC_Areas_Urbanas",
+    "title": "SIOSE y Corine - Áreas Urbanas",
+    "bloque_tematico": "Administración del territorio",
+    "subtema": "Sistema de información urbana",
+    "proveedor": "MIVAUV",
+    "tipo": "WFS",
+    "url": "https://mapas.fomento.gob.es/arcgis/services/SIU/Servicios_OGC/MapServer/WFSServer",
+    "capabilities_url": "https://mapas.fomento.gob.es/arcgis/services/SIU/Servicios_OGC/MapServer/WFSServer?service=wfs&request=getCapabilities",
+    "formatos_salida": [
+      "GML",
+      "XML",
+      "Geopackage",
+      "KML",
+      "GeoJSON"
+    ],
+    "formato_consumo": "GeoJSON",
+    "inspire": "Land Use - LU",
+    "notas": "Acceso vectorial a capas de planeamiento y áreas urbanas. Permite análisis espacial pero requiere gestión de BBOX por volumen de datos.",
+    "referencia": "Sistema de Información Urbana | Ministerio de Vivienda y Agenda Urbana",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
     "puntuacion": {
       "tematica": 2,
       "cobertura": 2,
       "fuente": 2,
-      "tecnica": 2,
-      "total": 8
+      "tecnica": 1,
+      "total": 7
     },
     "prioridad": "P0 - MVP",
     "cobertura": {

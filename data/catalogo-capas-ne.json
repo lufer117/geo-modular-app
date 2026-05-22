@@ -1,5 +1,41 @@
 [
   {
+    "id": "mivauv-siose-y-corine-wfs",
+    "title": "SIOSE y Corine",
+    "bloque_tematico": "Administración del territorio",
+    "subtema": "Sistema de información urbana",
+    "proveedor": "MIVAUV",
+    "tipo": "WFS",
+    "url": "https://mapas.fomento.gob.es/arcgis/services/SIU/Servicios_OGC/MapServer/WFSServer",
+    "capabilities_url": "https://mapas.fomento.gob.es/arcgis/services/SIU/Servicios_OGC/MapServer/WFSServer?service=wfs&request=getCapabilities",
+    "formatos_salida": [
+      "GML",
+      "XML",
+      "Geopackage",
+      "KML",
+      "GeoJSON"
+    ],
+    "formato_consumo": "GeoJSON",
+    "inspire": "Land Use - LU",
+    "notas": "Acceso vectorial a capas de planeamiento y áreas urbanas. Permite análisis espacial pero requiere gestión de BBOX por volumen de datos.",
+    "referencia": "Sistema de Información Urbana | Ministerio de Vivienda y Agenda Urbana",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 2,
+      "cobertura": 2,
+      "fuente": 2,
+      "tecnica": 1,
+      "total": 7
+    },
+    "prioridad": "P0 - MVP",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+  {
     "id": "fega-mapa-servicio-wms-en-la-nube-sigpac-wms",
     "title": "Servicio WMS en la Nube SIGPAC",
     "bloque_tematico": "Agricultura",

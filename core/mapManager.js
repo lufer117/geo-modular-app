@@ -190,6 +190,18 @@ export function addCapas(capas) {
   console.info(`[mapManager] ${capas.length} capas añadidas al Map`);
 }
 
+/**
+ * Añade una sola capa al Map (lazy-load on-demand para WFS).
+ * La máscara se reposiciona encima.
+ * @param {Layer} capa
+ */
+export function addCapa(capa) {
+  if (!_map) return;
+  _map.layers.add(capa);
+  _map.layers.remove(_maskLayer);
+  _map.layers.add(_maskLayer);
+}
+
 // ─── Máscara municipal ────────────────────────────────────────────────────
 
 /**

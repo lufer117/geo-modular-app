@@ -108,6 +108,21 @@ function _buildParams(config) {
         url:    config.url,
         // WFSLayer en SDK v5 consume el servicio WFS nativamente
         // El formato interno es GeoJSON; no hace falta especificarlo
+
+        // ─── LÍMITE TEMPORAL DE PRUEBA ───────────────────────────────────
+        // WFSLayer sin filtro espacial descarga el servicio completo.
+        // 2.5M features → warning + fallo. Limitamos a 500 para verificar
+        // que la capa carga, renderiza y responde correctamente antes de
+        // implementar el filtro real por municipio (siguiente paso).
+        // Cuando el filtro espacial esté activo, este valor se elimina.
+        // maxRecordCount: 500
+        
+        // ─── FEATURE TYPE CONCRETO DEL SERVICIO ───────────────────────────────────
+        // name: selecciona un feature type concreto del servicio WFS.
+        // Sin este parámetro el SDK coge el primero del GetCapabilities
+        // → puede ser un servicio con millones de features.
+        // El catálogo declara qué feature type es relevante para este municipio.
+        ...(config.name ? { name: config.name } : {})
       };
 
     case "GEOJSON":

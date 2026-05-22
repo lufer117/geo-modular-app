@@ -15,8 +15,10 @@
  *   Aquí no se hace nada adicional sobre la capa WMS; el servidor
  *   responde con datos para el viewport visible y la máscara recorta
  *   visualmente el exterior del municipio.
- *   Para FeatureLayer/WFS con BBOX: se aplica un featureEffect con
- *   filtro geométrico para limitar las entidades al bbox del municipio.
+ *   Para FeatureLayer/WFS con BBOX: se aplica featureEffect DECLARATIVO
+ *   (sin layer.load()) para limitar las entidades al bbox del municipio.
+ *   El filtro se asigna antes de que la capa entre al mapa; el SDK lo
+ *   aplica en el momento de la carga, no antes.
  *   Para GeoJSON con BBOX: la carga completa es inevitable en cliente
  *   sin backend; la máscara gestiona el recorte visual.
  *
@@ -26,6 +28,8 @@
  *   ancho de banda y además la máscara visual es redundante (pero actúa
  *   como seguridad adicional).
  *   Para FeatureLayer FILTRABLE: definitionExpression con el campo de filtro.
+ *   NOTA: FILTRABLE sí usa layer.load() porque definitionExpression requiere
+ *   conocer el esquema del servicio antes de aplicarse.
  *
  * DIRECTA:
  *   La URL o el servicio ya incorpora el ámbito municipal. Sin filtro extra.
@@ -55,17 +59,16 @@ export async function inicializarCapa(layer, config, municipioData) {
         break;
 
       case "FILTRABLE":
+        // TODO: pendiente de añadir campo_filtro al catálogo antes de activar.
+        // La lógica está implementada en _estrategiaFiltrable().
         await _estrategiaFiltrable(layer, config, municipioData);
         break;
 
       case "DIRECTA":
-        // El servicio responde directamente al ámbito municipal.
-        // No se aplica filtro adicional.
         console.info(`[layerInitializer] "${config.id}" DIRECTA — sin filtro extra`);
         break;
 
       case "CONSULTA":
-        // Solo para GetFeatureInfo / identify.
         console.info(`[layerInitializer] "${config.id}" CONSULTA — visible, sin filtro espacial`);
         break;
 
@@ -105,7 +108,12 @@ export function getTiposImplementados() {
 /**
  * Estrategia BBOX:
  *   - WMS: la máscara de mapManager gestiona el recorte visual. Sin acción aquí.
- *   - FeatureLayer/WFS: aplicar featureEffect con filtro geométrico al bbox.
+ *   - FeatureLayer/WFS: featureEffect DECLARATIVO — sin layer.load().
+ *       POR QUÉ sin load(): layer.load() dispara la descarga completa del WFS
+ *       aunque la capa no esté en el mapa ni sea visible. featureEffect es una
+ *       propiedad declarativa que el SDK lee en el momento de la carga real
+ *       (cuando la capa entra al mapa y el usuario la activa). Asignarlo antes
+ *       de map.add() garantiza que el filtro esté activo desde el primer request.
  *   - GeoJSON: sin filtro extra en cliente (máscara gestiona lo visual).
  */
 async function _estrategiaBbox(layer, config, municipioData) {
@@ -121,12 +129,7 @@ async function _estrategiaBbox(layer, config, municipioData) {
     );
 
   } else if (tipo === "FEATURE" || tipo === "WFS") {
-    // FeatureLayer/WFS: aplicar featureEffect para mostrar solo las entidades
-    // que intersecten con el bbox del municipio.
-    // Esto es eficiente: el SDK no descarga las entidades fuera del área.
     try {
-      await layer.load();
-
       const [Extent, FeatureFilter] = await Promise.all([
         $arcgis.import("esri/geometry/Extent"),
         $arcgis.import("esri/layers/support/FeatureFilter")
@@ -137,14 +140,18 @@ async function _estrategiaBbox(layer, config, municipioData) {
         spatialReference: { wkid: 4326 }
       });
 
-      // featureEffect: ocultar entidades fuera del bbox
+      // Asignación DECLARATIVA: no requiere layer.load().
+      // El SDK aplica este filtro cuando la capa entra al mapa,
+      // limitando la descarga al bbox desde el primer request WFS.
+      // Sin este patrón, layer.load() dispararía la descarga de las
+      // 45.000+ features nacionales antes de que el usuario active nada.
       layer.featureEffect = {
-        filter:             new FeatureFilter({ geometry: extent, spatialRelationship: "intersects" }),
-        excludedEffect:     "opacity(0)",  // Entidades fuera: invisibles
-        includedEffect:     ""             // Entidades dentro: render normal
+        filter:         new FeatureFilter({ geometry: extent, spatialRelationship: "intersects" }),
+        excludedEffect: "opacity(0)",  // Entidades fuera del bbox: invisibles
+        includedEffect: ""             // Entidades dentro: render normal
       };
 
-      console.info(`[layerInitializer] Feature/WFS BBOX aplicado a "${config.id}"`);
+      console.info(`[layerInitializer] WFS/Feature BBOX declarado en "${config.id}" — sin descarga prematura`);
 
     } catch (err) {
       console.warn(
@@ -165,8 +172,11 @@ async function _estrategiaBbox(layer, config, municipioData) {
  * Estrategia FILTRABLE:
  *   - WMS con soporte CQL_FILTER (GeoServer): pasar filtro por municipio.
  *     El servidor devuelve solo la geometría del municipio → eficiente.
- *   - FeatureLayer: definitionExpression con el campo_filtro del catálogo.
- *     El servidor filtra en origen antes de enviar datos.
+ *   - FeatureLayer/WFS: definitionExpression con el campo_filtro del catálogo.
+ *     El SDK solo descarga las entidades que cumplan la expresión.
+ *     NOTA: aquí sí se usa layer.load() porque definitionExpression en
+ *     FeatureLayer requiere que el servicio esté cargado para validar
+ *     el esquema de campos antes de aplicar el filtro.
  */
 async function _estrategiaFiltrable(layer, config, municipioData) {
   const campoFiltro = config.campo_filtro;
@@ -182,8 +192,8 @@ async function _estrategiaFiltrable(layer, config, municipioData) {
 
   if (tipo === "WMS") {
     // WMS con CQL_FILTER (servidores GeoServer/GeoServer-compatible).
-    // Catastro soporta filtros por municipio mediante parámetros específicos.
     // Se aplica como customLayerParameters que WMSLayer incluye en cada tile request.
+    // No requiere layer.load(): es un parámetro HTTP añadido a la URL del tile.
     layer.customLayerParameters = {
       CQL_FILTER: `${campoFiltro}='${municipioData.codigo_ine}'`
     };
@@ -193,7 +203,8 @@ async function _estrategiaFiltrable(layer, config, municipioData) {
 
   } else if (tipo === "FEATURE" || tipo === "WFS") {
     // FeatureLayer/WFS: definitionExpression filtra en el servidor.
-    // El SDK solo descarga las entidades que cumplan la expresión.
+    // layer.load() necesario aquí para validar que el campo existe en el esquema.
+    // Solo aplica a servicios con campo de filtro municipal conocido (catálogo).
     try {
       await layer.load();
       layer.definitionExpression = `${campoFiltro} = '${municipioData.codigo_ine}'`;

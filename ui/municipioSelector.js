@@ -134,7 +134,11 @@ async function _onMunicipioChange(event) {
     const cfgList = pares.map(p => p.config);
 
     // ── 4. Añadir capas al mapa ──
-    mapManager.addCapas(layers);
+    // WFSLayer descarga features en map.add() aunque visible=false.
+    // Las WFS se registran pero no entran al mapa hasta que el usuario
+    // las active desde el árbol (lazy-load en layerTree.js).
+    const capasInmediatas = layers.filter((_, i) => cfgList[i].tipo !== "WFS");
+    mapManager.addCapas(capasInmediatas);
 
     // ── 5. Actualizar máscara visual (recorte WMS por polígono municipal) ──
     await mapManager.actualizarMascara(municipioData.polygon);
@@ -146,7 +150,10 @@ async function _onMunicipioChange(event) {
     emit("municipio-cargado", {
       municipioData,
       layers,
-      configs: cfgList
+      configs: cfgList,
+      lazyLayerIds: new Set(
+        cfgList.filter(c => c.tipo === "WFS").map(c => c.id)
+      )
     });
 
     console.info(

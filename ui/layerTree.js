@@ -18,23 +18,21 @@
  *   - selection-mode="ancestors" → emite calciteTreeItemSelect en cada cambio
  *   - Un listener único en el árbol raíz (delegación de eventos)
  *   - data-layer-id + data-layer-index identifican qué capa toglear
- *   - Los grupos (nivel 1 y 2) no tienen data-layer-id → el listener los ignora
+ *   - Los grupos (nivel 1 y 2) no tienen data-layer-id → el listener los ignoran
  *
  * ── REACTIVIDAD ───────────────────────────────────────────────────────────
  * El árbol se reconstruye completamente al recibir "municipio-cargado".
  * Árbol limpio por municipio → sin riesgo de estado inconsistente.
  */
 
-import { on, emit }        from "../utils/eventBus.js";
-import { clearContainer }  from "../utils/domUtils.js";
+import { on, emit }       from "../utils/eventBus.js";
+import { clearContainer } from "../utils/domUtils.js";
+import * as mapManager    from "../core/mapManager.js";
 
 let _containerEl = null;
-
-// Referencias al estado del municipio activo.
-// Se actualizan en cada "municipio-cargado" para que el listener
-// del árbol siempre opere sobre las capas correctas.
-let _layersRef  = [];
-let _configsRef = [];
+let _layersRef   = [];
+let _configsRef  = [];
+let _lazyLayerIds = new Set();
 
 // ─── Inicialización ────────────────────────────────────────────────────────
 
@@ -48,19 +46,28 @@ export function initLayerTree(container) {
     return;
   }
 
-  on("municipio-cargado", ({ layers, configs }) => {
-    _renderTree(layers, configs);
+  // Mensaje inicial — layerTree es dueño único de este contenedor.
+  // Se elimina en _renderTree via clearContainer cuando llegue municipio-cargado.
+  const msg = document.createElement("p");
+  msg.className   = "layer-tree-empty";
+  msg.textContent = "Selecciona un municipio para ver las capas disponibles.";
+  _containerEl.appendChild(msg);
+
+  on("municipio-cargado", ({ layers, configs, lazyLayerIds }) => {
+    _renderTree(layers, configs, lazyLayerIds ?? new Set());
   });
 }
 
 // ─── Renderizado principal ─────────────────────────────────────────────────
 
-function _renderTree(layers, configs) {
+function _renderTree(layers, configs, lazyLayerIds) {
+  // CRÍTICO: limpiar el contenedor antes de renderizar.
+  // Elimina el mensaje inicial y cualquier árbol de municipio anterior.
   clearContainer(_containerEl);
 
-  // Actualizar refs del municipio activo
-  _layersRef  = layers;
-  _configsRef = configs;
+  _lazyLayerIds = lazyLayerIds;
+  _layersRef    = layers;
+  _configsRef   = configs;
 
   if (!configs || configs.length === 0) {
     const msg = document.createElement("p");
@@ -72,31 +79,20 @@ function _renderTree(layers, configs) {
 
   const grupos = _agrupar(configs, layers);
 
-  // ── Árbol Calcite raíz ─────────────────────────────────────────────────
-  // selection-mode="ancestors": al seleccionar una hoja, el árbol marca
-  // automáticamente los nodos padre (visual). Emite calciteTreeItemSelect.
   const tree = document.createElement("calcite-tree");
   tree.setAttribute("selection-mode", "ancestors");
   tree.setAttribute("lines", "");
 
-  // ── Listener único por delegación ─────────────────────────────────────
-  // POR QUÉ en el árbol raíz y no en cada item:
-  //   - Un solo handler cubre todos los items del árbol
-  //   - closest() filtra solo items de capa (tienen data-layer-id)
-  //   - Los grupos (nivel 1 y 2) no tienen el atributo → se ignoran
   tree.addEventListener("calciteTreeItemSelect", e => {
     const item = e.target.closest("calcite-tree-item[data-layer-id]");
     if (!item) return;
-    
-    console.log("selected attr:", item.hasAttribute("selected"));
-    console.log("e.detail:", JSON.stringify(e.detail));
-    console.log("layer.visible antes:", _layersRef[parseInt(item.dataset.layerIndex)].visible);
 
     const layerIndex = parseInt(item.dataset.layerIndex, 10);
     const layerId    = item.dataset.layerId;
 
-    // Calcite ya actualizó "selected" antes de emitir el evento
-    const visible = !item.hasAttribute("selected"); //para evitar desfase tempora. Check activa, sin él la interacción queda invertida
+    // Calcite actualiza "selected" antes de emitir el evento.
+    // La negación evita el desfase temporal de la prop selected.
+    const visible = !item.hasAttribute("selected");
 
     const layer  = _layersRef[layerIndex];
     const config = _configsRef[layerIndex];
@@ -104,6 +100,12 @@ function _renderTree(layers, configs) {
     if (!layer) {
       console.warn(`[layerTree] Layer no encontrada para índice ${layerIndex}`);
       return;
+    }
+
+    // Lazy-load: WFS entra al mapa solo la primera vez que el usuario la activa.
+    // layer.map es null si la capa no está en ningún mapa todavía.
+    if (visible && _lazyLayerIds.has(layerId) && !layer.map) {
+      mapManager.addCapa(layer);
     }
 
     layer.visible = visible;
@@ -154,18 +156,6 @@ function _crearItemGrupo(label, negrita) {
   return item;
 }
 
-/**
- * Crea un calcite-tree-item de capa hoja.
- *
- * POR QUÉ no hay calcite-checkbox:
- * El estado activo/inactivo lo representa "selected" en el tree-item.
- * Calcite lo gestiona visualmente (checkmark nativo). Así evitamos
- * el conflicto de eventos entre tree-item y checkbox manual.
- *
- * @param {Object} config       - Config del catálogo
- * @param {Layer}  layer        - Instancia Esri
- * @param {number} globalIndex  - Índice en el array configs/layers del municipio
- */
 function _crearItemCapa(config, layer, globalIndex) {
   const item = document.createElement("calcite-tree-item");
   item.dataset.layerId    = config.id;
@@ -180,7 +170,7 @@ function _crearItemCapa(config, layer, globalIndex) {
   span.textContent = config.title;
   item.appendChild(span);
 
-  if (config.prioridad === "P0") {
+  if (config.prioridad === "P0 - MVP") {
     const badge = document.createElement("calcite-chip");
     badge.setAttribute("scale", "s");
     badge.setAttribute("kind", "brand");
