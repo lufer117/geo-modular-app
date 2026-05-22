@@ -128,6 +128,30 @@ async function _estrategiaBbox(layer, config, municipioData) {
     );
 
   } else if (tipo === "WFS") {
+
+    const srsname = config.srsname ?? "EPSG:4326";
+    let bboxStr;
+
+    if (srsname === "EPSG:3857") {
+      // El servidor trabaja en Web Mercator → proyectar bbox antes de enviarlo.
+      // El catálogo siempre almacena en 4326; la proyección es solo adaptación
+      // en la petición, no modifica los datos del catálogo.
+      const [webMercatorUtils, Point] = await Promise.all([
+        $arcgis.import("esri/geometry/support/webMercatorUtils"),
+        $arcgis.import("esri/geometry/Point")
+      ]);
+      const sw = webMercatorUtils.geographicToWebMercator(
+        new Point({ x: xmin, y: ymin, spatialReference: { wkid: 4326 } })
+      );
+      const ne = webMercatorUtils.geographicToWebMercator(
+        new Point({ x: xmax, y: ymax, spatialReference: { wkid: 4326 } })
+      );
+      bboxStr = `${sw.x},${sw.y},${ne.x},${ne.y},EPSG:3857`;
+    } else {
+      // Servidor en 4326 → bbox directo sin proyección
+      bboxStr = `${xmin},${ymin},${xmax},${ymax},EPSG:4326`;
+    }
+
     // customParameters.BBOX → filtro SERVIDOR real.
     // El servicio WFS recibe el bbox en cada GetFeature request
     // y devuelve solo las features que intersectan esa área.
@@ -138,9 +162,9 @@ async function _estrategiaBbox(layer, config, municipioData) {
     layer.customParameters = {
       BBOX: `${xmin},${ymin},${xmax},${ymax},EPSG:4326`
     };
-    console.info(
-      `[layerInitializer] WFS BBOX servidor "${config.id}" → [${xmin},${ymin},${xmax},${ymax}]`
-    );
+    layer.customParameters = { BBOX: bboxStr };
+  console.info(`[layerInitializer] WFS BBOX servidor "${config.id}" → ${srsname} [${bboxStr}]`);
+
 
   } else if (tipo === "FEATURE") {
     // FeatureLayer con BBOX: featureEffect declarativo (cliente).

@@ -66,6 +66,7 @@
   {
     "id": "mivauv-siose-y-corine-wfs-aurbanas",
     "name": "OGC_Areas_Urbanas",
+    "srsname": "EPSG:3857",
     "title": "SIOSE y Corine - Áreas Urbanas",
     "bloque_tematico": "Administración del territorio",
     "subtema": "Sistema de información urbana",
