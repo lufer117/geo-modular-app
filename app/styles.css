@@ -40,7 +40,7 @@ calcite-shell {
   height: 100%;
 }
 
-/* Ambas vistas superpuestas — ocupan el mismo espacio */
+/* Ambas vistas superpuestas e invisibles— ocupan el mismo espacio */
 arcgis-map,
 arcgis-scene {
   position: absolute;

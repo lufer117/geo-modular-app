@@ -6,18 +6,16 @@
   <link rel="icon" href="data:,"> 
   <title>GIS Municipal — Visor Adaptativo</title>
 
-  <!-- 
-    Busca: Incluir: Esri JS modules + Web Components (arcgis-map, arcgis-scene,
-    arcgis-zoom, arcgis-legend, etc.) + Calcite Design System.
-    Sin API Key → basemap restringido a "osm". 
-  -->
-
-  
-  <link rel="stylesheet" href="https://js.arcgis.com/5.0/esri/themes/light/main.css" />
-    
-  <!-- Load ArcGIS Maps SDK for JavaScript v5 from CDN -->
+     
+  <!-- Load ArcGIS SDK for JavaScript v5 from CDN  -->
+    <!-- v5 usa modulos -->
+    <!-- el SDK registra la función $arcgis en el ámbito global -->
+    <!-- Funcion asincrona no devuelve el resultado inmediatamente, sino que devuelve una Promesa-->
   
  <script type="module" src="https://js.arcgis.com/5.0/"></script>
+
+  <!-- Estilos de los Widgets nativos, tema visual, variables de diseño css -->
+  <link rel="stylesheet" href="https://js.arcgis.com/5.0/esri/themes/light/main.css" />
 
   <!--
     Calcite Design System — Web Components de UI (calcite-shell, calcite-panel,
@@ -27,7 +25,7 @@
   <link rel="stylesheet" href="https://js.arcgis.com/calcite-components/2.13.2/calcite.css" />
   <script type="module" src="https://js.arcgis.com/calcite-components/2.13.2/calcite.esm.js"></script>
 
-  <!-- Estilos propios: solo layout y overrides. Sin lógica. -->
+  <!-- Estilos propios: solo layout y overrides -->
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
@@ -37,10 +35,15 @@
     Slots disponibles: header, panel-start, panel-end, footer.
     El contenido sin slot va al área central (el mapa).
   -->
+
+  <!-- Jerarquía: Shell > Navigation > Content -->
+  <!-- Se abre el marco calcite-shell-->
   <calcite-shell>
+    
 
     <!-- ═══ CABECERA ══════════════════════════════════════════════════════ -->
-    <calcite-navigation slot="header">
+     <!-- barra de navegación ubicada en el header (parte superior)-->
+    <calcite-navigation slot="header"> 
 
       <!-- Logo / título -->
       <calcite-navigation-logo
@@ -50,29 +53,40 @@
         icon="map-pin"
       ></calcite-navigation-logo>
 
-      <!-- Selector de municipio — montado por municipioSelector.js -->
+      <!-- Espacio vacio para Selector de municipio 
+          slot content-center: for adding interactive elements in the center position of the primary navigation level.
+          municipioSelector.js: encargado de dibujar el selector -->
       <div slot="content-center" id="municipio-selector-container"></div>
 
-      <!-- Botón 2D/3D — montado por toolbar.js -->
+
+      <!-- Espacio vacio para Botón 2D/3D
+          slot content-end: extremo derecho
+          toolbar.js: montará herramienta 
+          class="toolbar-end": styles css -->
       <div slot="content-end" id="toolbar-container" class="toolbar-end"></div>
 
     </calcite-navigation>
 
     <!-- ═══ PANEL LATERAL IZQUIERDO (capas) ══════════════════════════════ -->
-    <calcite-shell-panel slot="panel-start" display-mode="float">
+
+    <!-- Pendiente agregar action-bar para collapsar panel -->
+
+
+    <!-- Shell panel 
+        panel-start: posición izquierda-->
+    <calcite-shell-panel slot="panel-start">
 
       <calcite-panel heading="Capas" description="Selecciona un municipio para ver sus capas">
 
-        <!-- Selector de mapa base -->
+        <!-- Espacio para Selector de mapa base -->
         <calcite-block heading="Mapa base" expanded>
           <div id="basemap-selector-container"></div>
         </calcite-block>
 
-        <!-- Árbol de capas — construido por layerTree.js al cargar municipio -->
+        <!-- Espacio para Árbol de capas
+            construido por layerTree.js al cargar municipio -->
         <calcite-block id="capas-block" heading="Capas disponibles" expanded>
-          <div id="layer-tree-container">
-        
-          </div>
+          <div id="layer-tree-container"></div>
         </calcite-block>
 
       </calcite-panel>
@@ -90,12 +104,13 @@
 
     <!-- ═══ ÁREA CENTRAL: MAPA ════════════════════════════════════════════
       Dos Web Components que comparten el mismo Map (instancia única).
-      Solo uno está visible a la vez; la clase "hidden" alterna entre ellos.
+      Solo uno está visible a la vez. 
       mapManager.toggleVista() gestiona el cambio.
     ════════════════════════════════════════════════════════════════════════ -->
     <div id="map-container">
 
-      <!-- Vista 2D — activa por defecto -->
+      <!-- Vista 2D — activa por defecto
+          class="vista-activa" del styles CSS -->
       <arcgis-map id="map-view" class="vista-activa">
         <arcgis-zoom          position="top-left"></arcgis-zoom>
         <arcgis-home          position="top-left"></arcgis-home>
@@ -119,7 +134,8 @@
 
   </calcite-shell>
 
-  <!-- Entry point ES Module — cargado después del DOM y del SDK -->
+  <!-- Entry point ES Module — cargado después del DOM y del SDK 
+        para asegurar que estén cargados antes que JS empiece a funcionar -->
   <script type="module" src="./main.js"></script>
 
 </body>
@@ -129,3 +145,6 @@
 <!-- REFERENCES -->
 
 <!-- https://developers.arcgis.com/javascript/latest/sample-code/views-switch-2d-3d/ -->
+<!-- https://developers.arcgis.com/calcite-design-system/core-concepts/#slots -->
+<!-- https://developers.arcgis.com/calcite-design-system/components/shell-panel/ -->
+<!-- https://developers.arcgis.com/calcite-design-system/components/panel/ -->

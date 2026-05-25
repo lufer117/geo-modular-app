@@ -31,7 +31,8 @@
 
   {
     "id": "ign-cnig-redes-geodesicas-del-ign-de-espana-wfs",
-    "title": "Redes Geodésicas del IGN de España",
+    "name": "RED_ERGNSS",
+    "title": "Redes Geodésicas del IGN de España- ERGNSS",
     "bloque_tematico": "Cartografia base e imagenes",
     "subtema": "Geodesia y sistemas de referencia",
     "proveedor": "IGN-CNIG",

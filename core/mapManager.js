@@ -13,7 +13,7 @@
  * Las capas se añaden una sola vez. Ambas vistas las renderizan.
  *
  * ── PATRÓN viewOnReady() ─────────────────────────────────────────────────
- * SDK v5 usa viewOnReady() en lugar del evento arcgisViewReadyChange.
+ * SDK v5 usa viewOnReady() 
  * La SceneView se inicializa en background para no bloquear el arranque:
  * _sceneReadyPromise guarda la promesa y toggleVista() la awaita solo
  * la primera vez que el usuario activa 3D.
@@ -28,15 +28,16 @@
  * La máscara siempre se reposiciona al final para quedar sobre los datos.
  */
 
-// ── Estado privado ────────────────────────────────────────────────────────
-let _map               = null;
-let _mapEl             = null;
-let _sceneEl           = null;
-let _vistaActiva       = "2D";
-let _maskLayer         = null;
-let _sceneReadyPromise = null;  // Promesa de inicialización 3D en background
+// ── Variables privadas del módulo ───────────────────────────────────────────────
+let _map               = null; // se guarda instancia unica de esri/Map
+let _mapEl             = null; // guarda el web component <arcgis-map> (contenedor 2d)
+let _sceneEl           = null; // guarda el web component <arcgis-scene> (contenedor 3d)
+let _vistaActiva       = "2D"; // guarda el estado global, default 2D
+let _maskLayer         = null; // GraphicsLayer usada para la máscara municipal
+let _sceneReadyPromise = null;  // Guarda la Promesa de inicialización 3D en background
 
-// ─── Inicialización ───────────────────────────────────────────────────────
+
+// ─── INICIALIZACIÓN ───────────────────────────────────────────────────────
 
 /**
  * Inicializa el Map único y lo asigna a ambos Web Components.
@@ -47,9 +48,13 @@ let _sceneReadyPromise = null;  // Promesa de inicialización 3D en background
  * @param {string} opts.sceneContainerId - id del <arcgis-scene>
  * @returns {Promise<void>}
  */
-export async function initMap({ mapContainerId, sceneContainerId }) {
-  const [Map, GraphicsLayer] = await Promise.all([
-    $arcgis.import("esri/Map"),
+
+
+export async function initMap({ mapContainerId, sceneContainerId }) { // parametros creados en main.js
+  const [Map, GraphicsLayer] = await Promise.all([ //all para que ambos imports se carguen en paralelo
+
+    // importacion dinámica: carga bajo demanda
+    $arcgis.import("esri/Map"), 
     $arcgis.import("esri/layers/GraphicsLayer")
   ]);
 
@@ -68,9 +73,11 @@ export async function initMap({ mapContainerId, sceneContainerId }) {
     layers:  [_maskLayer]
   });
 
-  _mapEl   = document.getElementById(mapContainerId);
-  _sceneEl = document.getElementById(sceneContainerId);
+  //buscar los web components (contenedores)
+  _mapEl   = document.getElementById(mapContainerId); //para saber dónde inyectar el objeto .Map -> <arcgis-map> 
+  _sceneEl = document.getElementById(sceneContainerId); //para saber dónde inyectar el objeto .Map -> <arcgis-scene> 
 
+  // manejo de error si hay error tipografico entre index y main, ids no coinciden 
   if (!_mapEl || !_sceneEl) {
     throw new Error(
       `[mapManager] Elementos no encontrados: "${mapContainerId}", "${sceneContainerId}". ` +
@@ -78,28 +85,29 @@ export async function initMap({ mapContainerId, sceneContainerId }) {
     );
   }
 
-  // Asignar el mismo Map a ambos Web Components.
+  // Asignar el mismo objeto Map JS a ambos Web Components (contenedores) para dibujar en pantalla
   // Desde aquí comparten exactamente el mismo array de capas.
-  _mapEl.map   = _map;
+  _mapEl.map   = _map; 
   _sceneEl.map = _map;
 
-  // viewOnReady() es el patrón correcto en SDK v5.
-  // Esperamos solo la vista 2D para no bloquear el arranque de la app.
+  
+  // Espera solo la vista 2D para no bloquear el arranque de la app.
+  // no espera 3D porque muy pesado al arrancar
   await _mapEl.viewOnReady();
   console.info("[mapManager] MapView (2D) lista");
 
   // Vista inicial centrada en España
   await _mapEl.view.goTo({ center: [-3.7038, 40.4168], zoom: 6 });
 
-  // SceneView en background: se inicializa en paralelo.
+  // SceneView en lazy empieza a prepararse en paralelo mientras usuario usa 2D
   // toggleVista() awaita esta promesa solo la primera vez que se necesite 3D.
   _sceneReadyPromise = _sceneEl.viewOnReady().then(() => {
     console.info("[mapManager] SceneView (3D) lista (background)");
-    _sceneEl.view.viewpoint = _mapEl.view.viewpoint.clone();
+    _sceneEl.view.viewpoint = _mapEl.view.viewpoint.clone(); //asigna vista y clona posición, centro, zoom, tilt, escala, orientación y cámara de 2D a 3D.
   });
 }
 
-// ─── Toggle 2D / 3D ──────────────────────────────────────────────────────
+// ─── TOGGLE 2D / 3D ──────────────────────────────────────────────────────
 
 /**
  * Alterna entre vista 2D y 3D sincronizando la posición de cámara.
@@ -110,8 +118,10 @@ export async function initMap({ mapContainerId, sceneContainerId }) {
  *
  * @returns {Promise<"2D"|"3D">}
  */
+
+
 export async function toggleVista() {
-  // Esperar SceneView solo la primera vez — después ya está resuelta
+  // Esperar SceneView solo la primera vez — después no hace falta esperar
   if (_sceneReadyPromise) {
     await _sceneReadyPromise;
     _sceneReadyPromise = null;
