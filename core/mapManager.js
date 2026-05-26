@@ -29,6 +29,8 @@
  */
 
 // ── Variables privadas del módulo ───────────────────────────────────────────────
+// Las variables viven mientras la página este cargada
+// El exterior solo accede a lo que se exporta explicitamente 
 let _map               = null; // se guarda instancia unica de esri/Map
 let _mapEl             = null; // guarda el web component <arcgis-map> (contenedor 2d)
 let _sceneEl           = null; // guarda el web component <arcgis-scene> (contenedor 3d)
@@ -61,25 +63,25 @@ export async function initMap({ mapContainerId, sceneContainerId }) { // paramet
   // listMode:"hide" → la máscara no aparece en el árbol de capas ni leyenda.
   // Es infraestructura visual, no un dato geográfico del municipio.
   _maskLayer = new GraphicsLayer({
-    id:       "municipio-mask",
-    title:    "Máscara municipal",
-    listMode: "hide"
+    id:       "municipio-mask", //The unique ID assigned to the layer. If not set by the developer, it is automatically generated when the layer is loaded.
+    title:    "Máscara municipal", //The title of the layer used to identify it in places such as the Layer List component.
+    listMode: "hide" //Indicates how the layer should display eg: in the Layer List component
   });
 
   // Sin API Key activa → basemap "osm".
-  // La máscara se añade desde el inicio; las capas de datos vienen via addCapas().
+  // La máscara se añade desde el inicio al Map; las capas de datos vendrán via addCapas().
   _map = new Map({
     basemap: "osm",
-    layers:  [_maskLayer]
+    layers:  [_maskLayer] 
   });
 
   //buscar los web components (contenedores)
-  _mapEl   = document.getElementById(mapContainerId); //para saber dónde inyectar el objeto .Map -> <arcgis-map> 
-  _sceneEl = document.getElementById(sceneContainerId); //para saber dónde inyectar el objeto .Map -> <arcgis-scene> 
+  _mapEl   = document.getElementById(mapContainerId); //js, variable que contiene el web component <arcgis-map> del DOM
+  _sceneEl = document.getElementById(sceneContainerId); //js, variable que contiene el web component <arcgis-scene> del DOM 
 
   // manejo de error si hay error tipografico entre index y main, ids no coinciden 
   if (!_mapEl || !_sceneEl) {
-    throw new Error(
+    throw new Error( //js
       `[mapManager] Elementos no encontrados: "${mapContainerId}", "${sceneContainerId}". ` +
       `Verifica los id en index.html.`
     );
@@ -87,16 +89,19 @@ export async function initMap({ mapContainerId, sceneContainerId }) { // paramet
 
   // Asignar el mismo objeto Map JS a ambos Web Components (contenedores) para dibujar en pantalla
   // Desde aquí comparten exactamente el mismo array de capas.
-  _mapEl.map   = _map; 
-  _sceneEl.map = _map;
+  // Cualquier capa que se añada a _map se verá automáticamente en la vista 2D/3D.
+   _mapEl.map   = _map; //<arcgis-map>.map = Map (.map es una propiedad de arcgis-map y _map es una clase Map "An instance of a Map object to display in the view.")
+  _sceneEl.map = _map; //<arcgis-map>.map = Map 
 
   
   // Espera solo la vista 2D para no bloquear el arranque de la app.
   // no espera 3D porque muy pesado al arrancar
-  await _mapEl.viewOnReady();
+  await _mapEl.viewOnReady(); // (m) viewOnReady() devuelve una promesa
   console.info("[mapManager] MapView (2D) lista");
 
   // Vista inicial centrada en España
+  // view (p) de <arcgis-map>: The MapView instance created and managed by the component.
+  // goTo (m) de <arcgis-map>: Sets the view to a given target.
   await _mapEl.view.goTo({ center: [-3.7038, 40.4168], zoom: 6 });
 
   // SceneView en lazy empieza a prepararse en paralelo mientras usuario usa 2D
@@ -127,8 +132,14 @@ export async function toggleVista() {
     _sceneReadyPromise = null;
   }
 
-  const is2D = _vistaActiva === "2D";
+  // detectar la vista actual "===" evaluación lógica
+  //¿Es el valor actual de _vistaActiva exactamente igual al string "2D"?".
+  // Devuelve: true/false
+  const is2D = _vistaActiva === "2D"; 
 
+  // Elegir vista origen y destino
+  // Si is2D true : sourceView = 2D y targetView = 3D
+  // Si is2D false : sourceView = 3D y targetView = 2D
   const sourceView = is2D ? _mapEl.view : _sceneEl.view;
   const targetView = is2D ? _sceneEl.view : _mapEl.view;
 
@@ -205,6 +216,8 @@ export function addCapas(capas) {
  * La máscara se reposiciona encima.
  * @param {Layer} capa
  */
+
+
 export function addCapa(capa) {
   if (!_map) return;
   _map.layers.add(capa);
@@ -315,3 +328,10 @@ export function setBasemap(basemapId) {
   _map.basemap = basemapId;
   console.info(`[mapManager] Basemap cambiado a: ${basemapId}`);
 }
+
+
+
+// ─── REFERENCES ──────────────────────────────────────────────────────────────
+// https://developers.arcgis.com/javascript/latest/references/map-components/components/arcgis-map/
+// (p) : propiedad
+// (m): método
