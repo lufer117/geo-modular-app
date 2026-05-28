@@ -27,7 +27,7 @@
  *   3. Usuario expande el nodo → calciteTreeItemExpand se dispara
  *   4. fetchFeatureTypes(url) → array de FeatureTypeInfo
  *   5. Se inyectan nodos hijo en el árbol (uno por FeatureType)
- *   6. Al activar un hijo → crearCapaWfsHija() + addCapa() (lazy)
+ *   6. Al activar un hijo → aplicarBboxWfs() + addCapa() (lazy)
  *
  * ── POR QUÉ selection-mode="ancestors" y NO calcite-checkbox manual ───────
  * calcite-tree-item intercepta todos los pointer events para su mecanismo
@@ -46,18 +46,25 @@
  * Árbol limpio por municipio → sin riesgo de estado inconsistente.
  */
 
-import { on, emit }                                    from "../utils/eventBus.js";
-import { clearContainer }                              from "../utils/domUtils.js";
-import * as mapManager                                 from "../core/mapManager.js";
-import { crearCapaWfsHija }                            from "../core/layerFactory.js";
-import { fetchFeatureTypes }                           from "../utils/wfsCapabilitiesParser.js";
+import { on, emit }        from "../utils/eventBus.js";
+import { clearContainer }  from "../utils/domUtils.js";
+import * as mapManager     from "../core/mapManager.js";
+import { crearCapaWfsHija } from "../core/layerFactory.js";
+import { aplicarBboxWfs }  from "../core/layerInitializer.js"; // ← CAMBIO: importar helper de filtrado
+import { fetchFeatureTypes } from "../utils/wfsCapabilitiesParser.js";
 
 // ─── Estado interno del módulo ────────────────────────────────────────────
 
-let _containerEl  = null;
-let _layersRef    = [];
-let _configsRef   = [];
-let _lazyLayerIds = new Set();
+let _containerEl   = null;
+let _layersRef     = [];
+let _configsRef    = [];
+let _lazyLayerIds  = new Set();
+
+// ← CAMBIO: guardar municipioData para aplicar BBOX a las capas hijas WFS
+// creadas on-demand en _crearHijoWfs(). Las hijas no pasan por
+// inicializarCapa() porque no tienen entrada en el catálogo; necesitamos
+// el contexto del municipio activo para filtrarlas igual que al padre.
+let _municipioData = null;
 
 /**
  * Conjunto de IDs de nodos WFS "discovery" que ya han sido expandidos.
@@ -86,10 +93,12 @@ export function initLayerTree(container) {
   msg.textContent = "Selecciona un municipio para ver las capas disponibles.";
   _containerEl.appendChild(msg);
 
-  on("municipio-cargado", ({ layers, configs, lazyLayerIds }) => {
+  // ← CAMBIO: desestructurar también municipioData del evento
+  on("municipio-cargado", ({ layers, configs, lazyLayerIds, municipioData }) => {
     // Limpiar el estado de discovery al cambiar de municipio.
     // Un municipio nuevo puede tener las mismas URLs WFS pero con distinto contexto.
     _wfsDiscoveryExpanded.clear();
+    _municipioData = municipioData ?? null; // ← CAMBIO: actualizar contexto municipal
     _renderTree(layers, configs, lazyLayerIds ?? new Set());
   });
 }
@@ -222,7 +231,6 @@ function _handleLayerSelect(e) {
 
 /**
  * Activa/desactiva un FeatureLayer hijo de un nodo WFS discovery.
- * La instancia se crea la primera vez que se activa (lazy).
  *
  * @param {HTMLElement} item   - El calcite-tree-item del hijo
  * @param {string}      hijoId - ID derivado: "{padreId}::{featureType.name}"
@@ -232,11 +240,10 @@ function _handleWfsHijoSelect(item, hijoId) {
 
   // La instancia de capa se almacena en el propio nodo DOM como referencia.
   // Esto evita un Map externo y mantiene el estado colocado junto al elemento
-  // que lo necesita. Se asigna en _handleWfsDiscovery cuando se crean los hijos.
-  let layer = item._layerInstance;
+  // que lo necesita. Se asigna en _crearHijoWfs cuando se crean los hijos.
+  const layer = item._layerInstance;
 
   if (!layer) {
-    // Aún no se ha creado (no debería pasar, pero por seguridad)
     console.warn(`[layerTree] Capa WFS hija sin instancia: "${hijoId}"`);
     return;
   }
@@ -421,10 +428,19 @@ function _crearItemWfsDiscovery(config, globalIndex) {
 
 /**
  * Crea el nodo Calcite para un FeatureType hijo de un nodo WFS discovery,
- * y crea la instancia WFSLayer correspondiente.
+ * crea la instancia WFSLayer correspondiente, y le aplica el filtro BBOX
+ * del municipio activo antes de que entre al mapa.
  *
- * La instancia de capa se almacena en item._layerInstance para acceso
- * directo desde _handleWfsHijoSelect sin necesitar un Map externo.
+ * ── POR QUÉ SE APLICA BBOX AQUÍ ──────────────────────────────────────────
+ * La hija no tiene entrada en el catálogo → no pasa por inicializarCapa().
+ * aplicarBboxWfs() es la función pública de layerInitializer que encapsula
+ * la lógica de filtrado servidor OGC. Llamarla aquí respeta el SRP:
+ *   - layerFactory  → solo instancia
+ *   - layerInitializer → único dueño de la lógica de filtrado (DRY)
+ *   - layerTree     → orquesta UI y llama al filtrado con el contexto disponible
+ *
+ * La instancia se almacena en item._layerInstance para acceso O(1) desde
+ * _handleWfsHijoSelect sin necesitar un Map externo.
  *
  * @param {import('../utils/wfsCapabilitiesParser.js').FeatureTypeInfo} featureType
  * @param {Object} configPadre - Config del catálogo del servicio padre
@@ -438,8 +454,8 @@ async function _crearHijoWfs(featureType, configPadre) {
   const layer = await crearCapaWfsHija(featureType, configPadre);
 
   const item = document.createElement("calcite-tree-item");
-  item.dataset.layerId  = hijoId;
-  item.dataset.wfsHijo  = "true"; // Identificador para _handleLayerSelect
+  item.dataset.layerId = hijoId;
+  item.dataset.wfsHijo = "true"; // Identificador para _handleLayerSelect
 
   if (!layer) {
     // La capa no pudo crearse: mostrar el nodo como deshabilitado
@@ -456,6 +472,14 @@ async function _crearHijoWfs(featureType, configPadre) {
     item.appendChild(errorChip);
 
     return { item, layer: null };
+  }
+
+  // ← CAMBIO: aplicar BBOX al hijo antes de que entre al mapa.
+  // La hija hereda el srsname del configPadre (que sí está en el catálogo).
+  // El filtro debe aplicarse ANTES de map.add() para que el primer
+  // GetFeature request ya lleve el parámetro BBOX al servidor.
+  if (_municipioData) {
+    await aplicarBboxWfs(layer, _municipioData, configPadre.srsname ?? "EPSG:4326");
   }
 
   // Almacenar referencia directa en el nodo DOM para acceso O(1) desde el listener
@@ -498,9 +522,9 @@ function _setDiscoveryState(parentItem, childrenTree, state) {
   clearContainer(childrenTree);
 
   const messages = {
-    loading: { icon: null,            text: "Cargando tipos de capa...",              chip: null      },
-    empty:   { icon: "information",   text: "Sin FeatureTypes disponibles",           chip: "neutral" },
-    error:   { icon: "exclamation",   text: "No se pudo conectar con el servicio",   chip: "danger"  }
+    loading: { icon: null,          text: "Cargando tipos de capa...",            chip: null      },
+    empty:   { icon: "information", text: "Sin FeatureTypes disponibles",         chip: "neutral" },
+    error:   { icon: "exclamation", text: "No se pudo conectar con el servicio",  chip: "danger"  }
   };
 
   const { icon, text, chip } = messages[state] ?? messages.error;

@@ -12,30 +12,27 @@
  *
  * BBOX — WMS:
  *   El recorte visual lo gestiona la máscara de mapManager.
- *   Aquí no se hace nada adicional sobre la capa WMS; el servidor
- *   responde con datos para el viewport visible y la máscara recorta
- *   visualmente el exterior del municipio.
- *   Para FeatureLayer/WFS con BBOX: se aplica featureEffect DECLARATIVO
- *   (sin layer.load()) para limitar las entidades al bbox del municipio.
- *   El filtro se asigna antes de que la capa entre al mapa; el SDK lo
- *   aplica en el momento de la carga, no antes.
- *   Para GeoJSON con BBOX: la carga completa es inevitable en cliente
- *   sin backend; la máscara gestiona el recorte visual.
+ * BBOX — WFS:
+ *   customParameters.BBOX → filtro SERVIDOR real (OGC estándar).
+ *   Función pública aplicarBboxWfs() reutilizable por layerTree para
+ *   capas hijas WFS creadas dinámicamente via discovery.
+ * BBOX — FEATURE:
+ *   featureEffect declarativo (cliente). El servidor ArcGIS REST no
+ *   acepta parámetros OGC; filtro real requiere definitionExpression.
+ * BBOX — GeoJSON:
+ *   Carga completa inevitable en cliente sin backend.
  *
  * FILTRABLE — WMS con soporte CQL_FILTER (GeoServer):
- *   Se añaden customLayerParameters con CQL_FILTER al WMSLayer.
- *   El servidor retorna solo la geometría del municipio → eficiente en
- *   ancho de banda y además la máscara visual es redundante (pero actúa
- *   como seguridad adicional).
- *   Para FeatureLayer FILTRABLE: definitionExpression con el campo de filtro.
- *   NOTA: FILTRABLE sí usa layer.load() porque definitionExpression requiere
- *   conocer el esquema del servicio antes de aplicarse.
+ *   customLayerParameters con CQL_FILTER → servidor devuelve solo municipio.
+ * FILTRABLE — FeatureLayer/WFS:
+ *   definitionExpression con campo_filtro del catálogo.
+ *   Requiere layer.load() para validar el esquema antes de aplicar filtro.
  *
  * DIRECTA:
- *   La URL o el servicio ya incorpora el ámbito municipal. Sin filtro extra.
+ *   La URL ya incorpora el ámbito municipal. Sin filtro extra.
  *
  * CONSULTA:
- *   La capa se usa solo para GetFeatureInfo / identify. Se carga sin filtro.
+ *   Solo GetFeatureInfo / identify. Sin filtro espacial.
  */
 
 // ─── API pública ──────────────────────────────────────────────────────────
@@ -59,8 +56,6 @@ export async function inicializarCapa(layer, config, municipioData) {
         break;
 
       case "FILTRABLE":
-        // TODO: pendiente de añadir campo_filtro al catálogo antes de activar.
-        // La lógica está implementada en _estrategiaFiltrable().
         await _estrategiaFiltrable(layer, config, municipioData);
         break;
 
@@ -84,8 +79,67 @@ export async function inicializarCapa(layer, config, municipioData) {
 }
 
 /**
+ * Aplica el filtro BBOX de servidor a una WFSLayer.
+ *
+ * ── POR QUÉ ES PÚBLICA ───────────────────────────────────────────────────
+ * Las capas WFS hijas creadas dinámicamente via discovery (layerTree) no
+ * pasan por inicializarCapa() porque no tienen entrada en el catálogo.
+ * layerTree las crea on-demand y necesita aplicarles el mismo filtro BBOX
+ * que el padre. Exportar esta función evita duplicar lógica (DRY) y mantiene
+ * la responsabilidad del filtrado en layerInitializer (SRP).
+ *
+ * @param {WFSLayer} layer         - Instancia WFSLayer (padre o hija)
+ * @param {Object}   municipioData - Datos del municipio activo
+ * @param {string}   [srsname="EPSG:4326"] - CRS declarado en el catálogo
+ * @returns {Promise<void>}
+ */
+export async function aplicarBboxWfs(layer, municipioData, srsname = "EPSG:4326") {
+  if (!layer || !municipioData?.bbox) return;
+
+  const [xmin, ymin, xmax, ymax] = municipioData.bbox;
+  let bboxStr;
+
+  try {
+    if (srsname === "EPSG:3857") {
+      // Servidor en Web Mercator → proyectar bbox desde WGS84.
+      // El catálogo siempre almacena en 4326; la proyección es solo
+      // adaptación en la petición HTTP, no modifica el catálogo.
+      const [webMercatorUtils, Point] = await Promise.all([
+        $arcgis.import("esri/geometry/support/webMercatorUtils"),
+        $arcgis.import("esri/geometry/Point")
+      ]);
+      const sw = webMercatorUtils.geographicToWebMercator(
+        new Point({ x: xmin, y: ymin, spatialReference: { wkid: 4326 } })
+      );
+      const ne = webMercatorUtils.geographicToWebMercator(
+        new Point({ x: xmax, y: ymax, spatialReference: { wkid: 4326 } })
+      );
+      bboxStr = `${sw.x},${sw.y},${ne.x},${ne.y},EPSG:3857`;
+    } else {
+      // Servidor en WGS84 → bbox directo sin proyección
+      bboxStr = `${xmin},${ymin},${xmax},${ymax},EPSG:4326`;
+    }
+
+    // customParameters.BBOX → filtro SERVIDOR real (OGC estándar).
+    // El servicio WFS recibe el bbox en cada GetFeature request y devuelve
+    // solo features que intersectan esa área.
+    // Mucho más eficiente que featureEffect (cliente): el servidor no
+    // transfiere datos fuera del bbox.
+    layer.customParameters = { BBOX: bboxStr };
+
+    console.info(
+      `[layerInitializer] WFS BBOX "${layer.id}" → ${srsname} [${bboxStr}]`
+    );
+
+  } catch (err) {
+    console.warn(
+      `[layerInitializer] No se pudo aplicar BBOX a WFS "${layer.id}":`, err
+    );
+  }
+}
+
+/**
  * Recarga una capa (útil al cambiar de municipio sin recrear la instancia).
- * Solo aplica a tipos que implementan refresh() (WMSLayer, FeatureLayer...).
  * @param {Layer} layer
  */
 export function recargarCapa(layer) {
@@ -105,73 +159,22 @@ export function getTiposImplementados() {
 
 // ─── Estrategias privadas ─────────────────────────────────────────────────
 
-/**
- * Estrategia BBOX:
- *   - WMS: recorte visual delegado a la máscara de mapManager.
- *   - WFS: customParameters.BBOX → filtro SERVIDOR real (OGC estándar).
- *       El servicio devuelve solo features del bbox desde el primer request.
- *   - FEATURE (ArcGIS REST): featureEffect declarativo (filtro cliente).
- *       El servidor no acepta parámetros OGC; filtro servidor real
- *       requiere definitionExpression → estrategia FILTRABLE.
- *   - GeoJSON: carga completa inevitable en cliente sin backend.
- */
 async function _estrategiaBbox(layer, config, municipioData) {
   const [xmin, ymin, xmax, ymax] = municipioData.bbox;
   const tipo = config.tipo;
 
   if (tipo === "WMS") {
-    // WMS: la máscara visual lo cubre. El servidor WMS sirve los tiles del
-    // viewport, que tras el zoom al municipio solo incluye datos del área.
-    // Sin acción adicional en la capa.
     console.info(
       `[layerInitializer] WMS BBOX "${config.id}" → recorte visual delegado a máscara municipal`
     );
 
   } else if (tipo === "WFS") {
-
+    // Delegar en la función pública para no duplicar lógica.
+    // La misma función la usa layerTree para las capas hijas WFS discovery.
     const srsname = config.srsname ?? "EPSG:4326";
-    let bboxStr;
-
-    if (srsname === "EPSG:3857") {
-      // El servidor trabaja en Web Mercator → proyectar bbox antes de enviarlo.
-      // El catálogo siempre almacena en 4326; la proyección es solo adaptación
-      // en la petición, no modifica los datos del catálogo.
-      const [webMercatorUtils, Point] = await Promise.all([
-        $arcgis.import("esri/geometry/support/webMercatorUtils"),
-        $arcgis.import("esri/geometry/Point")
-      ]);
-      const sw = webMercatorUtils.geographicToWebMercator(
-        new Point({ x: xmin, y: ymin, spatialReference: { wkid: 4326 } })
-      );
-      const ne = webMercatorUtils.geographicToWebMercator(
-        new Point({ x: xmax, y: ymax, spatialReference: { wkid: 4326 } })
-      );
-      bboxStr = `${sw.x},${sw.y},${ne.x},${ne.y},EPSG:3857`;
-    } else {
-      // Servidor en 4326 → bbox directo sin proyección
-      bboxStr = `${xmin},${ymin},${xmax},${ymax},EPSG:4326`;
-    }
-
-    // customParameters.BBOX → filtro SERVIDOR real.
-    // El servicio WFS recibe el bbox en cada GetFeature request
-    // y devuelve solo las features que intersectan esa área.
-    // Es radicalmente más eficiente que featureEffect:
-    //   featureEffect → descarga todo, oculta visualmente lo que sobra
-    //   customParameters.BBOX → el servidor ya no envía lo que sobra
-    // Formato OGC estándar: "xmin,ymin,xmax,ymax,CRS"
-    layer.customParameters = {
-      BBOX: `${xmin},${ymin},${xmax},${ymax},EPSG:4326`
-    };
-    layer.customParameters = { BBOX: bboxStr };
-  console.info(`[layerInitializer] WFS BBOX servidor "${config.id}" → ${srsname} [${bboxStr}]`);
-
+    await aplicarBboxWfs(layer, municipioData, srsname);
 
   } else if (tipo === "FEATURE") {
-    // FeatureLayer con BBOX: featureEffect declarativo (cliente).
-    // FeatureLayer ArcGIS REST no acepta customParameters OGC;
-    // el filtro servidor real requiere definitionExpression con geometría,
-    // que a su vez requiere layer.load() previo → estrategia FILTRABLE.
-    // featureEffect es el mejor filtro disponible sin load() para este tipo.
     try {
       const [Extent, FeatureFilter] = await Promise.all([
         $arcgis.import("esri/geometry/Extent"),
@@ -187,25 +190,14 @@ async function _estrategiaBbox(layer, config, municipioData) {
     } catch (err) {
       console.warn(`[layerInitializer] No se pudo aplicar featureEffect a "${config.id}":`, err);
     }
+
   } else if (tipo === "GEOJSON") {
-    // GeoJSON: en cliente sin backend no es posible filtrar la descarga.
-    // La carga es completa; la máscara gestiona el recorte visual.
     console.info(
       `[layerInitializer] GeoJSON BBOX "${config.id}" → carga completa, recorte visual vía máscara`
     );
   }
 }
 
-/**
- * Estrategia FILTRABLE:
- *   - WMS con soporte CQL_FILTER (GeoServer): pasar filtro por municipio.
- *     El servidor devuelve solo la geometría del municipio → eficiente.
- *   - FeatureLayer/WFS: definitionExpression con el campo_filtro del catálogo.
- *     El SDK solo descarga las entidades que cumplan la expresión.
- *     NOTA: aquí sí se usa layer.load() porque definitionExpression en
- *     FeatureLayer requiere que el servicio esté cargado para validar
- *     el esquema de campos antes de aplicar el filtro.
- */
 async function _estrategiaFiltrable(layer, config, municipioData) {
   const campoFiltro = config.campo_filtro;
 
@@ -219,9 +211,6 @@ async function _estrategiaFiltrable(layer, config, municipioData) {
   const tipo = config.tipo;
 
   if (tipo === "WMS") {
-    // WMS con CQL_FILTER (servidores GeoServer/GeoServer-compatible).
-    // Se aplica como customLayerParameters que WMSLayer incluye en cada tile request.
-    // No requiere layer.load(): es un parámetro HTTP añadido a la URL del tile.
     layer.customLayerParameters = {
       CQL_FILTER: `${campoFiltro}='${municipioData.codigo_ine}'`
     };
@@ -230,9 +219,6 @@ async function _estrategiaFiltrable(layer, config, municipioData) {
     );
 
   } else if (tipo === "FEATURE" || tipo === "WFS") {
-    // FeatureLayer/WFS: definitionExpression filtra en el servidor.
-    // layer.load() necesario aquí para validar que el campo existe en el esquema.
-    // Solo aplica a servicios con campo de filtro municipal conocido (catálogo).
     try {
       await layer.load();
       layer.definitionExpression = `${campoFiltro} = '${municipioData.codigo_ine}'`;
