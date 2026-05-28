@@ -51,7 +51,7 @@ import { clearContainer }  from "../utils/domUtils.js";
 import * as mapManager     from "../core/mapManager.js";
 import { crearCapaWfsHija } from "../core/layerFactory.js";
 import { aplicarBboxWfs }  from "../core/layerInitializer.js"; // ← CAMBIO: importar helper de filtrado
-import { fetchFeatureTypes } from "../utils/wfsCapabilitiesParser.js";
+import { fetchFeatureTypes, checkFeaturesInBbox } from "../utils/wfsCapabilitiesParser.js";
 
 // ─── Estado interno del módulo ────────────────────────────────────────────
 
@@ -301,14 +301,34 @@ async function _handleWfsDiscovery(item) {
       return;
     }
 
-    // Limpiar el spinner y rellenar con los FeatureTypes descubiertos
     clearContainer(childrenTree);
 
-    // Crear instancias y nodos DOM en paralelo para reducir latencia.
-    // Promise.all garantiza que todos los FeatureTypes están listos antes
-    // de insertar nodos en el DOM → sin parpadeos de árbol incompleto.
+    // ── Verificar disponibilidad espacial en paralelo ─────────────────────
+    // Por qué en paralelo: con N FeatureTypes, el tiempo total pasa de
+    // O(N × latencia_red) a O(latencia_max). Con 5 tipos y ~300ms/req:
+    //   serie → ~1.500ms | paralelo → ~300ms
+    //
+    // checkFeaturesInBbox nunca rechaza (captura internamente todos los errores),
+    // por lo que Promise.all es seguro sin .catch adicional.
+    const bbox = _municipioData?.bbox ?? null;
+
+    let availabilityMap; // Map<nombre_featureType, boolean>
+
+    if (bbox) {
+      const checks  = featureTypes.map(ft => checkFeaturesInBbox(config.url, ft.name, bbox));
+      const results = await Promise.all(checks);
+      availabilityMap = new Map(featureTypes.map((ft, i) => [ft.name, results[i]]));
+    } else {
+      // Sin bbox no podemos filtrar → asumir disponibles (degradación segura)
+      console.warn("[layerTree] _municipioData.bbox no disponible; omitiendo check BBOX");
+      availabilityMap = new Map(featureTypes.map(ft => [ft.name, true]));
+    }
+
+    // Crear instancias y nodos DOM en paralelo.
+    // _crearHijoWfs recibe el flag de disponibilidad: si es false, renderiza
+    // el nodo como deshabilitado con chip informativo y omite la instancia de capa.
     const hijos = await Promise.all(
-      featureTypes.map(ft => _crearHijoWfs(ft, config))
+      featureTypes.map(ft => _crearHijoWfs(ft, config, availabilityMap.get(ft.name) ?? false))
     );
 
     hijos.forEach(({ item: hijoItem }) => {
@@ -446,12 +466,42 @@ function _crearItemWfsDiscovery(config, globalIndex) {
  * @param {Object} configPadre - Config del catálogo del servicio padre
  * @returns {Promise<{item: HTMLElement, layer: WFSLayer|null}>}
  */
-async function _crearHijoWfs(featureType, configPadre) {
+async function _crearHijoWfs(featureType, configPadre, disponible = true) {
   const hijoId = `${configPadre.id}::${featureType.name}`;
+
+  // ── Cortocircuito: sin datos en este municipio ────────────────────────
+  // No instanciamos la WFSLayer porque no hay nada que añadir al mapa.
+  // El nodo se renderiza deshabilitado con un chip informativo para que
+  // el usuario sepa que el tipo existe pero no tiene cobertura aquí.
+  if (!disponible) {
+    const item = document.createElement("calcite-tree-item");
+    item.dataset.layerId = hijoId;
+    item.dataset.wfsHijo = "true";
+    item.setAttribute("disabled", "");
+
+    const wrapper = document.createElement("span");
+    wrapper.style.cssText = "display:flex; align-items:center; gap:6px; flex-wrap:wrap;";
+
+    const label = document.createElement("span");
+    label.className   = "layer-label layer-label--unavailable";
+    label.textContent = featureType.title || featureType.name;
+
+    const chip = document.createElement("calcite-chip");
+    chip.setAttribute("kind",  "neutral");
+    chip.setAttribute("scale", "s");
+    chip.textContent = "Sin datos en esta zona";
+
+    wrapper.appendChild(label);
+    wrapper.appendChild(chip);
+    item.appendChild(wrapper);
+
+    return { item, layer: null };
+  }
 
   // Crear la instancia de capa antes de crear el nodo DOM.
   // Si falla, el nodo mostrará un estado de error en lugar de quedar huérfano.
   const layer = await crearCapaWfsHija(featureType, configPadre);
+
 
   const item = document.createElement("calcite-tree-item");
   item.dataset.layerId = hijoId;
