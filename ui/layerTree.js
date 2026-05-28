@@ -7,6 +7,27 @@
  *   bloque_tematico → nivel 1  (SIN checkbox, expandible, negrita)
  *   subtema         → nivel 2  (SIN checkbox, expandible)
  *   title (capa)    → nivel 3  (seleccionable → activa/desactiva la capa)
+ *     └── [WFS sin name] → nivel 4  (FeatureTypes descubiertos via Capabilities)
+ *                          (solo estos tienen checkbox efectivo)
+ *
+ * ── WFS CON DESCUBRIMIENTO DINÁMICO ──────────────────────────────────────
+ * Cuando el catálogo tiene una entrada WFS sin campo "name", el servicio
+ * puede exponer múltiples FeatureTypes. En lugar de hardcodear cada tipo
+ * en el catálogo (una entrada por feature type → mantenimiento O(n)),
+ * la app consulta el GetCapabilities del servicio al expandir el nodo
+ * y construye los hijos dinámicamente.
+ *
+ * Ventaja académica: la app consume la autodescripción del servicio OGC
+ * para construir la UI → se adapta automáticamente si el servidor añade
+ * o quita tipos sin tocar el catálogo.
+ *
+ * Flujo:
+ *   1. configEngine devuelve entrada WFS sin name → es un "nodo discovery"
+ *   2. layerTree renderiza el nodo con indicador visual de expansión pendiente
+ *   3. Usuario expande el nodo → calciteTreeItemExpand se dispara
+ *   4. fetchFeatureTypes(url) → array de FeatureTypeInfo
+ *   5. Se inyectan nodos hijo en el árbol (uno por FeatureType)
+ *   6. Al activar un hijo → crearCapaWfsHija() + addCapa() (lazy)
  *
  * ── POR QUÉ selection-mode="ancestors" y NO calcite-checkbox manual ───────
  * calcite-tree-item intercepta todos los pointer events para su mecanismo
@@ -18,21 +39,33 @@
  *   - selection-mode="ancestors" → emite calciteTreeItemSelect en cada cambio
  *   - Un listener único en el árbol raíz (delegación de eventos)
  *   - data-layer-id + data-layer-index identifican qué capa toglear
- *   - Los grupos (nivel 1 y 2) no tienen data-layer-id → el listener los ignoran
+ *   - Los grupos (nivel 1 y 2) no tienen data-layer-id → el listener los ignora
  *
  * ── REACTIVIDAD ───────────────────────────────────────────────────────────
  * El árbol se reconstruye completamente al recibir "municipio-cargado".
  * Árbol limpio por municipio → sin riesgo de estado inconsistente.
  */
 
-import { on, emit }       from "../utils/eventBus.js";
-import { clearContainer } from "../utils/domUtils.js";
-import * as mapManager    from "../core/mapManager.js";
+import { on, emit }                                    from "../utils/eventBus.js";
+import { clearContainer }                              from "../utils/domUtils.js";
+import * as mapManager                                 from "../core/mapManager.js";
+import { crearCapaWfsHija }                            from "../core/layerFactory.js";
+import { fetchFeatureTypes }                           from "../utils/wfsCapabilitiesParser.js";
 
-let _containerEl = null;
-let _layersRef   = [];
-let _configsRef  = [];
+// ─── Estado interno del módulo ────────────────────────────────────────────
+
+let _containerEl  = null;
+let _layersRef    = [];
+let _configsRef   = [];
 let _lazyLayerIds = new Set();
+
+/**
+ * Conjunto de IDs de nodos WFS "discovery" que ya han sido expandidos.
+ * Evita lanzar múltiples peticiones GetCapabilities si el usuario colapsa
+ * y vuelve a expandir el mismo nodo.
+ * Clave: config.id del padre. Valor: true (ya expandido).
+ */
+const _wfsDiscoveryExpanded = new Map();
 
 // ─── Inicialización ────────────────────────────────────────────────────────
 
@@ -54,6 +87,9 @@ export function initLayerTree(container) {
   _containerEl.appendChild(msg);
 
   on("municipio-cargado", ({ layers, configs, lazyLayerIds }) => {
+    // Limpiar el estado de discovery al cambiar de municipio.
+    // Un municipio nuevo puede tener las mismas URLs WFS pero con distinto contexto.
+    _wfsDiscoveryExpanded.clear();
     _renderTree(layers, configs, lazyLayerIds ?? new Set());
   });
 }
@@ -62,7 +98,6 @@ export function initLayerTree(container) {
 
 function _renderTree(layers, configs, lazyLayerIds) {
   // CRÍTICO: limpiar el contenedor antes de renderizar.
-  // Elimina el mensaje inicial y cualquier árbol de municipio anterior.
   clearContainer(_containerEl);
 
   _lazyLayerIds = lazyLayerIds;
@@ -83,34 +118,22 @@ function _renderTree(layers, configs, lazyLayerIds) {
   tree.setAttribute("selection-mode", "ancestors");
   tree.setAttribute("lines", "");
 
+  // ── Listener de selección (toggle visibilidad) ─────────────────────────
+  // Delegación de eventos: un único listener en la raíz captura los eventos
+  // de todos los nodos hoja. Los nodos agrupadores y nodos WFS discovery
+  // no tienen data-layer-id → el listener los ignora.
   tree.addEventListener("calciteTreeItemSelect", e => {
-    const item = e.target.closest("calcite-tree-item[data-layer-id]");
-    if (!item) return;
+    _handleLayerSelect(e);
+  });
 
-    const layerIndex = parseInt(item.dataset.layerIndex, 10);
-    const layerId    = item.dataset.layerId;
-
-    // Calcite actualiza "selected" antes de emitir el evento.
-    // La negación evita el desfase temporal de la prop selected.
-    const visible = !item.hasAttribute("selected");
-
-    const layer  = _layersRef[layerIndex];
-    const config = _configsRef[layerIndex];
-
-    if (!layer) {
-      console.warn(`[layerTree] Layer no encontrada para índice ${layerIndex}`);
-      return;
+  // ── Listener de expansión (discovery WFS) ─────────────────────────────
+  // calciteTreeItemExpand se dispara cuando el usuario abre un nodo.
+  // Solo actuamos si el nodo es un "discovery WFS" pendiente de expansión.
+  tree.addEventListener("calciteTreeItemExpand", e => {
+    const item = e.target;
+    if (item.dataset.wfsDiscovery === "true") {
+      _handleWfsDiscovery(item);
     }
-
-    // Lazy-load: WFS entra al mapa solo la primera vez que el usuario la activa.
-    // layer.map es null si la capa no está en ningún mapa todavía.
-    if (visible && _lazyLayerIds.has(layerId) && !layer.map) {
-      mapManager.addCapa(layer);
-    }
-
-    layer.visible = visible;
-    emit(visible ? "capa-activada" : "capa-desactivada", { layerId, layer, config });
-    console.info(`[layerTree] "${layerId}" → visible: ${visible}`);
   });
 
   grupos.forEach(({ bloque, subtemas }) => {
@@ -125,7 +148,21 @@ function _renderTree(layers, configs, lazyLayerIds) {
 
       pares.forEach(({ config, layer }) => {
         const globalIndex = configs.indexOf(config);
-        subtemaChildren.appendChild(_crearItemCapa(config, layer, globalIndex));
+
+        // ── Nodo WFS sin name: discovery mode ─────────────────────────
+        // Una entrada WFS sin campo "name" en el catálogo es un servicio
+        // con múltiples FeatureTypes. Se renderiza como nodo expandible
+        // que cargará sus hijos dinámicamente al abrirse.
+        if (config.tipo === "WFS" && !config.name) {
+          subtemaChildren.appendChild(
+            _crearItemWfsDiscovery(config, globalIndex)
+          );
+        } else {
+          // Nodo hoja estándar (WMS, WMTS, WFS con name, GeoJSON…)
+          subtemaChildren.appendChild(
+            _crearItemCapa(config, layer, globalIndex)
+          );
+        }
       });
 
       subtemaItem.appendChild(subtemaChildren);
@@ -140,8 +177,153 @@ function _renderTree(layers, configs, lazyLayerIds) {
   console.info(`[layerTree] Árbol renderizado: ${configs.length} capas`);
 }
 
+// ─── Handlers de eventos ──────────────────────────────────────────────────
+
+/**
+ * Gestiona la activación/desactivación de una capa hoja.
+ * Se llama desde el listener de calciteTreeItemSelect.
+ */
+function _handleLayerSelect(e) {
+  const item = e.target.closest("calcite-tree-item[data-layer-id]");
+  if (!item) return;
+
+  const layerId    = item.dataset.layerId;
+  const layerIndex = item.dataset.layerIndex;
+
+  // Nodo hijo WFS (instancia creada on-demand): no tiene índice global
+  // porque no estaba en el array original de configs/layers.
+  // Se gestiona en _handleWfsHijoSelect.
+  if (item.dataset.wfsHijo === "true") {
+    _handleWfsHijoSelect(item, layerId);
+    return;
+  }
+
+  const globalIndex = parseInt(layerIndex, 10);
+  // Calcite actualiza "selected" antes de emitir el evento.
+  const visible = !item.hasAttribute("selected");
+
+  const layer  = _layersRef[globalIndex];
+  const config = _configsRef[globalIndex];
+
+  if (!layer) {
+    console.warn(`[layerTree] Layer no encontrada para índice ${globalIndex}`);
+    return;
+  }
+
+  // Lazy-load: la capa entra al mapa solo la primera vez que se activa.
+  if (visible && _lazyLayerIds.has(layerId) && !layer.map) {
+    mapManager.addCapa(layer);
+  }
+
+  layer.visible = visible;
+  emit(visible ? "capa-activada" : "capa-desactivada", { layerId, layer, config });
+  console.info(`[layerTree] "${layerId}" → visible: ${visible}`);
+}
+
+/**
+ * Activa/desactiva un FeatureLayer hijo de un nodo WFS discovery.
+ * La instancia se crea la primera vez que se activa (lazy).
+ *
+ * @param {HTMLElement} item   - El calcite-tree-item del hijo
+ * @param {string}      hijoId - ID derivado: "{padreId}::{featureType.name}"
+ */
+function _handleWfsHijoSelect(item, hijoId) {
+  const visible = !item.hasAttribute("selected");
+
+  // La instancia de capa se almacena en el propio nodo DOM como referencia.
+  // Esto evita un Map externo y mantiene el estado colocado junto al elemento
+  // que lo necesita. Se asigna en _handleWfsDiscovery cuando se crean los hijos.
+  let layer = item._layerInstance;
+
+  if (!layer) {
+    // Aún no se ha creado (no debería pasar, pero por seguridad)
+    console.warn(`[layerTree] Capa WFS hija sin instancia: "${hijoId}"`);
+    return;
+  }
+
+  // Lazy: añadir al mapa solo la primera vez que se activa
+  if (visible && !layer.map) {
+    mapManager.addCapa(layer);
+  }
+
+  layer.visible = visible;
+  emit(visible ? "capa-activada" : "capa-desactivada", {
+    layerId: hijoId,
+    layer,
+    // Config sintético mínimo para que legendPanel pueda identificar la capa
+    config: { id: hijoId, title: layer.title, tipo: "WFS" }
+  });
+  console.info(`[layerTree] WFS hijo "${hijoId}" → visible: ${visible}`);
+}
+
+/**
+ * Gestiona la expansión de un nodo WFS discovery.
+ * Se llama la primera vez que el usuario expande el nodo.
+ * Las expansiones siguientes no relanza el fetch (caché en _wfsDiscoveryExpanded).
+ *
+ * @param {HTMLElement} item - El calcite-tree-item del nodo padre WFS
+ */
+async function _handleWfsDiscovery(item) {
+  const configId = item.dataset.configId;
+
+  // Idempotencia: si ya se expandió, no relanzar el fetch.
+  if (_wfsDiscoveryExpanded.has(configId)) return;
+  _wfsDiscoveryExpanded.set(configId, true);
+
+  const config = _configsRef.find(c => c.id === configId);
+  if (!config) {
+    console.error(`[layerTree] Config no encontrada para discovery: "${configId}"`);
+    return;
+  }
+
+  // Obtener el slot de hijos (el calcite-tree anidado dentro del item)
+  const childrenTree = item.querySelector("calcite-tree[slot='children']");
+  if (!childrenTree) {
+    console.error(`[layerTree] No se encontró slot children en nodo "${configId}"`);
+    return;
+  }
+
+  // Mostrar spinner mientras carga
+  _setDiscoveryState(item, childrenTree, "loading");
+
+  try {
+    const featureTypes = await fetchFeatureTypes(config.url);
+
+    if (featureTypes.length === 0) {
+      _setDiscoveryState(item, childrenTree, "empty");
+      return;
+    }
+
+    // Limpiar el spinner y rellenar con los FeatureTypes descubiertos
+    clearContainer(childrenTree);
+
+    // Crear instancias y nodos DOM en paralelo para reducir latencia.
+    // Promise.all garantiza que todos los FeatureTypes están listos antes
+    // de insertar nodos en el DOM → sin parpadeos de árbol incompleto.
+    const hijos = await Promise.all(
+      featureTypes.map(ft => _crearHijoWfs(ft, config))
+    );
+
+    hijos.forEach(({ item: hijoItem }) => {
+      if (hijoItem) childrenTree.appendChild(hijoItem);
+    });
+
+    console.info(
+      `[layerTree] WFS discovery "${configId}": ${featureTypes.length} FeatureTypes`
+    );
+
+  } catch (err) {
+    console.error(`[layerTree] Error al expandir WFS "${configId}":`, err);
+    _setDiscoveryState(item, childrenTree, "error");
+  }
+}
+
 // ─── Construcción de items ─────────────────────────────────────────────────
 
+/**
+ * Crea el nodo Calcite para un agrupador (bloque temático o subtema).
+ * Sin data-layer-id → el listener de selección lo ignora.
+ */
 function _crearItemGrupo(label, negrita) {
   const item = document.createElement("calcite-tree-item");
   item.setAttribute("expanded", "");
@@ -156,6 +338,9 @@ function _crearItemGrupo(label, negrita) {
   return item;
 }
 
+/**
+ * Crea el nodo Calcite para una capa hoja estándar (con data-layer-id).
+ */
 function _crearItemCapa(config, layer, globalIndex) {
   const item = document.createElement("calcite-tree-item");
   item.dataset.layerId    = config.id;
@@ -170,23 +355,184 @@ function _crearItemCapa(config, layer, globalIndex) {
   span.textContent = config.title;
   item.appendChild(span);
 
-  if (config.prioridad === "P0 - MVP") {
-    const badge = document.createElement("calcite-chip");
-    badge.setAttribute("scale", "s");
-    badge.setAttribute("kind", "brand");
-    badge.textContent = "P0";
-    item.appendChild(badge);
-  }
-
-  if (config.inspire) {
-    const chip = document.createElement("calcite-chip");
-    chip.setAttribute("scale", "s");
-    chip.setAttribute("kind", "neutral");
-    chip.textContent = "INSPIRE";
-    item.appendChild(chip);
-  }
+  _añadirBadges(item, config);
 
   return item;
+}
+
+/**
+ * Crea el nodo Calcite para un servicio WFS en modo discovery.
+ *
+ * ── DISEÑO DEL NODO DISCOVERY ────────────────────────────────────────────
+ * El nodo debe:
+ *   a) Ser expandible (para disparar calciteTreeItemExpand)
+ *   b) NO ser seleccionable como capa (no tiene data-layer-id)
+ *   c) Tener un slot "children" vacío pero presente (Calcite lo necesita
+ *      para mostrar el chevron de expansión incluso con hijos vacíos)
+ *   d) Mostrar indicador visual de que tiene contenido pendiente de cargar
+ *
+ * El atributo data-wfs-discovery="true" identifica estos nodos para el
+ * listener de calciteTreeItemExpand.
+ *
+ * @param {Object} config      - Config del catálogo (tipo WFS, sin name)
+ * @param {number} globalIndex - Índice en _configsRef (para trazabilidad)
+ */
+function _crearItemWfsDiscovery(config, globalIndex) {
+  const item = document.createElement("calcite-tree-item");
+  // NO añadir data-layer-id: este nodo no activa/desactiva una capa directa.
+  // El listener de selección lo ignorará.
+  item.dataset.wfsDiscovery = "true";
+  item.dataset.configId     = config.id;
+  // Expandido por defecto para descubrir sus hijos al cargar
+  item.setAttribute("expanded", "");
+
+  // Etiqueta con icono de servicio WFS para diferenciarlo visualmente
+  const label = document.createElement("span");
+  label.className   = "layer-label layer-label--wfs-service";
+  label.textContent = config.title;
+  item.appendChild(label);
+
+  // Badge que indica que los hijos se cargarán dinámicamente
+  const badge = document.createElement("calcite-chip");
+  badge.setAttribute("scale", "s");
+  badge.setAttribute("kind", "neutral");
+  badge.setAttribute("icon", "data-magnifying-glass");
+  badge.textContent = "WFS";
+  item.appendChild(badge);
+
+  _añadirBadges(item, config);
+
+  // Slot de hijos: debe existir vacío para que Calcite muestre el chevron.
+  // Se rellena con el spinner o los FeatureTypes en _setDiscoveryState/_handleWfsDiscovery.
+  const childrenTree = document.createElement("calcite-tree");
+  childrenTree.slot  = "children";
+
+  // Spinner inicial (visible mientras no se haya expandido)
+  const spinner = document.createElement("calcite-loader");
+  spinner.setAttribute("scale", "s");
+  spinner.setAttribute("inline", "");
+  spinner.setAttribute("text", "Cargando tipos...");
+  childrenTree.appendChild(spinner);
+
+  item.appendChild(childrenTree);
+
+  return item;
+}
+
+/**
+ * Crea el nodo Calcite para un FeatureType hijo de un nodo WFS discovery,
+ * y crea la instancia WFSLayer correspondiente.
+ *
+ * La instancia de capa se almacena en item._layerInstance para acceso
+ * directo desde _handleWfsHijoSelect sin necesitar un Map externo.
+ *
+ * @param {import('../utils/wfsCapabilitiesParser.js').FeatureTypeInfo} featureType
+ * @param {Object} configPadre - Config del catálogo del servicio padre
+ * @returns {Promise<{item: HTMLElement, layer: WFSLayer|null}>}
+ */
+async function _crearHijoWfs(featureType, configPadre) {
+  const hijoId = `${configPadre.id}::${featureType.name}`;
+
+  // Crear la instancia de capa antes de crear el nodo DOM.
+  // Si falla, el nodo mostrará un estado de error en lugar de quedar huérfano.
+  const layer = await crearCapaWfsHija(featureType, configPadre);
+
+  const item = document.createElement("calcite-tree-item");
+  item.dataset.layerId  = hijoId;
+  item.dataset.wfsHijo  = "true"; // Identificador para _handleLayerSelect
+
+  if (!layer) {
+    // La capa no pudo crearse: mostrar el nodo como deshabilitado
+    item.setAttribute("disabled", "");
+    const span = document.createElement("span");
+    span.className   = "layer-label layer-label--error";
+    span.textContent = featureType.title;
+    item.appendChild(span);
+
+    const errorChip = document.createElement("calcite-chip");
+    errorChip.setAttribute("scale", "s");
+    errorChip.setAttribute("kind", "danger");
+    errorChip.textContent = "Error";
+    item.appendChild(errorChip);
+
+    return { item, layer: null };
+  }
+
+  // Almacenar referencia directa en el nodo DOM para acceso O(1) desde el listener
+  item._layerInstance = layer;
+
+  const span = document.createElement("span");
+  span.className   = "layer-label";
+  span.textContent = featureType.title;
+  item.appendChild(span);
+
+  // Mostrar el nombre técnico como tooltip para que el usuario pueda
+  // identificar el FeatureType exacto en caso de necesitar referenciarlo
+  if (featureType.name !== featureType.title) {
+    item.title = featureType.name;
+  }
+
+  // CRS como indicador informativo si es relevante (no WGS84)
+  if (featureType.crs && !featureType.crs.includes("4326") && !featureType.crs.includes("4258")) {
+    const crsChip = document.createElement("calcite-chip");
+    crsChip.setAttribute("scale", "s");
+    crsChip.setAttribute("kind", "neutral");
+    crsChip.textContent = featureType.crs.replace(/.*:/, "EPSG:");
+    item.appendChild(crsChip);
+  }
+
+  return { item, layer };
+}
+
+// ─── Estado visual del nodo discovery ────────────────────────────────────
+
+/**
+ * Actualiza el contenido del slot de hijos de un nodo WFS discovery
+ * según el estado actual de la petición Capabilities.
+ *
+ * @param {HTMLElement} parentItem   - El calcite-tree-item del padre WFS
+ * @param {HTMLElement} childrenTree - El calcite-tree slot="children"
+ * @param {"loading"|"empty"|"error"} state
+ */
+function _setDiscoveryState(parentItem, childrenTree, state) {
+  clearContainer(childrenTree);
+
+  const messages = {
+    loading: { icon: null,            text: "Cargando tipos de capa...",              chip: null      },
+    empty:   { icon: "information",   text: "Sin FeatureTypes disponibles",           chip: "neutral" },
+    error:   { icon: "exclamation",   text: "No se pudo conectar con el servicio",   chip: "danger"  }
+  };
+
+  const { icon, text, chip } = messages[state] ?? messages.error;
+
+  if (state === "loading") {
+    const spinner = document.createElement("calcite-loader");
+    spinner.setAttribute("scale", "s");
+    spinner.setAttribute("inline", "");
+    spinner.setAttribute("text", text);
+    childrenTree.appendChild(spinner);
+    return;
+  }
+
+  // Para empty y error: un item informativo no seleccionable
+  const infoItem = document.createElement("calcite-tree-item");
+  infoItem.setAttribute("disabled", "");
+
+  const span = document.createElement("span");
+  span.className   = `layer-label layer-label--${state}`;
+  span.textContent = text;
+  infoItem.appendChild(span);
+
+  if (chip) {
+    const chipEl = document.createElement("calcite-chip");
+    chipEl.setAttribute("scale", "s");
+    chipEl.setAttribute("kind", chip);
+    if (icon) chipEl.setAttribute("icon", icon);
+    chipEl.textContent = state === "empty" ? "Vacío" : "Error";
+    infoItem.appendChild(chipEl);
+  }
+
+  childrenTree.appendChild(infoItem);
 }
 
 // ─── Agrupación ───────────────────────────────────────────────────────────
@@ -211,4 +557,28 @@ function _agrupar(configs, layers) {
       pares
     }))
   }));
+}
+
+// ─── Helpers privados ─────────────────────────────────────────────────────
+
+/**
+ * Añade badges visuales (P0, INSPIRE) a un calcite-tree-item.
+ * Extraído para reutilizarlo en nodos estándar y nodos discovery.
+ */
+function _añadirBadges(item, config) {
+  if (config.prioridad === "P0 - MVP") {
+    const badge = document.createElement("calcite-chip");
+    badge.setAttribute("scale", "s");
+    badge.setAttribute("kind", "brand");
+    badge.textContent = "P0";
+    item.appendChild(badge);
+  }
+
+  if (config.inspire) {
+    const chip = document.createElement("calcite-chip");
+    chip.setAttribute("scale", "s");
+    chip.setAttribute("kind", "neutral");
+    chip.textContent = "INSPIRE";
+    item.appendChild(chip);
+  }
 }

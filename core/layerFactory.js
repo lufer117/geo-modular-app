@@ -23,7 +23,7 @@
  *   FEATURE     → FeatureLayer   (servicios Feature de ArcGIS Online/Server)
  */
 
-// Registro tipo → módulo Esri
+// Registro tipo → módulo Esri.
 // Mantenerlo aquí centraliza el mapa de dependencias del SDK.
 const _TIPO_MAP = {
   "WMS":         "esri/layers/WMSLayer",
@@ -33,6 +33,8 @@ const _TIPO_MAP = {
   "ArcGIS_REST": "esri/layers/MapImageLayer",
   "FEATURE":     "esri/layers/FeatureLayer"
 };
+
+// ─── API pública ──────────────────────────────────────────────────────────
 
 /**
  * Crea una instancia de capa Esri a partir de la configuración del catálogo.
@@ -60,6 +62,73 @@ export async function crearCapa(config) {
     console.error(`[layerFactory] Error al crear capa "${config.id}":`, err);
     return null;
   }
+}
+
+/**
+ * Crea una instancia WFSLayer para un FeatureType hijo descubierto
+ * dinámicamente vía GetCapabilities.
+ *
+ * ── POR QUÉ UNA FUNCIÓN SEPARADA Y NO REUTILIZAR crearCapa ───────────────
+ * crearCapa() espera un config completo del catálogo (con id, bloque_tematico,
+ * disponibilidad_municipal…). Un FeatureType hijo viene del parser de
+ * Capabilities y solo tiene name, title, abstract y crs — no tiene registro
+ * en el catálogo. Crear un "config falso" para engañar a crearCapa() sería
+ * un acoplamiento frágil: si crearCapa() evoluciona, los configs sintéticos
+ * rompen silenciosamente.
+ *
+ * Esta función deriva un config mínimo a partir del padre (que sí está en el
+ * catálogo) y el FeatureType descubierto, manteniendo la trazabilidad con el
+ * servicio original sin contaminar el catálogo con entradas sintéticas.
+ *
+ * @param {import('../utils/wfsCapabilitiesParser.js').FeatureTypeInfo} featureType
+ *   Objeto devuelto por fetchFeatureTypes(): { name, title, abstract, crs }
+ * @param {Object} configPadre
+ *   Config del catálogo del servicio WFS padre (tiene url, srsname, etc.)
+ * @returns {Promise<WFSLayer|null>}
+ */
+export async function crearCapaWfsHija(featureType, configPadre) {
+  try {
+    const WFSLayer = await $arcgis.import("esri/layers/WFSLayer");
+
+    // El id del hijo combina el id del padre con el nombre del FeatureType.
+    // Esto garantiza unicidad incluso si dos servicios WFS declaran un tipo
+    // con el mismo nombre (ej: dos servidores con "municipios:Municipios").
+    // El separador "::" es suficientemente raro en los nombres OGC para evitar colisiones.
+    const hijoId = `${configPadre.id}::${featureType.name}`;
+
+    return new WFSLayer({
+      id:      hijoId,
+      title:   featureType.title,
+      url:     configPadre.url,
+      name:    featureType.name,
+      // Heredar el CRS del padre si el hijo no declara uno.
+      // El estándar OGC obliga a declarar DefaultCRS en cada FeatureType,
+      // pero algunos servidores no cumplen el estándar; el fallback evita errores.
+      ...(featureType.crs
+        ? { spatialReference: { wkid: _crsToWkid(featureType.crs) } }
+        : configPadre.srsname
+          ? { spatialReference: { wkid: _crsToWkid(configPadre.srsname) } }
+          : {}
+      ),
+      // Arrancan ocultas; el usuario las activa desde el árbol de capas.
+      visible: false
+    });
+
+  } catch (err) {
+    console.error(
+      `[layerFactory] Error al crear capa WFS hija "${featureType.name}":`, err
+    );
+    return null;
+  }
+}
+
+/**
+ * Devuelve la lista de tipos de capa implementados.
+ * Útil para logging y validación en desarrollo.
+ * @returns {string[]}
+ */
+export function getTiposImplementados() {
+  return Object.keys(_TIPO_MAP);
 }
 
 // ─── Construcción de parámetros por tipo ──────────────────────────────────
@@ -105,23 +174,12 @@ function _buildParams(config) {
     case "WFS":
       return {
         ...base,
-        url:    config.url,
-        // WFSLayer en SDK v5 consume el servicio WFS nativamente
-        // El formato interno es GeoJSON; no hace falta especificarlo
-
-        // ─── LÍMITE TEMPORAL DE PRUEBA ───────────────────────────────────
-        // WFSLayer sin filtro espacial descarga el servicio completo.
-        // 2.5M features → warning + fallo. Limitamos a 500 para verificar
-        // que la capa carga, renderiza y responde correctamente antes de
-        // implementar el filtro real por municipio (siguiente paso).
-        // Cuando el filtro espacial esté activo, este valor se elimina.
-        // maxRecordCount: 500
-        
-        // ─── FEATURE TYPE CONCRETO DEL SERVICIO ───────────────────────────────────
-        // name: selecciona un feature type concreto del servicio WFS.
-        // Sin este parámetro el SDK coge el primero del GetCapabilities
+        url: config.url,
+        // name: selecciona un FeatureType concreto del servicio WFS.
+        // Si no está en el catálogo, el SDK coge el primero del GetCapabilities
         // → puede ser un servicio con millones de features.
-        // El catálogo declara qué feature type es relevante para este municipio.
+        // Las entradas WFS sin name son servicios "padre" que se expandirán
+        // dinámicamente en layerTree via GetCapabilities (discovery mode).
         ...(config.name ? { name: config.name } : {})
       };
 
@@ -152,11 +210,46 @@ function _buildParams(config) {
   }
 }
 
+// ─── Helpers privados ─────────────────────────────────────────────────────
+
 /**
- * Devuelve la lista de tipos de capa implementados.
- * Útil para logging y validación en desarrollo.
- * @returns {string[]}
+ * Convierte un CRS OGC (EPSG:4326, urn:ogc:def:crs:EPSG::4258, etc.)
+ * al WKID numérico que espera el SDK de ArcGIS.
+ *
+ * ── FORMATOS CONOCIDOS ────────────────────────────────────────────────────
+ * Los servidores WFS españoles usan tres variantes del mismo estándar:
+ *   "EPSG:4326"                        → WFS 1.x, formato corto
+ *   "urn:ogc:def:crs:EPSG::4326"       → WFS 2.0, URN largo
+ *   "http://www.opengis.net/def/crs/EPSG/0/4326"  → WFS 2.0, URI HTTP
+ *
+ * En todos los casos, el número al final es el WKID.
+ * Si el formato no coincide con ningún patrón conocido, devuelve 4326
+ * como fallback seguro (WGS84, el más común en servicios públicos españoles).
+ *
+ * @param {string} crs - Identificador CRS del Capabilities
+ * @returns {number} WKID numérico
  */
-export function getTiposImplementados() {
-  return Object.keys(_TIPO_MAP);
+function _crsToWkid(crs) {
+  if (!crs) return 4326;
+
+  // Extraer el número final de cualquier formato conocido
+  // Ejemplos: "EPSG:4326" → "4326", "urn:ogc:def:crs:EPSG::25830" → "25830"
+  const match = crs.match(/(\d+)$/);
+  if (match) {
+    const wkid = parseInt(match[1], 10);
+    // Validación básica: WKID válidos están en rango razonable
+    if (wkid > 0 && wkid < 1_000_000) return wkid;
+  }
+
+  console.warn(
+    `[layerFactory] CRS no reconocido: "${crs}" → usando EPSG:4326 como fallback`
+  );
+  return 4326;
 }
+
+
+
+// ─── REFERENCES ──────────────────────────────────
+
+// FeatureLayer https://developers.arcgis.com/javascript/latest/references/core/layers/FeatureLayer/
+// WFSLayer https://developers.arcgis.com/javascript/latest/references/core/layers/WFSLayer/
