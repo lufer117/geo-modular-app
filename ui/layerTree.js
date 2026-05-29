@@ -474,28 +474,42 @@ async function _crearHijoWfs(featureType, configPadre, disponible = true) {
   // El nodo se renderiza deshabilitado con un chip informativo para que
   // el usuario sepa que el tipo existe pero no tiene cobertura aquí.
   if (!disponible) {
-    const item = document.createElement("calcite-tree-item");
-    item.dataset.layerId = hijoId;
-    item.dataset.wfsHijo = "true";
-    item.setAttribute("disabled", "");
+     const item = document.createElement("calcite-tree-item");
+  item.dataset.layerId = hijoId;
+  item.dataset.wfsHijo = "true";
+  item.setAttribute("disabled", "");
+  
+  // Tooltip nativo (visible al hacer hover)
+  item.title = `${featureType.name} — sin datos en este municipio`;
 
-    const wrapper = document.createElement("span");
-    wrapper.style.cssText = "display:flex; align-items:center; gap:6px; flex-wrap:wrap;";
+  const label = document.createElement("span");
+  label.className   = "layer-label";
+  label.textContent = featureType.title || featureType.name;
+  item.appendChild(label);
 
-    const label = document.createElement("span");
-    label.className   = "layer-label layer-label--unavailable";
-    label.textContent = featureType.title || featureType.name;
+  return { item, layer: null };
+    // const item = document.createElement("calcite-tree-item");
+    // item.dataset.layerId = hijoId;
+    // item.dataset.wfsHijo = "true";
+    // item.setAttribute("disabled", "");
 
-    const chip = document.createElement("calcite-chip");
-    chip.setAttribute("kind",  "neutral");
-    chip.setAttribute("scale", "s");
-    chip.textContent = "Sin datos en esta zona";
+    // const wrapper = document.createElement("span");
+    // wrapper.style.cssText = "display:flex; align-items:center; gap:6px; flex-wrap:wrap;";
 
-    wrapper.appendChild(label);
-    wrapper.appendChild(chip);
-    item.appendChild(wrapper);
+    // const label = document.createElement("span");
+    // label.className   = "layer-label layer-label--unavailable";
+    // label.textContent = featureType.title || featureType.name;
 
-    return { item, layer: null };
+    // const chip = document.createElement("calcite-chip");
+    // chip.setAttribute("kind",  "neutral");
+    // chip.setAttribute("scale", "s");
+    // chip.textContent = featureType.title;
+
+    // wrapper.appendChild(label);
+    // wrapper.appendChild(chip);
+    // item.appendChild(wrapper);
+
+    // return { item, layer: null };
   }
 
   // Crear la instancia de capa antes de crear el nodo DOM.
@@ -524,7 +538,7 @@ async function _crearHijoWfs(featureType, configPadre, disponible = true) {
     return { item, layer: null };
   }
 
-  // ← CAMBIO: aplicar BBOX al hijo antes de que entre al mapa.
+  // Aplicar BBOX al hijo antes de que entre al mapa.
   // La hija hereda el srsname del configPadre (que sí está en el catálogo).
   // El filtro debe aplicarse ANTES de map.add() para que el primer
   // GetFeature request ya lleve el parámetro BBOX al servidor.
