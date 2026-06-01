@@ -35,8 +35,8 @@ let _adaptador = null;
  *
  * @param {Object} adaptador - Debe implementar: getCatalogo() → Promise<Capa[]>
  */
-export function setAdaptador(adaptador) {
-  if (typeof adaptador?.getCatalogo !== "function") {
+export function setAdaptador(adaptador) { 
+  if (typeof adaptador?.getCatalogo !== "function") { //comprueba que existe adaptador y obtiene el catalogo
     throw new Error(
       "[configEngine] El adaptador debe implementar getCatalogo(): Promise<Capa[]>"
     );
@@ -57,7 +57,7 @@ export function setAdaptador(adaptador) {
  * @returns {Promise<Capa[]>} Array filtrado y ordenado
  */
 export async function fetchCapas(municipioData) {
-  if (!_adaptador) {
+  if (!_adaptador) { //comprueba adaptador
     throw new Error(
       "[configEngine] No hay adaptador registrado. Llama a setAdaptador() en main.js primero."
     );
@@ -65,10 +65,10 @@ export async function fetchCapas(municipioData) {
 
   const catalogo = await _adaptador.getCatalogo();
 
-  const capas = catalogo.filter(capa => _aplicaAlMunicipio(capa, municipioData));
+  const capas = catalogo.filter(capa => _aplicaAlMunicipio(capa, municipioData)); //recorre todas las capas, si devuelve true la capa entra
 
   // Ordenar por prioridad para que el árbol de capas tenga un orden coherente
-  const ORDEN_PRIORIDAD = { P0: 0, P1: 1, P2: 2, P3: 3, DESC: 99 };
+  const ORDEN_PRIORIDAD = { P0: 0, P1: 1, P2: 2, P3: 3, DESC: 99 }; // prioridad de mpv
   capas.sort(
     (a, b) => (ORDEN_PRIORIDAD[a.prioridad] ?? 99) - (ORDEN_PRIORIDAD[b.prioridad] ?? 99)
   );
@@ -91,8 +91,8 @@ export async function fetchCapas(municipioData) {
  * @param {Object} municipio  - Objeto de config/municipios.js
  * @returns {boolean}
  */
-function _aplicaAlMunicipio(capa, municipio) {
-  const cobertura = capa.cobertura;
+function _aplicaAlMunicipio(capa, municipio) { //solo recibe si es true o false
+  const cobertura = capa.cobertura; //obtiene cobertura de la capa según el catalogo
 
   if (!cobertura?.tipo) {
     console.warn(`[configEngine] Capa "${capa.id}" sin campo cobertura.tipo — ignorada`);

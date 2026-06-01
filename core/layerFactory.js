@@ -4,15 +4,16 @@
  * Fábrica de capas: transforma un objeto de configuración del catálogo
  * en una instancia de capa Esri lista para añadir al Map.
  *
+ * Config JSON → layerFactory → instancia Esri → map.add(layer): 
+ * Catalogo-capas.json define las capas de forma abstracta: usas strings como "WMS", "WFS" o "GEOJSON". 
+ * El SDK de ArcGIS necesita clases específicas como WMSLayer o WFSLayer.
+ * 
+ * Objetivo: evitar alto uso de if (tipo === "WMS") ...else if (tipo === "WMTS") ...else if ...
+ * config.tipo → busca string módulo → import dinámico
+ * 
  * ── RESPONSABILIDAD ÚNICA ────────────────────────────────────────────────
  * Solo instancia. No aplica filtros runtime (eso es layerInitializer).
  * No toca el DOM. No conoce el municipio seleccionado.
- *
- * ── EXTENSIÓN ────────────────────────────────────────────────────────────
- * Añadir soporte a un nuevo tipo:
- *   1. Añadir entrada en _TIPO_MAP: "TIPO": "esri/layers/XLayer"
- *   2. Añadir case en _buildParams() si necesita parámetros especiales
- * El resto del código no cambia.
  *
  * ── TIPOS SOPORTADOS ─────────────────────────────────────────────────────
  *   WMS         → WMSLayer       (servicios OGC WMS)
@@ -34,14 +35,37 @@ const _TIPO_MAP = {
   "FEATURE":     "esri/layers/FeatureLayer"
 };
 
-// ─── API pública ──────────────────────────────────────────────────────────
+
+// ─── API PÚBLICA ──────────────────────────────────────────────────────────
 
 /**
  * Crea una instancia de capa Esri a partir de la configuración del catálogo.
- *
- * @param {Object} config - Objeto de catalogo-capas.json
+ * 
+ * @param {Object} config - Objeto de configuración proveniente de catalogo-capas.json
  * @returns {Promise<Layer|null>} Instancia de capa, o null si el tipo es desconocido
+ * 
+ * 
+ * 1. El objeto config llega desde municipioSelector.js a través de:
+ * 2. configEngine.fetchCapas(municipioData) → devuelve un ARRAY de objetos config
+ * 3. configs.map(config => crearCapa(config)) → cada elemento se pasa como parámetro
+ *
+ * @example
+ * {
+ *   id: "catastro",
+ *   tipo: "wms",        // ← determina qué clase cargar
+ *   url: "https://...",
+ *   title: "Catastro"
+ * }
+ *
+ *  // Flujo interno:
+ *  1. config.tipo // resuelve el módulo (ej. "wms" → "./layers/WMSLayer.js")
+ *  2. $arcgis.import() // carga la clase dinámicamente (ej. WMSLayer)
+ *  3. _buildParams(config) // construye parámetros (url, id, title, etc.)
+ *  4. new ClaseCargada(params) // instancia la capa viva en el mapa
+ * 
  */
+
+
 export async function crearCapa(config) {
   const modulePath = _TIPO_MAP[config.tipo];
 
