@@ -192,12 +192,11 @@ export function getMap() {
 /**
  * Añade capas al Map compartido eliminando las anteriores.
  * Mantiene siempre la máscara como última capa (renderiza encima de todo).
- * Ejecturada por municipioSelector.js para cargar capas inmediatas !WFS
- * 
+ *  
  * @param {Layer[]} capas - Array de instancias Esri ya inicializadas
  */
 
-
+// Ejecturada por municipioSelector.js para cargar capas inmediatas !WFS
 export function addCapas(capas) {
   if (!_map) { // verifica que el objeto _map exista
     console.error("[mapManager] Map no inicializado. Llama a initMap() primero.");
@@ -229,11 +228,11 @@ export function addCapas(capas) {
 /**
  * Añade una sola capa al Map (lazy-load on-demand para WFS).
  * La máscara se reposiciona encima.
- * Ejecturada por layerTree.js para cargar WFS cuando el usuario marca el checkbox
+ *
  * @param {Layer} capa
  */
 
-
+// Ejecturada por layerTree.js para cargar WFS cuando el usuario marca el checkbox
 export function addCapa(capa) {
   if (!_map) return; //verifica si el objeto _map se ha inicializado
   _map.layers.add(capa); //añade capa por defecto en la parte superior de la pila visual 
@@ -250,12 +249,13 @@ export function addCapa(capa) {
  * exterior al municipio. Se rellena de gris semitransparente para que el
  * contexto geográfico exterior sea visible pero quede en segundo plano.
  *
- * Función ejecutada por municipioSelector.js
+ * 
  * 
  * @param {Object} polygon - { rings, spatialReference } de municipios.js municipioData.polygon
  * @returns {Promise<void>}
  */
 
+// Ejecutada en municipioSelector.js usando mapManager.actualizarMascara()
 export async function actualizarMascara(polygon) {
   if (!_maskLayer) return; //Verifica si _maskLayer existe. Si no está inicializada, la función se detiene para evitar errores
 
@@ -316,13 +316,12 @@ export function limpiarMascara() {
  * Hace zoom al bounding box del municipio en la vista activa.
  * expand(1.2) añade 20% de margen para mostrar contexto geográfico inmediato.
  *
- * Ejecutada por municipioSelector.js
  * 
  * @param {number[]} bbox - [xmin, ymin, xmax, ymax] en WGS84
  * @returns {Promise<void>}
  */
 
-
+// Ejecutada por municipioSelector.js con mapManager.irAlMunicipio(municipioData.bbox)
 export async function irAlMunicipio(bbox) {
   // uso de ?. Evita que la aplicación se detenga con un error si el elemento (_mapEl o _sceneEl) aún no está disponible en el DOM
   const view = _vistaActiva === "2D" ? _mapEl?.view : _sceneEl?.view; //detectar si el modo actual es 2D, si es true selecciona <arcgis-map>, si es false <arcgis-scene>
@@ -356,11 +355,11 @@ export async function irAlMunicipio(bbox) {
 /**
  * Cambia el basemap del mapa automáticamente en 2D y 3D
  * 
- * Ejecutada por basemapSelector.js al escuchar el evento de selección
  * 
  * @param {string} basemapId - Ej: "osm", "arcgis/satellite", "arcgis/topographic"
  */
 
+// Ejecutada por basemapSelector.js al escuchar el evento de selección → mapManager.setBasemap(basemapId)
 export function setBasemap(basemapId) {
   if (!_map) return; // verifica que el objeto _map este inicializado
   _map.basemap = basemapId; // (p) de _map. Aquí se asigna el id del basemap seleccionado a la instancia _map de esri

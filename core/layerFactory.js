@@ -44,7 +44,7 @@ const _TIPO_MAP = {
 /**
  * Crea una instancia de capa Esri a partir de la configuración del catálogo.
  * 
- * Ejecutada por: municipioSelector.js 
+ * Definida en layerFactory.js
  * 
  * @param {Object} config - Objeto de configuración proveniente de catalogo-capas.json
  * @returns {Promise<Layer|null>} Instancia de capa, o null si el tipo es desconocido
@@ -70,7 +70,7 @@ const _TIPO_MAP = {
  * 
  */
 
-
+// Ejecutada por municipioSelector.js
 export async function crearCapa(config) {
   const modulePath = _TIPO_MAP[config.tipo]; // busca el tipo "WMS" y devuelve "esri/layers/WMSLayer" = modulePath
 
@@ -97,13 +97,7 @@ export async function crearCapa(config) {
  * Crea una instancia WFSLayer para un FeatureType hijo descubierto
  * dinámicamente vía GetCapabilities.
  * 
- * Ejecutada por: layerTree.js
- *
- * ── POR QUÉ UNA FUNCIÓN SEPARADA Y NO REUTILIZAR crearCapa ───────────────
- * crearCapa() espera un config completo del catálogo (con id, bloque_tematico,
- * disponibilidad_municipal…). Pero un FeatureType hijo viene del parser de
- * Capabilities y solo tiene name, title, abstract y crs — no tiene registro 
- * en el catálogo. 
+ * Definida en layerFactory.js
  *
  * Esta función deriva un config mínimo a partir del padre (que sí está en el
  * catálogo) y el FeatureType descubierto en el parser de capabilities, manteniendo la trazabilidad con el
@@ -116,7 +110,16 @@ export async function crearCapa(config) {
  * @returns {Promise<WFSLayer|null>}
  */
 
-
+//Ejecutada por: layerTree.js
+// POR QUÉ UNA FUNCIÓN SEPARADA Y NO REUTILIZAR crearCapa ───────────────
+// crearCapa() espera un config completo del catálogo (con id, bloque_tematico,
+// disponibilidad_municipal…). Pero un FeatureType hijo viene del parser de
+// Capabilities y solo tiene name, title, abstract y crs — no tiene registro 
+// en el catálogo. 
+// 
+// Esta función deriva un config mínimo a partir del padre (que sí está en el
+// catálogo) y el FeatureType descubierto en el parser de capabilities, manteniendo la trazabilidad con el
+// servicio original sin contaminar el catálogo con entradas sintéticas.
 export async function crearCapaWfsHija(featureType, configPadre) {
   try {
     const WFSLayer = await $arcgis.import("esri/layers/WFSLayer");
@@ -177,7 +180,7 @@ export function getTiposImplementados() {
  */
 
 
-function _buildParams(config) {
+function _buildParams(config) { //config es json
   // Parámetros comunes a todos los tipos
   const base = {
     id:      config.id, //lo usará layerTree.js
@@ -251,6 +254,7 @@ function _buildParams(config) {
 /**
  * Convierte un CRS OGC (EPSG:4326, urn:ogc:def:crs:EPSG::4258, etc.)
  * al WKID numérico que espera el SDK de ArcGIS.
+ * 
  *
  * ── FORMATOS CONOCIDOS ────────────────────────────────────────────────────
  * Los servidores WFS españoles usan tres variantes del mismo estándar:
@@ -266,8 +270,8 @@ function _buildParams(config) {
  * @returns {number} WKID numérico
  */
 
-
-function _crsToWkid(crs) {
+// Ejecutada por crearCapaWfsHija() → return new WFSLayer más arriba ↑
+function _crsToWkid(crs) { 
   if (!crs) return 4326;
 
   // Extraer el número final de cualquier formato conocido
