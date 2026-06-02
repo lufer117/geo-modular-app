@@ -9,7 +9,8 @@
  * El SDK de ArcGIS necesita clases específicas como WMSLayer o WFSLayer.
  * 
  * Objetivo: evitar alto uso de if (tipo === "WMS") ...else if (tipo === "WMTS") ...else if ...
- * config.tipo → busca string módulo → import dinámico
+ * Dado un config.tipo → import módulo arcgis dinámicamente (cuando se necesita) 
+ *
  * 
  * ── RESPONSABILIDAD ÚNICA ────────────────────────────────────────────────
  * Solo instancia. No aplica filtros runtime (eso es layerInitializer).
@@ -26,6 +27,8 @@
 
 // Registro tipo → módulo Esri.
 // Mantenerlo aquí centraliza el mapa de dependencias del SDK.
+// Ej: si arcgis cambia esri/layers/WFSLayer, solo se cambiaría esa línea
+
 const _TIPO_MAP = {
   "WMS":         "esri/layers/WMSLayer",
   "WMTS":        "esri/layers/WMTSLayer",
@@ -36,16 +39,18 @@ const _TIPO_MAP = {
 };
 
 
-// ─── API PÚBLICA ──────────────────────────────────────────────────────────
+// ─── API PÚBLICA CREAR CAPA ──────────────────────────────────────────────────────────
 
 /**
  * Crea una instancia de capa Esri a partir de la configuración del catálogo.
+ * 
+ * Ejecutada por: municipioSelector.js 
  * 
  * @param {Object} config - Objeto de configuración proveniente de catalogo-capas.json
  * @returns {Promise<Layer|null>} Instancia de capa, o null si el tipo es desconocido
  * 
  * 
- * 1. El objeto config llega desde municipioSelector.js a través de:
+ * 1. El objeto config llega en municipioSelector.js a través de:
  * 2. configEngine.fetchCapas(municipioData) → devuelve un ARRAY de objetos config
  * 3. configs.map(config => crearCapa(config)) → cada elemento se pasa como parámetro
  *
@@ -67,20 +72,20 @@ const _TIPO_MAP = {
 
 
 export async function crearCapa(config) {
-  const modulePath = _TIPO_MAP[config.tipo];
+  const modulePath = _TIPO_MAP[config.tipo]; // busca el tipo "WMS" y devuelve "esri/layers/WMSLayer" = modulePath
 
-  if (!modulePath) {
+  if (!modulePath) { // muestra en consola error si no encuentra tipo 
     console.warn(
       `[layerFactory] Tipo desconocido: "${config.tipo}" (id: "${config.id}"). ` +
       `Tipos soportados: ${getTiposImplementados().join(", ")}`
     );
-    return null;
+    return null; // si la capa es invalida, la ignora y la app sigue viva
   }
 
-  try {
-    const LayerClass = await $arcgis.import(modulePath);
-    const params     = _buildParams(config);
-    return new LayerClass(params);
+  try { // para que la capa mala ↑ if!modulePath no rompa la app
+    const LayerClass = await $arcgis.import(modulePath); // se carga el módulo que se necesita "WMSLayer". LayerClass lo guarda como plantilla de una layer que se instanciará más adelante. Ej, "new LayerClass(...) = new WMSLayer(...)""
+    const params     = _buildParams(config); //Traduce las propiedades de nuestro JSON (como url o title) al formato exacto que espera el constructor de ArcGIS
+    return new LayerClass(params); // Si el tipo es "WMS" → "new WMSLayer(...)". La capa ya es creada en memoria para ser añadida cuando layerInitializer la procese  
 
   } catch (err) {
     console.error(`[layerFactory] Error al crear capa "${config.id}":`, err);
@@ -91,17 +96,17 @@ export async function crearCapa(config) {
 /**
  * Crea una instancia WFSLayer para un FeatureType hijo descubierto
  * dinámicamente vía GetCapabilities.
+ * 
+ * Ejecutada por: layerTree.js
  *
  * ── POR QUÉ UNA FUNCIÓN SEPARADA Y NO REUTILIZAR crearCapa ───────────────
  * crearCapa() espera un config completo del catálogo (con id, bloque_tematico,
- * disponibilidad_municipal…). Un FeatureType hijo viene del parser de
- * Capabilities y solo tiene name, title, abstract y crs — no tiene registro
- * en el catálogo. Crear un "config falso" para engañar a crearCapa() sería
- * un acoplamiento frágil: si crearCapa() evoluciona, los configs sintéticos
- * rompen silenciosamente.
+ * disponibilidad_municipal…). Pero un FeatureType hijo viene del parser de
+ * Capabilities y solo tiene name, title, abstract y crs — no tiene registro 
+ * en el catálogo. 
  *
  * Esta función deriva un config mínimo a partir del padre (que sí está en el
- * catálogo) y el FeatureType descubierto, manteniendo la trazabilidad con el
+ * catálogo) y el FeatureType descubierto en el parser de capabilities, manteniendo la trazabilidad con el
  * servicio original sin contaminar el catálogo con entradas sintéticas.
  *
  * @param {import('../utils/wfsCapabilitiesParser.js').FeatureTypeInfo} featureType
@@ -110,6 +115,8 @@ export async function crearCapa(config) {
  *   Config del catálogo del servicio WFS padre (tiene url, srsname, etc.)
  * @returns {Promise<WFSLayer|null>}
  */
+
+
 export async function crearCapaWfsHija(featureType, configPadre) {
   try {
     const WFSLayer = await $arcgis.import("esri/layers/WFSLayer");
@@ -118,7 +125,7 @@ export async function crearCapaWfsHija(featureType, configPadre) {
     // Esto garantiza unicidad incluso si dos servicios WFS declaran un tipo
     // con el mismo nombre (ej: dos servidores con "municipios:Municipios").
     // El separador "::" es suficientemente raro en los nombres OGC para evitar colisiones.
-    const hijoId = `${configPadre.id}::${featureType.name}`;
+    const hijoId = `${configPadre.id}::${featureType.name}`; //IGN::Municipios Catastro::Municipios. Si usa solo : los servicios OGC también lo usan y puede haber colisión
 
     return new WFSLayer({
       id:      hijoId,
@@ -155,25 +162,30 @@ export function getTiposImplementados() {
   return Object.keys(_TIPO_MAP);
 }
 
-// ─── Construcción de parámetros por tipo ──────────────────────────────────
+// ─── CONSTRUCCIÓN DE PARÁMETROS POR TIPO  ──────────────────────────────────
 
 /**
  * Construye el objeto de parámetros para el constructor Esri.
  * Separa la lógica de parametrización por tipo para facilitar
  * el mantenimiento cuando evolucionen los tipos.
+ * 
+ * Transforma un objeto de configuración plano (proveniente del catalogo-capas.json) en un objeto de propiedades que el SDK pueda entender para instanciar cada tipo de capa.
+ * 
  *
  * @param {Object} config
  * @returns {Object}
  */
+
+
 function _buildParams(config) {
   // Parámetros comunes a todos los tipos
   const base = {
-    id:      config.id,
-    title:   config.title,
+    id:      config.id, //lo usará layerTree.js
+    title:   config.title, // lo usa layerTree.js
     visible: config.visible ?? false  // Las capas arrancan ocultas; el usuario las activa
   };
 
-  switch (config.tipo) {
+  switch (config.tipo) { // la función adapta el JSON del catalogo a los requisitos del SDK según el servicio
 
     case "WMS":
       return {
@@ -182,7 +194,7 @@ function _buildParams(config) {
         // sublayers: mapea los nombres de capa del catálogo al formato que WMSLayer espera.
         // Si el catálogo no define sublayers, WMSLayer usa todas las que declare el servicio.
         ...(config.sublayers?.length
-          ? { sublayers: config.sublayers.map(name => ({ name })) }
+          ? { sublayers: config.sublayers.map(name => ({ name })) } // Arcgis espera [{ name: "Catastro" },{ name: "Parcelas" }]
           : {})
       };
 
@@ -197,7 +209,7 @@ function _buildParams(config) {
 
     case "WFS":
       return {
-        ...base,
+        ...base, // "..." copia todos los objetos de base 
         url: config.url,
         // name: selecciona un FeatureType concreto del servicio WFS.
         // Si no está en el catálogo, el SDK coge el primero del GetCapabilities
@@ -234,7 +246,7 @@ function _buildParams(config) {
   }
 }
 
-// ─── Helpers privados ─────────────────────────────────────────────────────
+// ─── HELPERS PRIVADOS ─────────────────────────────────────────────────────
 
 /**
  * Convierte un CRS OGC (EPSG:4326, urn:ogc:def:crs:EPSG::4258, etc.)
@@ -253,6 +265,8 @@ function _buildParams(config) {
  * @param {string} crs - Identificador CRS del Capabilities
  * @returns {number} WKID numérico
  */
+
+
 function _crsToWkid(crs) {
   if (!crs) return 4326;
 
