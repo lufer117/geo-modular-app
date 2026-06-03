@@ -6,6 +6,12 @@
  * ── RESPONSABILIDAD ──────────────────────────────────────────────────────
  * Renderizar un selector Calcite y, al elegir un municipio, orquestar
  * el pipeline completo de carga:
+ * 
+ *  En función del deployment recibido desde main.js:
+ *
+ *   municipios: []  → muestra todos los del catálogo (modo demo/TFM)
+ *   municipios: [N] → restringe el selector al ámbito del cliente
+ *   municipios: [1] → carga automática al arrancar sin esperar interacción
  *
  *   configEngine.fetchCapas(municipioData)
  *       ↓  array de configs filtradas por cobertura
@@ -28,6 +34,15 @@
  * No conoce el formato de las capas Esri.
  */
 
+
+//  usuario interactúa con el select        deployment.municipios tiene 1 elemento
+//         ↓                                           ↓
+//   _onMunicipioChange(event)           carga automática al arrancar
+//         ↓                                           ↓
+//         └───────────── _cargarMunicipio(codigoIne) ──────────────┘
+//                                     ↓
+//                           [pipeline completo — sin cambios]
+
 import { MUNICIPIOS }            from "../config/municipios.js";
 import * as configEngine         from "../config/configEngine.js";
 import * as mapManager           from "../core/mapManager.js";
@@ -42,7 +57,8 @@ let _cargando = false;
  * Renderiza el selector de municipio en el contenedor indicado.
  * @param {HTMLElement|string} container - Elemento DOM o selector CSS
  */
-export function renderMunicipioSelector(container) {
+
+export function renderMunicipioSelector(container, deployment = { municipios: [] }) {
   const el = typeof container === "string"
     ? document.querySelector(container)
     : container;
@@ -52,24 +68,40 @@ export function renderMunicipioSelector(container) {
     return;
   }
 
-  // ── Etiqueta ──
+  // ── Calcular municipios visibles según el ámbito del deployment ──
+  // deployment.municipios vacío = modo demo: sin filtro, se muestran todos.
+  // deployment.municipios con valores = modo producción: solo los del ámbito.
+  const municipiosVisibles = deployment.municipios?.length > 0
+    ? MUNICIPIOS.filter(m => deployment.municipios.includes(m.codigo_ine))
+    : MUNICIPIOS;
+
+  if (municipiosVisibles.length === 0) {
+    console.warn(
+      "[municipioSelector] Ningún municipio coincide con el deployment:",
+      deployment.municipios
+    );
+    return;
+  }
+
+  // ── Construir el selector Calcite ──
   const label = document.createElement("calcite-label");
   label.setAttribute("layout", "inline");
   label.textContent = "Municipio: ";
 
-  // ── Select Calcite ──
   const select = document.createElement("calcite-select");
-  select.id    = "municipio-select";
+  select.id = "municipio-select";
   select.setAttribute("label", "Selecciona un municipio");
 
-  // Opción vacía por defecto
-  const defaultOpt = document.createElement("calcite-option");
-  defaultOpt.value       = "";
-  defaultOpt.textContent = "— Selecciona un municipio —";
-  select.appendChild(defaultOpt);
+  // La opción vacía solo tiene sentido cuando hay más de un municipio.
+  // Con un único municipio se carga automáticamente y el placeholder no aporta.
+  if (municipiosVisibles.length > 1) {
+    const defaultOpt = document.createElement("calcite-option");
+    defaultOpt.value       = "";
+    defaultOpt.textContent = "— Selecciona un municipio —";
+    select.appendChild(defaultOpt);
+  }
 
-  // Una opción por cada municipio disponible
-  MUNICIPIOS.forEach(m => {
+  municipiosVisibles.forEach(m => {
     const opt = document.createElement("calcite-option");
     opt.value       = m.codigo_ine;
     opt.textContent = `${m.nombre} (${m.provincia_nombre})`;
@@ -80,13 +112,37 @@ export function renderMunicipioSelector(container) {
 
   label.appendChild(select);
   el.appendChild(label);
+
+  // ── Carga automática para instancias de un solo municipio ──
+  // Cuando el deployment declara exactamente un municipio, no esperamos
+  // interacción del usuario: seleccionamos directamente y disparamos la carga.
+  // Llamamos a _cargarMunicipio en lugar de simular el evento Calcite porque
+  // el evento puede no dispararse de forma fiable con un único elemento.
+  if (municipiosVisibles.length === 1) {
+    select.value = municipiosVisibles[0].codigo_ine;
+    _cargarMunicipio(municipiosVisibles[0].codigo_ine);
+  }
 }
 
-// ─── Handler privado ──────────────────────────────────────────────────────
+// ─── Handlers privados ────────────────────────────────────────────────────────
 
+/**
+ * Handler del evento calciteSelectChange.
+ * Delega en _cargarMunicipio para mantener DRY con la carga automática.
+ */
 async function _onMunicipioChange(event) {
-  const codigoIne = event.target.value;
+  await _cargarMunicipio(event.target.value);
+}
 
+/**
+ * Pipeline de carga de un municipio.
+ *
+ * Extraído del handler para ser reutilizable desde la carga automática
+ * sin duplicar lógica (DRY). Ambas rutas (evento + automática) convergen aquí.
+ *
+ * @param {string} codigoIne - Código INE del municipio a cargar
+ */
+async function _cargarMunicipio(codigoIne) {
   // Sin selección real o pipeline ya en curso → ignorar
   if (!codigoIne || _cargando) return;
 
@@ -99,7 +155,6 @@ async function _onMunicipioChange(event) {
   try {
     console.info(`[municipioSelector] → ${municipioData.nombre} (${municipioData.codigo_ine})`);
 
-    // Notificar a otros módulos que empieza la carga (si necesitan mostrar spinner)
     emit("municipio-seleccionado", { municipioData });
 
     // ── 1. Resolver capas del catálogo para este municipio ──
@@ -135,8 +190,8 @@ async function _onMunicipioChange(event) {
 
     // ── 4. Añadir capas al mapa ──
     // WFSLayer descarga features en map.add() aunque visible=false.
-    // Las WFS se registran pero no entran al mapa hasta que el usuario
-    // las active desde el árbol (lazy-load en layerTree.js).
+    // Las WFS no entran al mapa hasta que el usuario las active desde
+    // el árbol de capas (lazy-load implementado en layerTree.js).
     const capasInmediatas = layers.filter((_, i) => cfgList[i].tipo !== "WFS");
     mapManager.addCapas(capasInmediatas);
 
@@ -168,7 +223,9 @@ async function _onMunicipioChange(event) {
   }
 }
 
-// Muestra/oculta el indicador de carga en el select
+// ─── Helpers privados ─────────────────────────────────────────────────────────
+
+/** Muestra u oculta el spinner de carga del select Calcite */
 function _setLoading(isLoading) {
   const select = document.getElementById("municipio-select");
   if (!select) return;

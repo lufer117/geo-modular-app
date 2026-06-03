@@ -22,6 +22,8 @@
 // ── Config ──────────────────────────────────────────────────────────────
 import { LocalJsonAdapter }        from "../config/adapters/LocalJsonAdapter.js";
 import { setAdaptador }            from "../config/configEngine.js"; // le dice al sistema qué fuente de datos usar
+import { DEPLOYMENT }              from "../config/deployment.js";
+
 
 // ── Core ─────────────────────────────────────────────────────────────────
 // Main no crea el mapa directamente, lo inicializa 
@@ -98,7 +100,7 @@ async function main() {
     // 3. Montar UI
     // El orden importa: la toolbar y el selector están en la cabecera (visibles de entrada).
     // El árbol y la leyenda se construyen cuando "municipio-cargado" se emite con EVENTBUS
-    renderMunicipioSelector("#municipio-selector-container"); // styles & eventBus.emit("municipio-cargado")
+    renderMunicipioSelector("#municipio-selector-container", DEPLOYMENT); // styles & eventBus.emit("municipio-cargado")
     renderBasemapSelector("#basemap-selector-container"); // conecta con styles
     initLayerTree("#layer-tree-container"); // conecta con styles 
     initLegendPanel("#legend-container", "map-view");  // conecta con styles, index (mapa inicia en 2d)

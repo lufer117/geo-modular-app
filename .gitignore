@@ -9,6 +9,9 @@ Thumbs.db
 .env
 *.env.local
 
+# Configuración de instancia — varía por cliente y entorno
+config/deployment.js
+
 # Carpetas de build/distribución
 dist/
 build/
