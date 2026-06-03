@@ -86,6 +86,9 @@ async function main() {
   try {
     console.info("=== GIS Municipal — Arrancando... ===");
 
+    // 0. Esperar SDK — bug corregido: la función existía pero no se llamaba
+    await waitForArcGISSDK();
+
     // 1. Registrar adaptador de datos antes de cualquier operación de catálogo
     setAdaptador(new LocalJsonAdapter("../data/catalogo-capas.json"));
 
