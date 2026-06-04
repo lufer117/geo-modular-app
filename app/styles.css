@@ -123,33 +123,6 @@ calcite-block {
   text-align: center;
 }
 
-/* Grupos temáticos (nivel 1 y 2 del árbol, sin checkbox) */
-.layer-group-label {
-  font-weight: var(--calcite-font-weight-medium, 500);
-  color: var(--calcite-color-text-1, #2b2b2b);
-  font-size: var(--calcite-font-size-0, 0.9375rem);
-}
-
-/* Wrapper de cada capa hoja (nivel 3: checkbox + label + badges) */
-.layer-item-wrapper {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  flex-wrap: wrap;
-  padding: 0.1rem 0;
-}
-
-/* Etiqueta de la capa */
-.layer-label {
-  cursor: pointer;
-  font-size: var(--calcite-font-size--1, 0.875rem);
-  color: var(--calcite-color-text-2, #404040);
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 
 /* ── Panel de leyenda ────────────────────────────────────────────────────── */
 

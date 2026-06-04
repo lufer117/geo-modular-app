@@ -107,6 +107,7 @@ async function main() {
       mapContainerId:   "map-view", //conecta con index <div id="map-view"> y usado como parametro en initMap en mapManager.js
       sceneContainerId: "scene-view" // contacta con index <div id="scene-view"> y usado como parametro en initMap en mapManager.js
     });
+    
 
     // 4. Montar UI
     // El orden importa: la toolbar y el selector están en la cabecera (visibles de entrada).
