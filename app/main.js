@@ -27,7 +27,11 @@ import { DEPLOYMENT }              from "../config/deployment.js";
 
 // ── Core ─────────────────────────────────────────────────────────────────
 // Main no crea el mapa directamente, lo inicializa 
-import { initMap }                 from "../core/mapManager.js";
+import * as mapManager from "../core/mapManager.js";
+
+
+// ── Lang ─────────────────────────────────────────────────────────────────
+import { init as initI18n, consumirRestore } from "../config/i18n/i18nManager.js";
 
 // ── UI ────────────────────────────────────────────────────────────────────
 // Cada función importada monta una parte visual
@@ -89,18 +93,22 @@ async function main() {
     // 0. Esperar SDK — bug corregido: la función existía pero no se llamaba
     await waitForArcGISSDK();
 
-    // 1. Registrar adaptador de datos antes de cualquier operación de catálogo
+    // 1. Inicializar i18n ANTES de montar UI
+    //    Carga el JSON del idioma activo y aplica data-i18n al DOM
+    await initI18n();
+
+    // 2. Registrar adaptador de datos antes de cualquier operación de catálogo
     setAdaptador(new LocalJsonAdapter("../data/catalogo-capas.json"));
 
-    // 2. Inicializar el Map único con sus dos vistas (2D y 3D)
+    // 3. Inicializar el Map único con sus dos vistas (2D y 3D)
     // await porque crear el mapa es asíncono
     // espera que las acciones de initMap esten ok antes de renderizar otro componente de la interfaz
-    await initMap({
+    await mapManager.initMap({
       mapContainerId:   "map-view", //conecta con index <div id="map-view"> y usado como parametro en initMap en mapManager.js
       sceneContainerId: "scene-view" // contacta con index <div id="scene-view"> y usado como parametro en initMap en mapManager.js
     });
 
-    // 3. Montar UI
+    // 4. Montar UI
     // El orden importa: la toolbar y el selector están en la cabecera (visibles de entrada).
     // El árbol y la leyenda se construyen cuando "municipio-cargado" se emite con EVENTBUS
     renderMunicipioSelector("#municipio-selector-container", DEPLOYMENT); // styles & eventBus.emit("municipio-cargado")
@@ -108,6 +116,21 @@ async function main() {
     initLayerTree("#layer-tree-container"); // conecta con styles 
     initLegendPanel("#legend-container", "map-view");  // conecta con styles, index (mapa inicia en 2d)
     initToolbar("#toolbar-container"); // conecta con styles
+
+    // 5. Restaurar estado tras cambio de idioma (si lo hay)
+    //    consumirRestore() lee y borra la clave en una sola operación
+    const restore = consumirRestore();
+    if (restore) {
+      if (restore.municipio) {
+        // Reutilizar el pipeline interno de municipioSelector
+        // importándolo directamente para no duplicar lógica
+        const { cargarMunicipioPorCodigo } = await import("../ui/municipioSelector.js");
+        await cargarMunicipioPorCodigo(restore.municipio);
+      }
+      if (restore.vista === "3D") {
+        await mapManager.toggleVista();
+      }
+    }
 
     console.info("=== GIS Municipal — Listo ===");
 

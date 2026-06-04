@@ -6,6 +6,26 @@
   <link rel="icon" href="data:,"> 
   <title>GIS Municipal — Visor Adaptativo</title>
 
+  <!--
+  Script inline de detección de idioma.
+  DEBE ejecutarse antes de cargar el SDK de ArcGIS para que esriConfig.locale
+  esté establecido cuando el SDK inicialice sus Web Components.
+  Lee: ?lang= (URL) > localStorage > fallback "es"
+  El fallback "es" es intencional: deployment.js no existe aún en este momento.
+  i18nManager.init() aplicará el idioma correcto a los textos propios de la app.
+-->
+<script>
+  (function () {
+    const stored = localStorage.getItem("geo-app-lang");
+    const urlLang = new URLSearchParams(location.search).get("lang");
+    const lang = urlLang || stored || "es";
+    window.__GIS_LANG__ = lang;
+    // esriConfig puede no existir todavía; el SDK lo leerá de window antes de init
+    window.esriConfig = window.esriConfig || {};
+    window.esriConfig.locale = lang;
+  })();
+</script>
+
      
   <!-- Load ArcGIS SDK for JavaScript v5 from CDN  -->
     <!-- v5 usa modulos -->
@@ -48,6 +68,8 @@
       <!-- Logo / título -->
       <calcite-navigation-logo
         slot="logo"
+        data-i18n="app.title"
+        data-i18n-attr="heading"
         heading="GIS Municipal"
         description="Visor Adaptativo de Datos Municipales"
         icon="map-pin"
@@ -65,6 +87,11 @@
           class="toolbar-end": styles css -->
       <div slot="content-end" id="toolbar-container" class="toolbar-end"></div>
 
+      <!-- Selector de idioma — toolbar.js lo monta condicionalmente
+      Solo aparece si deployment.idiomas tiene más de un elemento -->
+      <div slot="user" id="lang-selector-container"></div>
+
+
     </calcite-navigation>
 
     <!-- ═══ PANEL LATERAL IZQUIERDO (capas) ══════════════════════════════ -->
@@ -72,30 +99,43 @@
     <!-- Pendiente agregar action-bar para collapsar panel -->
 
 
-    <!-- Shell panel 
-        panel-start: posición izquierda-->
+    <!-- Shell panel-start: posición izquierda-->
     <calcite-shell-panel slot="panel-start">
 
-      <calcite-panel heading="Capas" description="Selecciona un municipio para ver sus capas">
+      <calcite-panel 
+        data-i18n="panel.layers.heading"
+        data-i18n-attr="heading"
+        heading="Capas" 
+        description="Selecciona un municipio para ver sus capas">
 
-        <!-- Espacio para Selector de mapa base -->
-        <calcite-block heading="Mapa base" expanded>
+        <!-- calcite-block para Selector de mapa base -->
+        <calcite-block 
+          data-i18n="panel.basemap.heading"
+          data-i18n-attr="heading"
+          heading="Mapa base" expanded>
           <div id="basemap-selector-container"></div>
         </calcite-block>
 
-        <!-- Espacio para Árbol de capas
+        <!-- Espacio para Árbol de capas disponibles
             construido por layerTree.js al cargar municipio -->
-        <calcite-block id="capas-block" heading="Capas disponibles" expanded>
+        <calcite-block 
+          id="capas-block" 
+          data-i18n="panel.capas.heading"
+          data-i18n-attr="heading"
+          heading="Capas disponibles" expanded>
           <div id="layer-tree-container"></div>
         </calcite-block>
 
       </calcite-panel>
     </calcite-shell-panel>
 
-    <!-- ═══ PANEL LATERAL DERECHO (leyenda) ══════════════════════════════ -->
+    <!-- ═══ CALCITE-PANEL DERECHO (leyenda) ══════════════════════════════ -->
     <calcite-shell-panel slot="panel-end" display-mode="float">
 
-      <calcite-panel heading="Leyenda">
+      <calcite-panel 
+        data-i18n="panel.capas.heading"
+        data-i18n-attr="heading"
+        heading="Leyenda">
         <!-- arcgis-legend montado por legendPanel.js -->
         <div id="legend-container"></div>
       </calcite-panel>

@@ -1,0 +1,24 @@
+{
+  "app.title": "Municipal GIS",
+  "app.description": "Adaptive Municipal Data Viewer",
+
+  "nav.municipio.label": "Municipality:",
+  "nav.municipio.placeholder": "— Select a municipality —",
+
+  "panel.layers.heading": "Layers",
+  "panel.layers.description": "Select a municipality to see its layers",
+  "panel.basemap.heading": "Base map",
+  "panel.capas.heading": "Available layers",
+  "panel.legend.heading": "Legend",
+
+  "toolbar.toggle3d": "3D View",
+  "toolbar.toggle2d": "2D View",
+  "toolbar.lang.label": "Language",
+
+  "layers.loading": "Loading...",
+  "layers.empty": "No data in this area",
+  "layers.error": "Error loading layer",
+  "layers.wfs.expanding": "Querying layer types...",
+  "layers.wfs.empty": "No layer types found",
+  "layers.wfs.error": "Error querying service"
+}

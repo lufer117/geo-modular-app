@@ -52,6 +52,22 @@ import { emit }                  from "../utils/eventBus.js";
 
 // Semáforo: evitar doble carga si el usuario cambia de municipio rápidamente
 let _cargando = false;
+let _municipioActivo = null;
+
+export function getMunicipioActivo() {
+  return _municipioActivo;
+}
+
+/**
+ * API pública para cargar un municipio por código INE desde fuera del módulo.
+ * Usada por main.js para restaurar el estado tras un cambio de idioma.
+ * Delega en _cargarMunicipio para mantener DRY — un único pipeline.
+ *
+ * @param {string} codigoIne
+ */
+export async function cargarMunicipioPorCodigo(codigoIne) {
+  await _cargarMunicipio(codigoIne);
+}
 
 /**
  * Renderiza el selector de municipio en el contenedor indicado.
@@ -148,6 +164,8 @@ async function _cargarMunicipio(codigoIne) {
 
   const municipioData = MUNICIPIOS.find(m => m.codigo_ine === codigoIne);
   if (!municipioData) return;
+
+  _municipioActivo = codigoIne; 
 
   _cargando = true;
   _setLoading(true);

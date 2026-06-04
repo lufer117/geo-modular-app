@@ -1,0 +1,24 @@
+{
+  "app.title": "GIS Municipal",
+  "app.description": "Visor Adaptativo de Datos Municipales",
+
+  "nav.municipio.label": "Municipio:",
+  "nav.municipio.placeholder": "— Selecciona un municipio —",
+
+  "panel.layers.heading": "Capas",
+  "panel.layers.description": "Selecciona un municipio para ver sus capas",
+  "panel.basemap.heading": "Mapa base",
+  "panel.capas.heading": "Capas disponibles",
+  "panel.legend.heading": "Leyenda",
+
+  "toolbar.toggle3d": "Vista 3D",
+  "toolbar.toggle2d": "Vista 2D",
+  "toolbar.lang.label": "Idioma",
+
+  "layers.loading": "Cargando...",
+  "layers.empty": "Sin datos en esta zona",
+  "layers.error": "Error al cargar",
+  "layers.wfs.expanding": "Consultando tipos de capa...",
+  "layers.wfs.empty": "No se encontraron tipos de capa",
+  "layers.wfs.error": "Error al consultar el servicio"
+}

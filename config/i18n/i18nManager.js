@@ -1,0 +1,232 @@
+/**
+ * config/i18n/i18nManager.js
+ *
+ * Motor de internacionalización (i18n) de la aplicación.
+ *
+ * ── RESPONSABILIDAD ──────────────────────────────────────────────────────
+ * Es el ÚNICO módulo que sabe de idiomas. Centraliza:
+ *   - Resolución del idioma activo (URL > localStorage > deployment)
+ *   - Carga del JSON de traducciones correspondiente
+ *   - Aplicación de textos estáticos al DOM via atributos data-i18n
+ *   - Exposición de t() para textos dinámicos generados por JS
+ *   - Cambio de idioma en runtime con persistencia de estado
+ *
+ * ── POR QUÉ UN MÓDULO CENTRAL ────────────────────────────────────────────
+ * Distribuir la lógica de idioma entre módulos (toolbar, layerTree, etc.)
+ * crearía dependencias cruzadas y dificultaría añadir un nuevo idioma.
+ * Con este módulo, añadir un idioma = añadir un JSON + una línea en deployment.
+ *
+ * ── ESTRATEGIA DE ACTUALIZACIÓN EN RUNTIME ───────────────────────────────
+ * Textos estáticos del shell (index.html): atributos data-i18n → init() los aplica.
+ * Textos dinámicos (árbol de capas, mensajes de estado): t() en cada módulo JS.
+ * Al cambiar idioma: persiste estado (municipio + vista) → reload → init() re-aplica.
+ *
+ * ── LIMITACIÓN DOCUMENTADA ───────────────────────────────────────────────
+ * esriConfig.locale se establece desde window.__GIS_LANG__ en el script inline
+ * de index.html, ANTES de que el SDK cargue. En primera visita sin ?lang= en
+ * la URL, el SDK carga con el fallback del script inline ('es'), no con
+ * idioma_defecto de deployment.js (que aún no existe en ese momento).
+ * Trabajo futuro: SSR o endpoint que sirva el locale antes de la carga del SDK.
+ */
+
+import { DEPLOYMENT } from "../deployment.js";
+
+// ── Constantes ──────────────────────────────────────────────────────────────
+const STORAGE_KEY  = "geo-app-lang";
+const RESTORE_KEY  = "geo-app-restore";
+
+// Idiomas que el sistema conoce. Añadir aquí + crear su JSON es suficiente.
+const IDIOMAS_SOPORTADOS = ["es", "en", "eu", "gl", "ca", "va"];
+
+// Traducciones cargadas en memoria. null hasta que init() resuelve.
+let _traducciones = null;
+
+// Idioma activo en esta sesión.
+let _langActivo = "es";
+
+// ── API pública ─────────────────────────────────────────────────────────────
+
+/**
+ * Inicializa el sistema i18n.
+ * Debe llamarse en main.js ANTES de montar cualquier módulo de UI.
+ *
+ * @returns {Promise<void>}
+ */
+
+export async function init() {
+  _langActivo = _resolverIdioma();
+
+  // Sincronizar el <html lang=""> con el idioma activo
+  document.documentElement.lang = _langActivo;
+
+  // Cargar las traducciones del idioma resuelto
+  _traducciones = await _cargarTraducciones(_langActivo);
+
+  // Aplicar textos estáticos del shell (elementos con data-i18n en index.html)
+  _aplicarDOM();
+
+  console.info(`[i18n] Idioma activo: ${_langActivo}`);
+}
+
+/**
+ * Devuelve el texto traducido para una clave dada.
+ * Si la clave no existe en el idioma activo, devuelve la clave como fallback
+ * para que sea visible en UI y fácil de detectar durante el desarrollo.
+ *
+ * @param {string} key - Clave de traducción (ej: "layers.empty")
+ * @returns {string}
+ */
+
+export function t(key) {
+  if (!_traducciones) {
+    console.warn(`[i18n] t("${key}") llamado antes de init(). Retornando clave.`);
+    return key;
+  }
+  return _traducciones[key] ?? key; 
+}
+
+/**
+ * Devuelve el idioma activo.
+ * @returns {string} Código ISO 639-1 (ej: "es", "eu", "en")
+ */
+export function getLang() {
+  return _langActivo;
+}
+
+/**
+ * Cambia el idioma en runtime.
+ * Persiste el estado de la app (municipio + vista) en localStorage
+ * antes de recargar para restaurarlo después del reload.
+ *
+ * @param {string} code - Código ISO del idioma destino (ej: "eu")
+ * @param {Object} opts
+ * @param {string|null} opts.municipio  - codigo_ine del municipio activo (puede ser null)
+ * @param {string}      opts.vista      - "2D" | "3D"
+ */
+
+export function setLang(code, { municipio = null, vista = "2D" } = {}) {
+  // Validar que el idioma es soportado por el sistema Y por el deployment actual
+  const idiomasPermitidos = DEPLOYMENT.idiomas ?? ["es"];
+  if (!idiomasPermitidos.includes(code)) {
+    console.warn(`[i18n] Idioma "${code}" no está en deployment.idiomas:`, idiomasPermitidos);
+    return;
+  }
+
+  if (code === _langActivo) return; // No recargar si ya estamos en ese idioma
+
+  // 1. Persistir idioma elegido
+  localStorage.setItem(STORAGE_KEY, code);
+
+  // 2. Persistir estado de la app para restaurarlo tras el reload
+  //    Solo guardamos lo que necesitamos — nada más.
+  if (municipio || vista !== "2D") {
+    localStorage.setItem(RESTORE_KEY, JSON.stringify({ municipio, vista }));
+  }
+
+  // 3. Recargar — init() leerá el nuevo idioma de localStorage
+  location.reload();
+}
+
+/**
+ * Lee y elimina el estado de restauración guardado antes del cambio de idioma.
+ * Llamar una sola vez desde main.js justo después de init().
+ *
+ * @returns {{ municipio: string|null, vista: string }|null}
+ */
+
+export function consumirRestore() {
+  const raw = localStorage.getItem(RESTORE_KEY);
+  if (!raw) return null;
+
+  localStorage.removeItem(RESTORE_KEY); // Consumir: leer y borrar en una sola operación
+
+  try {
+    return JSON.parse(raw);
+  } catch {
+    console.warn("[i18n] Estado de restore corrupto, ignorando.");
+    return null;
+  }
+}
+
+// ── Privado ─────────────────────────────────────────────────────────────────
+
+/**
+ * Resuelve el idioma activo aplicando las prioridades definidas:
+ *   1. ?lang= en la URL
+ *   2. localStorage
+ *   3. deployment.idioma_defecto
+ *   4. "es" como último fallback
+ *
+ * Solo acepta idiomas que estén tanto en IDIOMAS_SOPORTADOS como en
+ * DEPLOYMENT.idiomas. Esto evita que un parámetro URL malformado
+ * active un idioma que el cliente no tiene configurado.
+ */
+function _resolverIdioma() {
+  const permitidos = (DEPLOYMENT.idiomas ?? ["es"])
+    .filter(l => IDIOMAS_SOPORTADOS.includes(l));
+
+  // Prioridad 1: ?lang= en URL
+  const urlLang = new URLSearchParams(location.search).get("lang");
+  if (urlLang && permitidos.includes(urlLang)) return urlLang;
+
+  // Prioridad 2: localStorage
+  const stored = localStorage.getItem(STORAGE_KEY);
+  if (stored && permitidos.includes(stored)) return stored;
+
+  // Prioridad 3: deployment.idioma_defecto
+  const defecto = DEPLOYMENT.idioma_defecto;
+  if (defecto && permitidos.includes(defecto)) return defecto;
+
+  // Prioridad 4: fallback absoluto
+  return "es";
+}
+
+/**
+ * Carga el JSON de traducciones del idioma indicado.
+ * Si falla (fichero no encontrado, JSON malformado), cae al español.
+ *
+ * @param {string} lang
+ * @returns {Promise<Object>}
+ */
+async function _cargarTraducciones(lang) {
+  try {
+    const res = await fetch(`../config/i18n/${lang}.json`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } catch (err) {
+    console.warn(`[i18n] No se pudo cargar "${lang}.json", usando "es" como fallback:`, err);
+
+    // Fallback: intentar cargar español
+    if (lang !== "es") {
+      const res = await fetch("../config/i18n/es.json");
+      return await res.json();
+    }
+    return {}; // Si ni español carga, devolver objeto vacío (t() retornará la clave)
+  }
+}
+
+/**
+ * Aplica las traducciones a todos los elementos del DOM que tengan
+ * el atributo data-i18n. Se ejecuta una vez en init() después de cargar
+ * el JSON. El reload garantiza un DOM limpio cada vez.
+ *
+ * Atributo data-i18n-attr permite especificar qué propiedad actualizar:
+ *   data-i18n="app.title"                     → actualiza textContent
+ *   data-i18n="panel.layers.heading"
+ *   data-i18n-attr="heading"                  → actualiza el atributo heading (Calcite)
+ */
+function _aplicarDOM() {
+  document.querySelectorAll("[data-i18n]").forEach(el => {
+    const key  = el.getAttribute("data-i18n");
+    const attr = el.getAttribute("data-i18n-attr"); // opcional
+    const text = t(key);
+
+    if (attr) {
+      // Para Web Components Calcite que usan atributos en lugar de textContent
+      // Ejemplo: <calcite-panel data-i18n="panel.layers.heading" data-i18n-attr="heading">
+      el.setAttribute(attr, text);
+    } else {
+      el.textContent = text;
+    }
+  });
+}
