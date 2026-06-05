@@ -88,10 +88,10 @@ export function initLayerTree(container) {
 
   // Mensaje inicial — layerTree es dueño único de este contenedor.
   // Se elimina en _renderTree via clearContainer cuando llegue municipio-cargado.
-  const msg = document.createElement("p");
-  msg.className   = "layer-tree-empty";
-  msg.textContent = "Selecciona un municipio para ver las capas disponibles.";
-  _containerEl.appendChild(msg);
+  // const msg = document.createElement("p");
+  // msg.className   = "layer-tree-empty";
+  // msg.textContent = "Selecciona un municipio para ver las capas disponibles.";
+  // _containerEl.appendChild(msg);
 
   // ← CAMBIO: desestructurar también municipioData del evento
   on("municipio-cargado", ({ layers, configs, lazyLayerIds, municipioData }) => {

@@ -7,135 +7,122 @@
   <title>GIS Municipal — Visor Adaptativo</title>
 
   <!--
-  Script inline de detección de idioma.
-  DEBE ejecutarse antes de cargar el SDK de ArcGIS para que esriConfig.locale
-  esté establecido cuando el SDK inicialice sus Web Components.
-  Lee: ?lang= (URL) > localStorage > fallback "es"
-  El fallback "es" es intencional: deployment.js no existe aún en este momento.
-  i18nManager.init() aplicará el idioma correcto a los textos propios de la app.
--->
-<script>
-  (function () {
-    const stored = localStorage.getItem("geo-app-lang");
-    const urlLang = new URLSearchParams(location.search).get("lang");
-    const lang = urlLang || stored || "es";
-    window.__GIS_LANG__ = lang;
-    // esriConfig puede no existir todavía; el SDK lo leerá de window antes de init
-    window.esriConfig = window.esriConfig || {};
-    window.esriConfig.locale = lang;
-  })();
-</script>
+    Script inline de detección de idioma.
+    DEBE ejecutarse antes de cargar el SDK de ArcGIS para que esriConfig.locale
+    esté establecido cuando el SDK inicialice sus Web Components.
+    Lee: ?lang= (URL) > localStorage > fallback "es"
+    El fallback "es" es intencional: deployment.js no existe aún en este momento.
+    i18nManager.init() aplicará el idioma correcto a los textos propios de la app.
+  -->
+  <script>
+    (function () {
+      const stored = localStorage.getItem("geo-app-lang");
+      const urlLang = new URLSearchParams(location.search).get("lang");
+      const lang = urlLang || stored || "es";
+      window.__GIS_LANG__ = lang;
+      window.esriConfig = window.esriConfig || {};
+      window.esriConfig.locale = lang;
+    })();
+  </script>
 
-     
-  <!-- Load ArcGIS SDK for JavaScript v5 from CDN  -->
-    <!-- v5 usa modulos -->
-    <!-- el SDK registra la función $arcgis en el ámbito global -->
-    <!-- Funcion asincrona no devuelve el resultado inmediatamente, sino que devuelve una Promesa-->
-  
- <script type="module" src="https://js.arcgis.com/5.0/"></script>
+  <!-- ArcGIS Maps SDK for JavaScript v5 — módulos ES, registra $arcgis global -->
+  <script type="module" src="https://js.arcgis.com/5.0/"></script>
 
-  <!-- Estilos de los Widgets nativos, tema visual, variables de diseño css -->
+  <!-- Tema visual del SDK: variables CSS, estilos de widgets nativos -->
   <link rel="stylesheet" href="https://js.arcgis.com/5.0/esri/themes/light/main.css" />
 
   <!--
-    Calcite Design System — Web Components de UI (calcite-shell, calcite-panel,
-    calcite-select, calcite-tree, calcite-checkbox, calcite-button, calcite-chip...)
+    Calcite Design System v2.13.2
+    Web Components de UI: calcite-shell, calcite-panel, calcite-select,
+    calcite-tree, calcite-button, calcite-chip...
     Se carga como módulo ES para activar los Custom Elements.
   -->
   <link rel="stylesheet" href="https://js.arcgis.com/calcite-components/2.13.2/calcite.css" />
   <script type="module" src="https://js.arcgis.com/calcite-components/2.13.2/calcite.esm.js"></script>
 
-  <!-- Estilos propios: solo layout y overrides -->
+  <!-- Estilos propios: solo layout y overrides Calcite. Sin lógica. -->
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
 
   <!--
-    calcite-shell: estructura de layout de la app completa.
-    Slots disponibles: header, panel-start, panel-end, footer.
+    calcite-shell: marco principal de la app.
+    Slots: header, panel-start, panel-end, footer.
     El contenido sin slot va al área central (el mapa).
   -->
-
-  <!-- Jerarquía: Shell > Navigation > Content -->
-  <!-- Se abre el marco calcite-shell-->
   <calcite-shell>
-    
 
     <!-- ═══ CABECERA ══════════════════════════════════════════════════════ -->
-     <!-- barra de navegación ubicada en el header (parte superior)-->
-    <calcite-navigation slot="header"> 
+    <calcite-navigation slot="header">
 
-      <!-- Logo / título -->
+      <!--
+        Logo y título de la app.
+        Usa data-i18n-props porque calcite-navigation-logo expone dos atributos
+        de texto distintos (heading + description) que deben traducirse.
+        Con data-i18n simple solo se puede cubrir uno por elemento.
+      -->
       <calcite-navigation-logo
         slot="logo"
-        data-i18n="app.title"
-        data-i18n-attr="heading"
-        heading="Feo app"
-        description="Visor Adaptativo de Datos Municipales"
         icon="map-pin"
+        data-i18n-props='{"heading":"app.title","description":"app.description"}'
       ></calcite-navigation-logo>
 
-      <!-- Espacio vacio para Selector de municipio 
-          slot content-center: for adding interactive elements in the center position of the primary navigation level.
-          municipioSelector.js: encargado de dibujar el selector -->
+      <!-- Selector de municipio — montado por municipioSelector.js -->
       <div slot="content-center" id="municipio-selector-container"></div>
 
-
-      <!-- Espacio vacio para Botón 2D/3D
-          slot content-end: extremo derecho
-          toolbar.js: montará herramienta 
-          class="toolbar-end": styles css -->
+      <!-- Botón 2D/3D y herramientas — montados por toolbar.js -->
       <div slot="content-end" id="toolbar-container" class="toolbar-end"></div>
 
-      <!-- Selector de idioma — toolbar.js lo monta condicionalmente
-      Solo aparece si deployment.idiomas tiene más de un elemento -->
+      <!-- Selector de idioma — montado condicionalmente por toolbar.js
+           Solo aparece si deployment.idiomas tiene más de un elemento -->
       <div slot="user" id="lang-selector-container"></div>
-
 
     </calcite-navigation>
 
     <!-- ═══ PANEL LATERAL IZQUIERDO (capas) ══════════════════════════════ -->
-
-    <!-- Pendiente agregar action-bar para collapsar panel -->
-
-
-    <!-- Shell panel-start: posición izquierda-->
     <calcite-shell-panel slot="panel-start">
 
-      <calcite-panel 
-        data-i18n="panel.layers.heading"
-        data-i18n-attr="heading"
-        heading="Capas" 
-        description="Selecciona un municipio para ver sus capas">
+      <!--
+        Panel principal de capas.
+        Usa data-i18n-props porque expone heading + description,
+        los dos deben actualizarse al cambiar de idioma.
+      -->
+      <calcite-panel
+        data-i18n-props='{"heading":"panel.layers.heading","description":"panel.layers.description"}'
+      >
 
-        <!-- calcite-block para Selector de mapa base -->
-        <calcite-block 
+        <!-- Bloque: selector de mapa base -->
+        <!--
+          Solo tiene heading → data-i18n simple es suficiente.
+          data-i18n-attr especifica el atributo del Web Component a actualizar.
+        -->
+        <calcite-block
           data-i18n="panel.basemap.heading"
           data-i18n-attr="heading"
-          heading="Mapa base" expanded>
+          expanded>
           <div id="basemap-selector-container"></div>
         </calcite-block>
 
-        <!-- Espacio para Árbol de capas disponibles
-            construido por layerTree.js al cargar municipio -->
-        <calcite-block 
-          id="capas-block" 
+        <!-- Bloque: árbol de capas disponibles — construido por layerTree.js -->
+        <calcite-block
+          id="capas-block"
           data-i18n="panel.capas.heading"
           data-i18n-attr="heading"
-          heading="Capas disponibles" expanded>
-          <div id="layer-tree-container"></div> 
+          expanded>
+          <div id="layer-tree-container"></div>
         </calcite-block>
 
       </calcite-panel>
     </calcite-shell-panel>
 
-    <!-- ═══ CALCITE-PANEL DERECHO (leyenda) ══════════════════════════════ -->
+    <!-- ═══ PANEL LATERAL DERECHO (leyenda) ══════════════════════════════ -->
     <calcite-shell-panel slot="panel-end" display-mode="float">
 
-      <calcite-panel 
-        data-i18n="panel.capas.heading"
+      <!-- Solo heading → data-i18n simple -->
+      <calcite-panel
+        data-i18n="panel.legend.heading"
         data-i18n-attr="heading"
-        heading="Leyenda">
+      >
         <!-- arcgis-legend montado por legendPanel.js -->
         <div id="legend-container"></div>
       </calcite-panel>
@@ -144,21 +131,20 @@
 
     <!-- ═══ ÁREA CENTRAL: MAPA ════════════════════════════════════════════
       Dos Web Components que comparten el mismo Map (instancia única).
-      Solo uno está visible a la vez. 
-      mapManager.toggleVista() gestiona el cambio.
+      Solo uno está visible a la vez.
+      mapManager.toggleVista() gestiona el cambio y la sincronización de viewpoint.
     ════════════════════════════════════════════════════════════════════════ -->
     <div id="map-container">
 
-      <!-- Vista 2D — activa por defecto
-          class="vista-activa" del styles CSS -->
+      <!-- Vista 2D — activa por defecto -->
       <arcgis-map id="map-view" class="vista-activa">
-        <arcgis-zoom          position="top-left"></arcgis-zoom>
-        <arcgis-home          position="top-left"></arcgis-home>
-        <arcgis-scale-bar     position="bottom-left" unit="metric"></arcgis-scale-bar>
-        <arcgis-coordinates-tool position="bottom-right"></arcgis-coordinates-tool>
+        <arcgis-zoom               position="top-left"></arcgis-zoom>
+        <arcgis-home               position="top-left"></arcgis-home>
+        <arcgis-scale-bar          position="bottom-left" unit="metric"></arcgis-scale-bar>
+        <arcgis-coordinates-tool   position="bottom-right"></arcgis-coordinates-tool>
       </arcgis-map>
 
-      <!-- Vista 3D — oculta al inicio (mapManager la muestra al toggleVista) -->
+      <!-- Vista 3D — oculta al inicio, mapManager la muestra en toggleVista() -->
       <arcgis-scene id="scene-view">
         <arcgis-zoom               position="top-left"></arcgis-zoom>
         <arcgis-home               position="top-left"></arcgis-home>
@@ -168,23 +154,15 @@
 
     </div>
 
-    <!-- ═══ BANNER DE ERROR (oculto por defecto) ═════════════════════════ -->
-    <!-- main.js lo muestra si hay un error fatal de inicialización -->
+    <!-- ═══ BANNER DE ERROR (oculto por defecto) ═════════════════════════
+      main.js lo muestra si hay un error fatal de inicialización.
+    ════════════════════════════════════════════════════════════════════════ -->
     <div id="app-error" class="hidden app-error-banner" role="alert"></div>
 
   </calcite-shell>
 
-  <!-- Entry point ES Module — cargado después del DOM y del SDK 
-        para asegurar que estén cargados antes que JS empiece a funcionar -->
+  <!-- Entry point ES Module — después del DOM y del SDK -->
   <script type="module" src="./main.js"></script>
 
 </body>
 </html>
-
-
-<!-- REFERENCES -->
-
-<!-- https://developers.arcgis.com/javascript/latest/sample-code/views-switch-2d-3d/ -->
-<!-- https://developers.arcgis.com/calcite-design-system/core-concepts/#slots -->
-<!-- https://developers.arcgis.com/calcite-design-system/components/shell-panel/ -->
-<!-- https://developers.arcgis.com/calcite-design-system/components/panel/ -->

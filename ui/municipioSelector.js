@@ -49,6 +49,7 @@ import * as mapManager           from "../core/mapManager.js";
 import { crearCapa }             from "../core/layerFactory.js";
 import { inicializarCapa }       from "../core/layerInitializer.js";
 import { emit }                  from "../utils/eventBus.js";
+import { t }                     from "../config/i18n/i18nManager.js";
 
 // Semáforo: evitar doble carga si el usuario cambia de municipio rápidamente
 let _cargando = false;
@@ -102,18 +103,18 @@ export function renderMunicipioSelector(container, deployment = { municipios: []
   // ── Construir el selector Calcite ──
   const label = document.createElement("calcite-label");
   label.setAttribute("layout", "inline");
-  label.textContent = "Municipio: ";
+  label.textContent = t("nav.municipio.label"); // no hardcoded
 
   const select = document.createElement("calcite-select");
   select.id = "municipio-select";
-  select.setAttribute("label", "Selecciona un municipio");
+  select.setAttribute("label", t("nav.municipio.placeholder")); // no hardcoded
 
   // La opción vacía solo tiene sentido cuando hay más de un municipio.
   // Con un único municipio se carga automáticamente y el placeholder no aporta.
   if (municipiosVisibles.length > 1) {
     const defaultOpt = document.createElement("calcite-option");
     defaultOpt.value       = "";
-    defaultOpt.textContent = "— Selecciona un municipio —";
+    defaultOpt.textContent = t("nav.municipio.placeholder"); // no hardcoded
     select.appendChild(defaultOpt);
   }
 

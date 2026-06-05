@@ -206,27 +206,64 @@ async function _cargarTraducciones(lang) {
 }
 
 /**
- * Aplica las traducciones a todos los elementos del DOM que tengan
- * el atributo data-i18n. Se ejecuta una vez en init() después de cargar
- * el JSON. El reload garantiza un DOM limpio cada vez.
+ * Aplica las traducciones al DOM estático del shell (index.html).
+ * Se ejecuta una vez en init(), después de cargar el JSON de traducciones.
+ * El reload garantiza un DOM limpio en cada cambio de idioma.
  *
- * Atributo data-i18n-attr permite especificar qué propiedad actualizar:
- *   data-i18n="app.title"                     → actualiza textContent
- *   data-i18n="panel.layers.heading"
- *   data-i18n-attr="heading"                  → actualiza el atributo heading (Calcite)
+ * ── DOS ESTRATEGIAS ──────────────────────────────────────────────────────
+ *
+ * A) data-i18n  [atributo único o textContent]
+ *    Para elementos con un solo texto a traducir.
+ *
+ *    Sin data-i18n-attr → actualiza textContent:
+ *      <span data-i18n="layers.empty"></span>
+ *
+ *    Con data-i18n-attr → actualiza el atributo indicado del Web Component:
+ *      <calcite-block data-i18n="panel.basemap.heading"
+ *                     data-i18n-attr="heading">
+ *
+ * B) data-i18n-props  [múltiples atributos en el mismo elemento]
+ *    Para Web Components Calcite que exponen varios atributos de texto
+ *    (heading, description, label, placeholder...).
+ *    Evita multiplicar data-i18n2, data-i18n3... que escalan mal.
+ *
+ *    Valor: JSON inline con { nombreAtributo: "clave.i18n" }
+ *      <calcite-panel
+ *        data-i18n-props='{"heading":"panel.layers.heading",
+ *                          "description":"panel.layers.description"}'>
+ *
+ *    _aplicarDOM() itera las entradas y llama setAttribute por cada una.
+ *    Si el JSON está malformado, emite console.warn y continúa con el
+ *    siguiente elemento para no bloquear el resto de traducciones.
+ *
+ * ── REGLA DE USO ─────────────────────────────────────────────────────────
+ *    - 1 atributo o textContent  →  data-i18n  [+ data-i18n-attr opcional]
+ *    - 2 o más atributos         →  data-i18n-props
+ *    Nunca mezclar ambos en el mismo elemento.
  */
 function _aplicarDOM() {
+  // ── Estrategia A: un atributo o textContent ──────────────────────────
   document.querySelectorAll("[data-i18n]").forEach(el => {
     const key  = el.getAttribute("data-i18n");
-    const attr = el.getAttribute("data-i18n-attr"); // opcional
+    const attr = el.getAttribute("data-i18n-attr");
     const text = t(key);
 
     if (attr) {
-      // Para Web Components Calcite que usan atributos en lugar de textContent
-      // Ejemplo: <calcite-panel data-i18n="panel.layers.heading" data-i18n-attr="heading">
       el.setAttribute(attr, text);
     } else {
       el.textContent = text;
+    }
+  });
+
+  // ── Estrategia B: múltiples atributos vía JSON inline ───────────────
+  document.querySelectorAll("[data-i18n-props]").forEach(el => {
+    try {
+      const props = JSON.parse(el.getAttribute("data-i18n-props"));
+      Object.entries(props).forEach(([attr, key]) => {
+        el.setAttribute(attr, t(key));
+      });
+    } catch (err) {
+      console.warn("[i18n] data-i18n-props malformado en elemento:", el, err);
     }
   });
 }
