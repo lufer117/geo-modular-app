@@ -80,7 +80,7 @@
     </calcite-navigation>
 
     <!-- ═══ PANEL LATERAL IZQUIERDO (capas) ══════════════════════════════ -->
-    <calcite-shell-panel slot="panel-start">
+    <calcite-shell-panel slot="panel-start" resizable display-mode="float">
 
       <!--
         Panel principal de capas.
@@ -88,8 +88,9 @@
         los dos deben actualizarse al cambiar de idioma.
       -->
       <calcite-panel
-        data-i18n-props='{"heading":"panel.layers.heading","description":"panel.layers.description"}'
-      >
+        data-i18n-props='{"heading":"panel.layers.heading"}'
+        collapsible
+        >
 
         <!-- Bloque: selector de mapa base -->
         <!--
@@ -99,7 +100,7 @@
         <calcite-block
           data-i18n="panel.basemap.heading"
           data-i18n-attr="heading"
-          expanded>
+          collapsible>
           <div id="basemap-selector-container"></div>
         </calcite-block>
 
@@ -108,7 +109,7 @@
           id="capas-block"
           data-i18n="panel.capas.heading"
           data-i18n-attr="heading"
-          expanded>
+          collapsible>
           <div id="layer-tree-container"></div>
         </calcite-block>
 

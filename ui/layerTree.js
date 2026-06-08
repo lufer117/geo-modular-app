@@ -124,7 +124,7 @@ function _renderTree(layers, configs, lazyLayerIds) {
   const grupos = _agrupar(configs, layers);
 
   const tree = document.createElement("calcite-tree");
-  tree.setAttribute("selection-mode", "ancestors");
+  tree.setAttribute("selection-mode", "multiple");
   tree.setAttribute("lines", "");
 
   // ── Listener de selección (toggle visibilidad) ─────────────────────────
@@ -302,6 +302,7 @@ async function _handleWfsDiscovery(item) {
     }
 
     clearContainer(childrenTree);
+    _setDiscoveryState(item, childrenTree, "loading"); // para que spinner sea visible hasta que los hijos estén listos
 
     // ── Verificar disponibilidad espacial en paralelo ─────────────────────
     // Por qué en paralelo: con N FeatureTypes, el tiempo total pasa de
@@ -331,6 +332,9 @@ async function _handleWfsDiscovery(item) {
       featureTypes.map(ft => _crearHijoWfs(ft, config, availabilityMap.get(ft.name) ?? false))
     );
 
+    // Limpiar el spinner antes de añadir los hijos
+    clearContainer(childrenTree); // espera los hijos antes de limpiar para evitar parpadeo excesivo si la carga es rápida
+
     hijos.forEach(({ item: hijoItem }) => {
       if (hijoItem) childrenTree.appendChild(hijoItem);
     });
@@ -353,7 +357,7 @@ async function _handleWfsDiscovery(item) {
  */
 function _crearItemGrupo(label, negrita) {
   const item = document.createElement("calcite-tree-item");
-  item.setAttribute("expanded", "");
+  // item.setAttribute("expanded", ""); // Opcional: expandir por defecto los grupos (puede ser mucho contenido)
 
   const span = document.createElement("span");
   span.className   = negrita
@@ -382,7 +386,7 @@ function _crearItemCapa(config, layer, globalIndex) {
   span.textContent = config.title;
   item.appendChild(span);
 
-  _añadirBadges(item, config);
+  // _añadirBadges(item, config);
 
   return item;
 }
@@ -410,8 +414,8 @@ function _crearItemWfsDiscovery(config, globalIndex) {
   // El listener de selección lo ignorará.
   item.dataset.wfsDiscovery = "true";
   item.dataset.configId     = config.id;
-  // Expandido por defecto para descubrir sus hijos al cargar
-  item.setAttribute("expanded", "");
+  // Opcional Expandido por defecto para descubrir sus hijos al cargar
+  // item.setAttribute("expanded", "");
 
   // Etiqueta con icono de servicio WFS para diferenciarlo visualmente
   const label = document.createElement("span");
@@ -427,7 +431,7 @@ function _crearItemWfsDiscovery(config, globalIndex) {
   badge.textContent = "WFS";
   item.appendChild(badge);
 
-  _añadirBadges(item, config);
+  // _añadirBadges(item, config); //opcional: añadir badges de prioridad/INSPIREy
 
   // Slot de hijos: debe existir vacío para que Calcite muestre el chevron.
   // Se rellena con el spinner o los FeatureTypes en _setDiscoveryState/_handleWfsDiscovery.
@@ -632,20 +636,20 @@ function _agrupar(configs, layers) {
  * Añade badges visuales (P0, INSPIRE) a un calcite-tree-item.
  * Extraído para reutilizarlo en nodos estándar y nodos discovery.
  */
-function _añadirBadges(item, config) {
-  if (config.prioridad === "P0 - MVP") {
-    const badge = document.createElement("calcite-chip");
-    badge.setAttribute("scale", "s");
-    badge.setAttribute("kind", "brand");
-    badge.textContent = "P0";
-    item.appendChild(badge);
-  }
+// function _añadirBadges(item, config) {
+//   if (config.prioridad === "P0 - MVP") {
+//     const badge = document.createElement("calcite-chip");
+//     badge.setAttribute("scale", "s");
+//     badge.setAttribute("kind", "brand");
+//     badge.textContent = "P0";
+//     item.appendChild(badge);
+//   }
 
-  if (config.inspire) {
-    const chip = document.createElement("calcite-chip");
-    chip.setAttribute("scale", "s");
-    chip.setAttribute("kind", "neutral");
-    chip.textContent = "INSPIRE";
-    item.appendChild(chip);
-  }
-}
+//   if (config.inspire) {
+//     const chip = document.createElement("calcite-chip");
+//     chip.setAttribute("scale", "s");
+//     chip.setAttribute("kind", "neutral");
+//     chip.textContent = "INSPIRE";
+//     item.appendChild(chip);
+//   }
+// }
