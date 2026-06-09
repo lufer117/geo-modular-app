@@ -63,12 +63,10 @@
       "tipo": "nacional"
     }
   },
- 
   {
-    "id": "mivauv-siose-y-corine-wfs-aurbanas",
-    "name": "OGC_Areas_Urbanas",
+    "id": "mivauv-siose-y-corine-wfs",
     "srsname": "EPSG:3857",
-    "title": "SIOSE y Corine - Áreas Urbanas",
+    "title": "SIOSE y Corine",
     "bloque_tematico": "Administración del territorio",
     "subtema": "Sistema de información urbana",
     "proveedor": "MIVAUV",
@@ -102,10 +100,46 @@
       "tipo": "nacional"
     }
   },
+  
   {
     "id": "ine-unidad-de-infraestructura-de-datos-espaciales-seccionado",
     "name": "WMS_INE_SECCIONES_G01:Secciones_2007",
     "title": "Seccionado Estadístico de España-2007",
+    "bloque_tematico": "Demografía",
+    "subtema": "Secciones censales",
+    "proveedor": "INE - Unidad de Infraestructura de Datos Espaciales",
+    "tipo": "WFS",
+    "url": "https://www.ine.es/geoserver/WMS_INE_SECCIONES_G01/wms",
+    "capabilities_url": "ine.es/geoserver/WMS_INE_SECCIONES_G01/wms?service=WFS&request=GetCapabilities",
+    "formatos_salida": [
+      "SHP",
+      "GeoJSON",
+      "KML",
+      "GML"
+    ],
+    "formato_consumo": "GeoJSON",
+    "inspire": "Statistical Units - SU",
+    "notas": "Descarga de geometria de secciones censales por provincia o conjunto nacional. Imprescindible para visualización demográfica inframunicipal. Requiere unión tabular de la geometría con datos INE por código de sección para tener indicadores demográficos . Actualización anual.",
+    "referencia": "Inicio / Datos Abiertos /Cartografía secciones censales",
+    "requiere_registro": false,
+    "coste": "Gratuita",
+    "visible": false,
+    "disponibilidad_municipal": "BBOX",
+    "puntuacion": {
+      "tematica": 2,
+      "cobertura": 2,
+      "fuente": 2,
+      "tecnica": 2,
+      "total": 8
+    },
+    "prioridad": "P0 - MVP",
+    "cobertura": {
+      "tipo": "nacional"
+    }
+  },
+   {
+    "id": "ine-unidad-de-infraestructura-de-datos-espaciales-seccionado",
+    "title": "Seccionado Estadístico de España",
     "bloque_tematico": "Demografía",
     "subtema": "Secciones censales",
     "proveedor": "INE - Unidad de Infraestructura de Datos Espaciales",

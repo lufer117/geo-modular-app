@@ -28,3 +28,5 @@ docs/
 prompts/
 research/
 
+# Ignorar carpeta de instrucciones de GitHub
+.github/instructions/

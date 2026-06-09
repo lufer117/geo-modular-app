@@ -57,7 +57,7 @@ export const MUNICIPIOS = [
 
     // Bounding box WGS84 [xmin, ymin, xmax, ymax]
     // 
-    bbox: [-1.6900, 42.7800, -1.6000, 42.8400],
+    bbox: [-1.895300,42.643216,-1.326937,42.942387],
 
     // Polígono simplificado para prototipo (hexágono aproximado sobre casco urbano)
     // rings: array de anillos WGS84 [[lon, lat], ...]

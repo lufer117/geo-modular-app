@@ -252,7 +252,7 @@ function _buildParams(config) { //config es json
 // ─── HELPERS PRIVADOS ─────────────────────────────────────────────────────
 
 /**
- * Convierte un CRS OGC (EPSG:4326, urn:ogc:def:crs:EPSG::4258, etc.)
+ * Normaliza/Convierte un CRS OGC (EPSG:4326, urn:ogc:def:crs:EPSG::4258, etc.)
  * al WKID numérico que espera el SDK de ArcGIS.
  * 
  *
@@ -271,6 +271,7 @@ function _buildParams(config) { //config es json
  */
 
 // Ejecutada por crearCapaWfsHija() → return new WFSLayer más arriba ↑
+
 function _crsToWkid(crs) { 
   if (!crs) return 4326;
 
