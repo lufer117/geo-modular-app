@@ -319,11 +319,10 @@ async function _handleWfsDiscovery(item) {
       // const checks  = featureTypes.map(ft => checkFeaturesInBbox(config.url, ft.name, bbox));
       // const results = await Promise.all(checks);
       
-      const results = await _checkEnLotes(featureTypes, config.url, bbox, {
-        tamanoLote: 4,
-        pausaMs: 500,
-      });
-      availabilityMap = new Map(featureTypes.map((ft, i) => [ft.name, results[i]]));
+        const results = await _checkConPool(featureTypes, config.url, bbox, {
+          concurrencia: 4   // mismo valor conservador, sin pausa artificial
+        });
+        availabilityMap = new Map(featureTypes.map((ft, i) => [ft.name, results[i]]));
     } else {
       // Sin bbox no podemos filtrar → asumir disponibles (degradación segura)
       console.warn("[layerTree] _municipioData.bbox no disponible; omitiendo check BBOX");
@@ -637,37 +636,52 @@ function _agrupar(configs, layers) {
 }
 
 // ─── Helpers privados ─────────────────────────────────────────────────────
+
 /**
- * Ejecuta checkFeaturesInBbox en lotes para no saturar servidores lentos.
- *
- * Por qué lotes y no serie pura: la serie (1 a 1) es demasiado lenta con
- * 19+ FeatureTypes. Los lotes pequeños con pausa equilibran velocidad y
- * respeto al servidor. ArcGIS Server gubernamental confirmado como sensible
- * a 19 peticiones simultáneas (AbortError por timeout en la mayoría).
- *
+ * Pool de concurrencia fija para checkFeaturesInBbox.
+ * 
+ * Por qué pool en vez de lotes con pausa:
+ * - Los lotes con pausa fija desperdician tiempo cuando el servidor responde rápido
+ *   (INE responde en ~80ms pero el lote espera 500ms igualmente).
+ * - El pool mantiene exactamente `concurrencia` peticiones activas en todo momento:
+ *   en cuanto una termina, la siguiente arranca sin esperar al resto del lote.
+ * - Mismo control de carga para servidores lentos (Fomento/ArcGIS gubernamental),
+ *   sin penalizar a los servidores rápidos (INE/GeoServer).
+ * 
  * @param {FeatureTypeInfo[]} featureTypes
  * @param {string} serviceUrl
  * @param {number[]} bbox
- * @param {{ tamanoLote: number, pausaMs: number }} opciones
- * @returns {Promise<boolean[]>} — mismo orden que featureTypes
+ * @param {object} opciones
+ * @param {number} opciones.concurrencia - Máximo de peticiones simultáneas (default: 4)
+ * @returns {Promise<boolean[]>} - Array de disponibilidad, mismo orden que featureTypes
  */
-async function _checkEnLotes(featureTypes, serviceUrl, bbox, { tamanoLote = 4, pausaMs = 500 } = {}) {
-  const resultados = [];
+async function _checkConPool(featureTypes, serviceUrl, bbox, { concurrencia = 4 } = {}) {
+  const resultados = new Array(featureTypes.length);
+  let siguiente = 0;
 
-  for (let i = 0; i < featureTypes.length; i += tamanoLote) {
-    const lote = featureTypes.slice(i, i + tamanoLote);
-    const checks = lote.map(ft => checkFeaturesInBbox(serviceUrl, ft.name, bbox));
-    const parciales = await Promise.all(checks);
-    resultados.push(...parciales);
+  // Cada "worker" es una cadena de promesas que consume el array de trabajo
+  // hasta agotarlo. Se lanzan `concurrencia` workers en paralelo.
+  async function worker() {
+    while (true) {
+      // Reserva atómica del siguiente índice pendiente
+      const idx = siguiente++;
+      if (idx >= featureTypes.length) break;
 
-    // Pausa entre lotes — solo si quedan más lotes por procesar
-    if (i + tamanoLote < featureTypes.length) {
-      await new Promise(resolve => setTimeout(resolve, pausaMs));
+      resultados[idx] = await checkFeaturesInBbox(
+        serviceUrl,
+        featureTypes[idx].name,
+        bbox
+      );
     }
   }
 
+  // Lanza exactamente `concurrencia` workers concurrentes
+  const workers = Array.from({ length: Math.min(concurrencia, featureTypes.length) }, worker);
+  await Promise.all(workers);
+
   return resultados;
 }
+
 /**
  * Añade badges visuales (P0, INSPIRE) a un calcite-tree-item.
  * Extraído para reutilizarlo en nodos estándar y nodos discovery.
