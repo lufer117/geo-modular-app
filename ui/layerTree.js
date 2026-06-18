@@ -316,13 +316,19 @@ async function _handleWfsDiscovery(item) {
     let availabilityMap; // Map<nombre_featureType, boolean>
 
     if (bbox) {
-      const checks  = featureTypes.map(ft => checkFeaturesInBbox(config.url, ft.name, bbox));
-      const results = await Promise.all(checks);
+      // const checks  = featureTypes.map(ft => checkFeaturesInBbox(config.url, ft.name, bbox));
+      // const results = await Promise.all(checks);
+      
+      const results = await _checkEnLotes(featureTypes, config.url, bbox, {
+        tamanoLote: 4,
+        pausaMs: 500,
+      });
       availabilityMap = new Map(featureTypes.map((ft, i) => [ft.name, results[i]]));
     } else {
       // Sin bbox no podemos filtrar → asumir disponibles (degradación segura)
       console.warn("[layerTree] _municipioData.bbox no disponible; omitiendo check BBOX");
-      availabilityMap = new Map(featureTypes.map(ft => [ft.name, true]));
+      // availabilityMap = new Map(featureTypes.map(ft => [ft.name, true]));
+      availabilityMap = new Map(featureTypes.map((ft, i) => [ft.name, results[i]]));
     }
 
     // Crear instancias y nodos DOM en paralelo.
@@ -631,7 +637,37 @@ function _agrupar(configs, layers) {
 }
 
 // ─── Helpers privados ─────────────────────────────────────────────────────
+/**
+ * Ejecuta checkFeaturesInBbox en lotes para no saturar servidores lentos.
+ *
+ * Por qué lotes y no serie pura: la serie (1 a 1) es demasiado lenta con
+ * 19+ FeatureTypes. Los lotes pequeños con pausa equilibran velocidad y
+ * respeto al servidor. ArcGIS Server gubernamental confirmado como sensible
+ * a 19 peticiones simultáneas (AbortError por timeout en la mayoría).
+ *
+ * @param {FeatureTypeInfo[]} featureTypes
+ * @param {string} serviceUrl
+ * @param {number[]} bbox
+ * @param {{ tamanoLote: number, pausaMs: number }} opciones
+ * @returns {Promise<boolean[]>} — mismo orden que featureTypes
+ */
+async function _checkEnLotes(featureTypes, serviceUrl, bbox, { tamanoLote = 4, pausaMs = 500 } = {}) {
+  const resultados = [];
 
+  for (let i = 0; i < featureTypes.length; i += tamanoLote) {
+    const lote = featureTypes.slice(i, i + tamanoLote);
+    const checks = lote.map(ft => checkFeaturesInBbox(serviceUrl, ft.name, bbox));
+    const parciales = await Promise.all(checks);
+    resultados.push(...parciales);
+
+    // Pausa entre lotes — solo si quedan más lotes por procesar
+    if (i + tamanoLote < featureTypes.length) {
+      await new Promise(resolve => setTimeout(resolve, pausaMs));
+    }
+  }
+
+  return resultados;
+}
 /**
  * Añade badges visuales (P0, INSPIRE) a un calcite-tree-item.
  * Extraído para reutilizarlo en nodos estándar y nodos discovery.
