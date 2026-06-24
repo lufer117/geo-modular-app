@@ -38,6 +38,7 @@ calcite-shell {
   position: relative;
   width: 100%;
   height: 100%;
+  overflow: hidden;
 }
 
 /* Ambas vistas superpuestas e invisibles— ocupan el mismo espacio */
@@ -52,18 +53,15 @@ arcgis-scene {
      opacity+visibility en lugar de display:none para no
      interrumpir el ciclo de renderizado de los Web Components. */
   opacity: 0;
-  visibility: hidden;
-
-  transition:
-    opacity 400ms ease,
-    visibility 400ms ease;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
 }
 
 /* Vista activa: visible y encima */
-.vista-activa {
+arcgis-map.vista-activa,
+arcgis-scene.vista-activa {
   opacity: 1;
-  visibility: visible;
-  z-index: 1;
+  pointer-events: auto;
 }
 
 /* .hidden se mantiene para otros elementos de la app (banners, etc.) */
@@ -102,14 +100,7 @@ arcgis-scene {
   opacity: 0.9;
 }
 
-/* ── Cabecera: toolbar end ───────────────────────────────────────────────── */
 
-.toolbar-end {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding-right: 0.75rem;
-}
 
 /* ── Panel lateral: secciones ───────────────────────────────────────────── */
 
@@ -141,15 +132,74 @@ calcite-block {
 }
 
 
-/* ── Panel de leyenda ────────────────────────────────────────────────────── */
+/* ── Leyenda flotante ────────────────────────────────────────────────────── */
 
-#legend-container {
-  overflow-y: auto;
-  max-height: calc(100vh - 140px);
+/* Flotante sobre el mapa, esquina inferior derecha.
+   bottom calculado para no solapar arcgis-coordinates-tool (28px aprox). */
+.legend-float {
+  position: absolute;
+  bottom: 36px;
+  right: 10px;
+  width: 200px;
+  max-height: 320px;
+  background: var(--calcite-color-foreground-1);
+  border: 1px solid var(--calcite-color-border-3);
+  border-radius: var(--calcite-border-radius);
+  overflow: hidden;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
 }
 
-#legend-container arcgis-legend {
-  padding: 0.5rem;
+.legend-float.hidden {
+  display: none;
+}
+
+.legend-float-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px 8px 12px;
+  border-bottom: 1px solid var(--calcite-color-border-3);
+  flex-shrink: 0;
+}
+
+.legend-float-title {
+  font-size: var(--calcite-font-size--1);
+  font-weight: var(--calcite-font-weight-medium);
+  color: var(--calcite-color-text-1);
+}
+
+/* arcgis-legend necesita overflow-y para listas largas */
+.legend-float #legend-container {
+  overflow-y: auto;
+  flex: 1;
+}
+
+/* Trigger secundario de leyenda — sobre el mapa, esquina inferior derecha,
+   justo encima de coordinates-tool */
+.legend-map-trigger {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  z-index: 10;
+  background: var(--calcite-color-foreground-1);
+  border: 1px solid var(--calcite-color-border-3);
+  border-radius: var(--calcite-border-radius);
+  padding: 4px 10px;
+  font-size: var(--calcite-font-size--2);
+  color: var(--calcite-color-text-2);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.legend-map-trigger:hover {
+  background: var(--calcite-color-foreground-2);
+}
+
+.legend-map-trigger.legend-trigger--active {
+  color: var(--calcite-color-brand);
+  border-color: var(--calcite-color-brand);
 }
 
 /* ── Banner de error fatal ───────────────────────────────────────────────── */

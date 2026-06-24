@@ -1,147 +1,52 @@
-/**
- * ui/toolbar.js
- *
- * Barra de herramientas superior.
- *
- * ── RESPONSABILIDAD ──────────────────────────────────────────────────────
- * Gestionar los controles globales de la aplicación que no pertenecen
- * a un panel concreto:
- *   - Botón toggle 2D/3D
- *   - Selector de idioma 
- *   - [futuro] Buscador de dirección / geocodificador
- *   - [futuro] Herramienta de medición
- *   - [futuro] Exportar a PDF
- *
- * ── TOGGLE 2D/3D ─────────────────────────────────────────────────────────
- * Al hacer clic:
- *   1. Llama a mapManager.toggleVista() — async, espera la animación
- *   2. Actualiza texto e icono del botón
- *   3. Actualiza la referencia de legendPanel al elemento de vista activo
- *   4. Emite "vista-cambiada" en eventBus
- *
- * El botón muestra loading durante la transición para evitar dobles clics.
- */
+  // ui/toolbar.js
+  // Responsabilidad: selector de idioma en la cabecera.
+  // El toggle 2D/3D se trasladó a ui/actionBar.js
 
-import { t, getLang, setLang } from "../config/i18n/i18nManager.js";
-import { DEPLOYMENT }          from "../config/deployment.js";
-import { getMunicipioActivo }  from "./municipioSelector.js";
-import * as mapManager            from "../core/mapManager.js";
-import { actualizarReferencia }   from "./legendPanel.js";
-import { emit }                   from "../utils/eventBus.js";
+  import { DEPLOYMENT }        from "../config/deployment.js";
+  import { t, getLang, setLang } from "../config/i18n/i18nManager.js";
+  import { getMunicipioActivo }  from "./municipioSelector.js";
+  import * as mapManager from "../core/mapManager.js";
 
-/**
- * Inicializa la toolbar en el contenedor indicado.
- * @param {HTMLElement|string} container
- */
-export function initToolbar(container) {
-  const el = typeof container === "string"
-    ? document.querySelector(container)
-    : container;
+  /**
+   * Inicializa el toolbar.
+   * Si el deployment tiene un solo idioma, no renderiza nada.
+   * @param {HTMLElement} container — div#lang-selector-container
+   */
+  export function initToolbar(container) {
+    if (!container) return;
+    if (DEPLOYMENT.idiomas.length <= 1) return;
 
-  if (!el) {
-    console.error("[toolbar] Contenedor no encontrado:", container);
-    return;
+    _renderSelectorIdioma(container);
   }
 
-  // Botón 2D/3D — siempre presente
-  el.appendChild(_crearBotonToggle());
+  // ─── Privadas ─────────────────────────────────────────────────────────────────
 
-  // Selector de idioma — solo si el deployment declara más de uno
-  const idiomasDisponibles = DEPLOYMENT.idiomas ?? ["es"];
-  if (idiomasDisponibles.length > 1) {
-    const langContainer = document.getElementById("lang-selector-container");
-    if (langContainer) {
-      langContainer.appendChild(_crearSelectorIdioma(idiomasDisponibles));
-    }
-  }
-}
+  function _renderSelectorIdioma(container) {
+    const langActivo = getLang();
 
+    // calcite-button-group: agrupa los botones de idioma visualmente.
+    // Un botón por idioma declarado en deployment.js.
+    const grupo = document.createElement("calcite-button-group");
 
-// ── TOGGLE 2D/3D ─────────────────────────────────────────────────────────
+    DEPLOYMENT.idiomas.forEach(codigo => {
+      const btn = document.createElement("calcite-button");
+      btn.textContent  = codigo.toUpperCase();
+      btn.appearance   = codigo === langActivo ? "solid" : "outline";
+      btn.scale        = "s";
+      btn.kind         = "neutral";
 
-// ─── Privado ──────────────────────────────────────────────────────────────
+      btn.addEventListener("click", () => {
+        if (codigo === getLang()) return; // ya activo, no hacer nada
 
-function _crearBotonToggle() {
-  const btn = document.createElement("calcite-button");
-  btn.id = "btn-toggle-vista";
-  btn.setAttribute("icon-start", "globe");
-  btn.setAttribute("appearance", "outline");
-  btn.setAttribute("color", "neutral");
-  btn.setAttribute("scale", "m");
-  btn.textContent = t("toolbar.toggle3d"); // no hardcoded
-
-  btn.addEventListener("click", async () => {
-    // Estado de carga: previene doble clic durante la animación
-    btn.setAttribute("loading", "");
-    btn.disabled = true;
-
-    try {
-      const nuevoModo = await mapManager.toggleVista();
-
-      if (nuevoModo === "3D") {
-        btn.textContent = t("toolbar.toggle2d"); // no hardcoded 
-        btn.setAttribute("icon-start", "map");
-        // Reasignar referencia según el modo que acaba de activarse
-        actualizarReferencia("scene-view"); // ← siempre scene-view aquí
-      } else {
-        btn.textContent = t("toolbar.toggle3d");
-        btn.setAttribute("icon-start", "globe");
-        // Leyenda apunta ahora al <arcgis-map>
-        actualizarReferencia("map-view"); // ← siempre map-view aquí
-      }
-
-      emit("vista-cambiada", { modo: nuevoModo });
-
-    } catch (err) {
-      console.error("[toolbar] Error al cambiar vista:", err);
-    } finally {
-      btn.removeAttribute("loading");
-      btn.disabled = false;
-    }
-  });
-
-  return btn;
-}
-
-// ── SELECTOR DE IDIOMA ─────────────────────────────────────────────────────────
-
-/**
- * Crea los botones de selección de idioma.
- * Un botón por idioma declarado en deployment.idiomas.
- * El botón del idioma activo aparece con appearance="solid".
- * Los demás con appearance="outline".
- *
- * Al pulsar un botón llama a setLang() con el estado actual de la app
- * para que el restore funcione correctamente tras el reload.
- */
-
-function _crearSelectorIdioma(idiomas) {
-  const group = document.createElement("calcite-button-group");
-  group.id = "lang-selector";
-
-  const langActivo = getLang();
-
-  idiomas.forEach(code => {
-    const btn = document.createElement("calcite-button");
-    btn.setAttribute("scale", "s");
-    btn.setAttribute("color", "neutral");
-    btn.setAttribute(
-      "appearance",
-      code === langActivo ? "solid" : "outline"
-    );
-    btn.textContent = code.toUpperCase();
-    btn.title = t("toolbar.lang.label");
-
-    btn.addEventListener("click", () => {
-      if (code === getLang()) return;
-      setLang(code, {
-        municipio: getMunicipioActivo(),
-        vista:     mapManager.getVistaActiva()
+        setLang(codigo, {
+          municipio: getMunicipioActivo(),
+          // getVistaActiva() ya no viene de toolbar — viene de mapManager directamente
+          vista: mapManager.getVistaActiva()
+        });
       });
+
+      grupo.appendChild(btn);
     });
 
-    group.appendChild(btn);
-  });
-
-  return group;
-}
+    container.appendChild(grupo);
+  }

@@ -3,16 +3,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <link rel="icon" href="data:,"> 
-  <title>GIS Municipal — Visor Adaptativo</title>
+  <link rel="icon" href="data:,">
+  <title>Geo app — Visor Adaptativo</title>
 
   <!--
     Script inline de detección de idioma.
     DEBE ejecutarse antes de cargar el SDK de ArcGIS para que esriConfig.locale
     esté establecido cuando el SDK inicialice sus Web Components.
     Lee: ?lang= (URL) > localStorage > fallback "es"
-    El fallback "es" es intencional: deployment.js no existe aún en este momento.
-    i18nManager.init() aplicará el idioma correcto a los textos propios de la app.
   -->
   <script>
     (function () {
@@ -25,144 +23,177 @@
     })();
   </script>
 
-  <!-- ArcGIS Maps SDK for JavaScript v5 — módulos ES, registra $arcgis global -->
   <script type="module" src="https://js.arcgis.com/5.0/"></script>
-
-  <!-- Tema visual del SDK: variables CSS, estilos de widgets nativos -->
   <link rel="stylesheet" href="https://js.arcgis.com/5.0/esri/themes/light/main.css" />
-
-  <!--
-    Calcite Design System v2.13.2
-    Web Components de UI: calcite-shell, calcite-panel, calcite-select,
-    calcite-tree, calcite-button, calcite-chip...
-    Se carga como módulo ES para activar los Custom Elements.
-  -->
   <link rel="stylesheet" href="https://js.arcgis.com/calcite-components/2.13.2/calcite.css" />
   <script type="module" src="https://js.arcgis.com/calcite-components/2.13.2/calcite.esm.js"></script>
-
-  <!-- Estilos propios: solo layout y overrides Calcite. Sin lógica. -->
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
 
-  <!--
-    calcite-shell: marco principal de la app.
-    Slots: header, panel-start, panel-end, footer.
-    El contenido sin slot va al área central (el mapa).
-  -->
   <calcite-shell>
 
     <!-- ═══ CABECERA ══════════════════════════════════════════════════════ -->
     <calcite-navigation slot="header">
 
-      <!--
-        Logo y título de la app.
-        Usa data-i18n-props porque calcite-navigation-logo expone dos atributos
-        de texto distintos (heading + description) que deben traducirse.
-        Con data-i18n simple solo se puede cubrir uno por elemento.
-      -->
       <calcite-navigation-logo
         slot="logo"
         icon="map-pin"
         data-i18n-props='{"heading":"app.title","description":"app.description"}'
       ></calcite-navigation-logo>
 
-      <!-- Selector de municipio — montado por municipioSelector.js -->
       <div slot="content-center" id="municipio-selector-container"></div>
 
-      <!-- Botón 2D/3D y herramientas — montados por toolbar.js -->
-      <div slot="content-end" id="toolbar-container" class="toolbar-end"></div>
-
-      <!-- Selector de idioma — montado condicionalmente por toolbar.js
-           Solo aparece si deployment.idiomas tiene más de un elemento -->
+      <!--
+        toolbar-container ahora solo aloja el selector de idioma.
+        El toggle 2D/3D se traslada al action bar (actionBar.js).
+      -->
       <div slot="user" id="lang-selector-container"></div>
 
     </calcite-navigation>
 
-    <!-- ═══ PANEL LATERAL IZQUIERDO (capas) ══════════════════════════════ -->
-    <calcite-shell-panel slot="panel-start" resizable display-mode="float">
+    <!-- ═══ ACTION BAR + PANELES LATERALES ═══════════════════════════════
+      calcite-shell-panel con display-mode="float" hace que los paneles
+      floten sobre el mapa sin reducir su área. El action bar vive dentro
+      del shell-panel y controla qué panel está abierto.
+    ════════════════════════════════════════════════════════════════════════ -->
+    <calcite-shell-panel slot="panel-start" display-mode="float" id="shell-panel-start" collapsed>
 
       <!--
-        Panel principal de capas.
-        Usa data-i18n-props porque expone heading + description,
-        los dos deben actualizarse al cambiar de idioma.
+        calcite-action-bar: barra de iconos vertical en el borde izquierdo.
+        expanded="false" → solo iconos, sin etiquetas de texto.
+        Los calcite-action disparan "calciteActionClick" que actionBar.js escucha.
       -->
-      <calcite-panel
-        data-i18n-props='{"heading":"panel.layers.heading"}'
-        collapsible
-        >
+      <calcite-action-bar slot="action-bar" expanded="false" id="main-action-bar">
 
-        <!-- Bloque: selector de mapa base -->
+        <!-- Grupo principal: herramientas de exploración de datos -->
+        <calcite-action-group>
+
+          <calcite-action
+            id="action-capas"
+            icon="layers"
+            text="Capas"
+            data-i18n="action.capas"
+            data-i18n-attr="text"
+            data-panel="panel-capas"
+          ></calcite-action>
+
+          <calcite-action
+            id="action-leyenda"
+            icon="legend"
+            text="Leyenda"
+            data-i18n="action.leyenda"
+            data-i18n-attr="text"
+            data-action="toggle-leyenda"
+          ></calcite-action>
+
+        </calcite-action-group>
+
         <!--
-          Solo tiene heading → data-i18n simple es suficiente.
-          data-i18n-attr especifica el atributo del Web Component a actualizar.
+          slot="actions-end": ancla visualmente al fondo del action bar.
+          Separa el toggle 2D/3D de las herramientas de datos — son
+          responsabilidades distintas (cambio de vista vs exploración).
         -->
+        <calcite-action-group slot="actions-end">
+          <calcite-action
+            id="action-toggle-vista"
+            icon="3d-glasses"
+            text="Toggle 2D/3D"
+            data-i18n="action.toggle3d"
+            data-i18n-attr="text"
+            data-action="toggle-vista"
+          ></calcite-action>
+        </calcite-action-group>
+
+      </calcite-action-bar>
+
+      <!-- Panel de capas — abierto/cerrado por actionBar.js -->
+      <calcite-panel
+        id="panel-capas"
+        data-i18n-props='{"heading":"panel.capas.heading"}'
+        closable
+        closed
+      >
+
         <calcite-block
           data-i18n="panel.basemap.heading"
           data-i18n-attr="heading"
-          collapsible>
+          collapsible
+          collapsed
+        >
           <div id="basemap-selector-container"></div>
         </calcite-block>
 
-        <!-- Bloque: árbol de capas disponibles — construido por layerTree.js -->
         <calcite-block
           id="capas-block"
+          heading="Cargando..." 
           data-i18n="panel.capas.heading"
           data-i18n-attr="heading"
-          collapsible>
+          expanded
+        >
           <div id="layer-tree-container"></div>
         </calcite-block>
 
       </calcite-panel>
-    </calcite-shell-panel>
-
-    <!-- ═══ PANEL LATERAL DERECHO (leyenda) ══════════════════════════════ -->
-    <calcite-shell-panel slot="panel-end" display-mode="float">
-
-      <!-- Solo heading → data-i18n simple -->
-      <calcite-panel
-        data-i18n="panel.legend.heading"
-        data-i18n-attr="heading"
-      >
-        <!-- arcgis-legend montado por legendPanel.js -->
-        <div id="legend-container"></div>
-      </calcite-panel>
 
     </calcite-shell-panel>
 
-    <!-- ═══ ÁREA CENTRAL: MAPA ════════════════════════════════════════════
-      Dos Web Components que comparten el mismo Map (instancia única).
-      Solo uno está visible a la vez.
-      mapManager.toggleVista() gestiona el cambio y la sincronización de viewpoint.
-    ════════════════════════════════════════════════════════════════════════ -->
+    <!-- ═══ ÁREA CENTRAL: MAPA ════════════════════════════════════════════ -->
     <div id="map-container">
 
       <!-- Vista 2D — activa por defecto -->
       <arcgis-map id="map-view" class="vista-activa">
-        <arcgis-zoom               position="top-left"></arcgis-zoom>
-        <arcgis-home               position="top-left"></arcgis-home>
-        <arcgis-scale-bar          position="bottom-left" unit="metric"></arcgis-scale-bar>
-        <arcgis-coordinates-tool   position="bottom-right"></arcgis-coordinates-tool>
+        <arcgis-zoom             position="top-left"></arcgis-zoom>
+        <arcgis-home             position="top-left"></arcgis-home>
+        <arcgis-scale-bar        position="bottom-left" unit="metric"></arcgis-scale-bar>
+        <arcgis-coordinates-tool position="bottom-right"></arcgis-coordinates-tool>
       </arcgis-map>
 
-      <!-- Vista 3D — oculta al inicio, mapManager la muestra en toggleVista() -->
+      <!-- Vista 3D — oculta al inicio -->
       <arcgis-scene id="scene-view">
-        <arcgis-zoom               position="top-left"></arcgis-zoom>
-        <arcgis-home               position="top-left"></arcgis-home>
-        <arcgis-navigation-toggle  position="top-left"></arcgis-navigation-toggle>
-        <arcgis-scale-bar          position="bottom-left" unit="metric"></arcgis-scale-bar>
+        <arcgis-zoom              position="top-left"></arcgis-zoom>
+        <arcgis-home              position="top-left"></arcgis-home>
+        <arcgis-navigation-toggle position="top-left"></arcgis-navigation-toggle>
+        <arcgis-scale-bar         position="bottom-left" unit="metric"></arcgis-scale-bar>
       </arcgis-scene>
+
+      <!--
+        Contenedor de la leyenda flotante.
+        legendPanel.js monta el <arcgis-legend> aquí.
+        Posición: esquina inferior derecha, sobre el mapa.
+        Oculto por defecto; actionBar.js lo muestra/oculta.
+      -->
+      <div id="legend-float-container" class="legend-float hidden">
+        <div class="legend-float-header">
+          <span
+            class="legend-float-title"
+            data-i18n="panel.legend.heading"
+          ></span>
+          <calcite-action
+            id="legend-float-close"
+            icon="x"
+            scale="s"
+            appearance="transparent"
+          ></calcite-action>
+        </div>
+        <div id="legend-container"></div>
+      </div>
+
+      <!--
+        Trigger de leyenda sobre el mapa.
+        Segundo punto de entrada: el usuario puede abrir la leyenda
+        directamente desde el mapa sin pasar por el action bar.
+        actionBar.js lo conecta al mismo toggle.
+      -->
+      <button id="legend-map-trigger" class="legend-map-trigger" data-i18n="panel.legend.heading"></button>
 
     </div>
 
-    <!-- ═══ BANNER DE ERROR (oculto por defecto) ═════════════════════════
-      main.js lo muestra si hay un error fatal de inicialización.
-    ════════════════════════════════════════════════════════════════════════ -->
+    <!-- ═══ BANNER DE ERROR ═══════════════════════════════════════════════ -->
     <div id="app-error" class="hidden app-error-banner" role="alert"></div>
 
   </calcite-shell>
 
-  <!-- Entry point ES Module — después del DOM y del SDK -->
   <script type="module" src="./main.js"></script>
 
 </body>

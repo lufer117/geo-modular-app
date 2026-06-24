@@ -1,92 +1,65 @@
 /**
  * ui/legendPanel.js
- *
- * Panel de leyenda dinámica.
- *
- * ── IMPLEMENTACIÓN ───────────────────────────────────────────────────────
- * Usa el Web Component <arcgis-legend> de ArcGIS Maps SDK v5.
- * Este componente es reactivo: se sincroniza automáticamente con la vista
- * a la que apunta (reference-element). Cuando las capas visibles cambian,
- * la leyenda se actualiza sola sin intervención de este módulo.
- *
- * ── INTEGRACIÓN CON EL TOGGLE 2D/3D ─────────────────────────────────────
- * Al alternar vistas, toolbar.js llama a actualizarReferencia() para
- * que <arcgis-legend> apunte al elemento de vista correcto.
- * Si no se actualiza, la leyenda seguiría mostrando la vista anterior.
- *
- * ── EVENTOS DE eventBus ──────────────────────────────────────────────────
- * "capa-activada"   → hook disponible para extensiones (badge de capas activas, etc.)
- * "capa-desactivada" → ídem
- * "municipio-cargado" → log informativo (la leyenda se actualiza sola)
+ * 
+ * Responsabilidad: Gestionar el ciclo de vida del Web Component <arcgis-legend>.
+ * Se integra con el Action Bar mediante el EventBus para reaccionar a cambios de vista.
  */
 
 import { on } from "../utils/eventBus.js";
 
-let _legendEl     = null;
-let _containerEl  = null;
-
-// ─── Inicialización ───────────────────────────────────────────────────────
+let _legendEl = null; // Instancia única del Web Component de leyenda
 
 /**
- * Inicializa el panel de leyenda.
- *
- * @param {HTMLElement|string} container   - Contenedor del panel
- * @param {string}             mapElementId - id del <arcgis-map> activo al inicio
+ * Inicializa la leyenda en el contenedor flotante.
+ * @param {string} initialViewId - ID del componente de vista activo al arrancar (por defecto map-view).
  */
-export function initLegendPanel(container, mapElementId) {
-  _containerEl = typeof container === "string"
-    ? document.querySelector(container)
-    : container;
-
-  if (!_containerEl) {
-    console.error("[legendPanel] Contenedor no encontrado:", container);
+export function initLegendPanel(initialViewId = "map-view") {
+  const container = document.getElementById("legend-container");
+  
+  if (!container) {
+    console.warn("[legendPanel] No se encontró el ancla #legend-container en el DOM.");
     return;
   }
 
-  // Crear el Web Component de leyenda.
-  // reference-element: apunta al id del <arcgis-map> o <arcgis-scene>.
-  // El componente obtiene su vista desde ese elemento automáticamente.
+  // Crear el Web Component nativo de ArcGIS Maps SDK v5.
+  // Este componente es reactivo por diseño: se vincula a una vista mediante 'reference-element'.
   _legendEl = document.createElement("arcgis-legend");
-  _legendEl.setAttribute("reference-element", mapElementId);
-
-  // hide-layers-not-in-view: oculta capas que están en el Map pero no visibles
-  // Mantiene la leyenda limpia: solo muestra lo que el usuario ve en pantalla
+  _legendEl.setAttribute("reference-element", initialViewId);
+  
+  // Solo mostrar capas que tienen visibilidad actual en el mapa (leyenda limpia).
   _legendEl.setAttribute("hide-layers-not-in-view", "");
 
-  _containerEl.appendChild(_legendEl);
-
-  // Suscripciones a eventBus para hooks futuros (badge, contador...)
-  on("capa-activada",    ({ config }) => _onCapaToggle(config, true));
-  on("capa-desactivada", ({ config }) => _onCapaToggle(config, false));
-  on("municipio-cargado", () => {
-    console.info("[legendPanel] Nuevo municipio → leyenda reactiva actualizada");
-  });
-
-  console.info(`[legendPanel] Inicializado → referencia: #${mapElementId}`);
+  container.appendChild(_legendEl);
+  
+  _registrarListeners();
+  
+  console.info(`[legendPanel] Inicializado y vinculado a #${initialViewId}`);
 }
 
-// ─── API pública ──────────────────────────────────────────────────────────
-
 /**
- * Actualiza el reference-element al cambiar entre 2D y 3D.
- * Llamado desde toolbar.js tras el toggle.
- * @param {string} elementId - id del <arcgis-map> o <arcgis-scene> activo
+ * Actualiza la referencia del componente de leyenda.
+ * Permite que la leyenda "salte" entre el mapa 2D y la escena 3D.
+ * @param {string} elementId - "map-view" | "scene-view"
  */
 export function actualizarReferencia(elementId) {
   if (!_legendEl) return;
   _legendEl.setAttribute("reference-element", elementId);
-  console.info(`[legendPanel] Referencia actualizada → #${elementId}`);
 }
 
-// ─── Privado ──────────────────────────────────────────────────────────────
+// ─── Métodos Privados ───────────────────────────────────────────────────────
 
-function _onCapaToggle(config, visible) {
-  // Hook para extensiones futuras:
-  // - Mostrar badge con número de capas activas
-  // - Destacar en la leyenda la última capa activada
-  // - Emitir analytics de uso
-  const total = _containerEl?.querySelectorAll("calcite-checkbox[checked]").length ?? 0;
-  console.info(
-    `[legendPanel] Capa "${config?.id}" ${visible ? "activada" : "desactivada"}`
-  );
+function _registrarListeners() {
+  /**
+   * Escucha el cambio de vista (2D/3D) emitido por el orquestador de la UI (Action Bar/Toolbar).
+   * Esto garantiza que la leyenda siempre muestre el contenido de la vista activa.
+   */
+  on("vista-cambiada", ({ modo }) => {
+    const targetId = (modo === "3D") ? "scene-view" : "map-view";
+    actualizarReferencia(targetId);
+  });
+
+  // Hook para el cambio de municipio (opcional: para limpiar estados si fuera necesario)
+  on("municipio-cargado", () => {
+    console.debug("[legendPanel] Municipio cambiado: la leyenda se actualizará automáticamente.");
+  });
 }

@@ -35,6 +35,7 @@ import { init as initI18n, consumirRestore } from "../config/i18n/i18nManager.js
 
 // ── UI ────────────────────────────────────────────────────────────────────
 // Cada función importada monta una parte visual
+import { initActionBar, setVistaActiva } from "../ui/actionBar.js";
 import { renderMunicipioSelector } from "../ui/municipioSelector.js";
 import { renderBasemapSelector }   from "../ui/basemapSelector.js";
 import { initLayerTree }           from "../ui/layerTree.js";
@@ -180,8 +181,9 @@ async function main() {
     renderMunicipioSelector("#municipio-selector-container", DEPLOYMENT); // styles & eventBus.emit("municipio-cargado")
     renderBasemapSelector("#basemap-selector-container"); // conecta con styles
     initLayerTree("#layer-tree-container"); // conecta con styles 
-    initLegendPanel("#legend-container", "map-view");  // conecta con styles, index (mapa inicia en 2d)
-    initToolbar("#toolbar-container"); // conecta con styles
+    initLegendPanel("map-view");  // conecta con styles, index (mapa inicia en 2d)
+    initToolbar(document.getElementById("lang-selector-container")); //toolbar se especializa en el cambio de idioma
+    initActionBar(); // inicializa actionbar
 
     // 6. Restaurar estado tras cambio de idioma (si lo hay)
     //    consumirRestore() lee y borra la clave en una sola operación
@@ -195,6 +197,7 @@ async function main() {
       }
       if (restore.vista === "3D") {
         await mapManager.toggleVista();
+        setVistaActiva("3D"); // actualiza el icono del action button
       }
     }
 
