@@ -70,6 +70,7 @@ arcgis-scene {
 .hidden {
   display: none !important;
 }
+
 /* ── Cabecera: selector de municipio ────────────────────────────────────── */
 
 #municipio-selector-container calcite-label {
@@ -83,6 +84,22 @@ arcgis-scene {
 
 #municipio-selector-container calcite-select {
   min-width: 280px;
+}
+
+/* ── Cabecera: logos ───────────────────────────────────────────────── */
+/* ── Logo de empresa (Bilbomática) ───────────────────────────────────── */
+.logo-empresa {
+  display: flex;
+  align-items: center;
+  padding: 0 var(--calcite-spacing-md, 12px);
+  border-left: 1px solid var(--calcite-color-border-3);
+}
+
+.logo-empresa-img {
+  height: 28px;      /* altura estándar del header de Calcite Navigation */
+  width: auto;
+  object-fit: contain;
+  opacity: 0.9;
 }
 
 /* ── Cabecera: toolbar end ───────────────────────────────────────────────── */

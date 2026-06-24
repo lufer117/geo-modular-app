@@ -43,29 +43,55 @@ export const DEPLOYMENT = {
   cliente:        "tfm-demo",
   municipios:     [],
   idiomas:        ["es"],
-  idioma_defecto: "es"
+  idioma_defecto: "es",
+
+// ── Identidad visual de la instancia ──────────────────────────────────
+  // La empresa edita estos valores en cada despliegue.
+  // logo_cliente: ruta relativa desde app/ o URL absoluta.
+  // Si logo_cliente es null, se muestra el icono SVG por defecto (icon="map-pin").
+  branding: {
+    logo_cliente:   "../assets/logos/xxx.svg",   // logo del ayuntamiento
+    logo_empresa:   "../assets/logos/bilbomatica.svg", // logo de Bilbomática (siempre)
+    nombre_visible: "Ayuntamiento de xxxx"      // texto alternativo / accesibilidad
+  }
 };
+
+
 
 // ── MODO AYUNTAMIENTO (1 municipio) ───────────────────────────────────────
 // La app arranca y carga el municipio automáticamente sin interacción.
 // Descomentar y ajustar el codigo_ine al municipio del cliente.
-//
-// export const DEPLOYMENT = {
-//   mode:           "production",
-//   cliente:        "ayuntamiento-pamplona",
-//   municipios:     ["31201"],
-//   idiomas:        ["es", "eu", "en"],
-//   idioma_defecto: "es"
-// };
+
+export const DEPLOYMENT = {
+  mode:           "production",
+  cliente:        "ayuntamiento-municipio",
+  municipios:     ["####"],
+  idiomas:        ["es", "eu", "en"],
+  idioma_defecto: "es", 
+
+  branding: {
+    logo_cliente:   "../assets/logos/xxx.svg",   // logo del ayuntamiento
+    logo_empresa:   "../assets/logos/bilbomatica.svg", // logo de Bilbomática (siempre)
+    nombre_visible: "Ayuntamiento de xxxx"      // texto alternativo / accesibilidad
+  }
+};
 
 // ── MODO COMARCA / MANCOMUNIDAD (N municipios) ────────────────────────────
 // Selector activo restringido al ámbito del cliente.
 // Descomentar y ajustar los codigos_ine al ámbito del cliente.
-//
-// export const DEPLOYMENT = {
-//   mode:           "production",
-//   cliente:        "comarca-pamplona",
-//   municipios:     ["31201", "31002", "31003"],
-//   idiomas:        ["es", "eu", "en"],
-//   idioma_defecto: "es"
-// };
+
+export const DEPLOYMENT = {
+  mode:           "production",
+  cliente:        "comarca-XXX",
+  municipios:     ["####", "####", "####"],
+  idiomas:        ["es", "eu", "en"],
+  idioma_defecto: "es",
+
+  branding: {
+    logo_cliente:   "../assets/logos/xxx.svg",   // logo del ayuntamiento
+    logo_empresa:   "../assets/logos/bilbomatica.svg", // logo de Bilbomática (siempre)
+    nombre_visible: "Mancomunidad de xxxx"      // texto alternativo / accesibilidad
+  }
+};
+
+

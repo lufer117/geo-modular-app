@@ -41,6 +41,10 @@ import { initLayerTree }           from "../ui/layerTree.js";
 import { initLegendPanel }         from "../ui/legendPanel.js";
 import { initToolbar }             from "../ui/toolbar.js";
 
+
+
+
+
 // ─── Bootstrap ────────────────────────────────────────────────────────────
 
 /**
@@ -83,6 +87,64 @@ async function waitForArcGISSDK(maxWaitMs = 5000) {
   });
 }
 
+// ── Branding ────────────────────────────────────────────────────────────
+// Aplica la identidad visual de la instancia desde deployment.js.
+// Se ejecuta antes que cualquier otro módulo para que el logo sea
+// lo primero que el usuario vea al cargar, sin flash de contenido sin marca.
+function aplicarBranding(branding) {
+  if (!branding) return;
+
+  const navLogo = document.querySelector("calcite-navigation-logo");
+  if (!navLogo) return;
+
+  // Nombre y descripción — sobreescriben los valores por defecto del HTML
+  if (branding.nombre_visible) navLogo.setAttribute("heading",     branding.nombre_visible);
+  if (branding.descripcion)    navLogo.setAttribute("description", branding.descripcion);
+
+  // Logo del cliente — si existe, reemplaza el icono SVG por una imagen real
+  if (branding.logo_cliente) {
+    navLogo.setAttribute("thumbnail", branding.logo_cliente);
+    navLogo.removeAttribute("icon");   // icon y thumbnail son mutuamente excluyentes en Calcite
+  }
+
+  // Logo de empresa — se inyecta como elemento fijo en el slot "user" de la navegación
+  // o junto al logo principal, según el diseño elegido
+  if (branding.logo_empresa) {
+    _inyectarLogoEmpresa(branding.logo_empresa);
+  }
+}
+
+function _inyectarLogoEmpresa(src) {
+  // El logo de la empresa va fijo en el extremo derecho del header,
+  // separado del logo del cliente. Slot "user" ya tiene el selector de idioma,
+  // así que creamos un contenedor dedicado.
+  const existing = document.getElementById("logo-empresa-container");
+  if (existing) return; // idempotente — no duplicar si se llama dos veces
+
+  const wrapper = document.createElement("div");
+  wrapper.id = "logo-empresa-container";
+  wrapper.className = "logo-empresa";
+
+  const img = document.createElement("img");
+  img.src = src;
+  img.alt = "Bilbomática";
+  img.className = "logo-empresa-img";
+
+  // Fallback silencioso: si la imagen no carga, el contenedor desaparece
+  img.onerror = () => { wrapper.style.display = "none"; };
+
+  wrapper.appendChild(img);
+
+  // Se inserta en el slot content-end de calcite-navigation,
+  // antes del toolbar-container para que quede a la derecha del todo
+  const nav = document.querySelector("calcite-navigation");
+  if (nav) {
+    const endSlot = document.getElementById("toolbar-container")?.parentElement;
+    // Insertar directamente en la navegación como slot content-end adicional
+    wrapper.setAttribute("slot", "content-end");
+    nav.appendChild(wrapper);
+  }
+}
 
 // ── ARRANQUE ────────────────────────────────────────────────────────────────────
 
@@ -90,17 +152,20 @@ async function main() {
   try {
     console.info("=== GIS Municipal — Arrancando... ===");
 
-    // 0. Esperar SDK — bug corregido: la función existía pero no se llamaba
+
+    // 0. Aplicar branding de la instancia antes de montar cualquier UI
+    aplicarBranding(DEPLOYMENT.branding);
+    // 1. Esperar SDK — bug corregido: la función existía pero no se llamaba
     await waitForArcGISSDK();
 
-    // 1. Inicializar i18n ANTES de montar UI
+    // 2. Inicializar i18n ANTES de montar UI
     //    Carga el JSON del idioma activo y aplica data-i18n al DOM
     await initI18n();
 
-    // 2. Registrar adaptador de datos antes de cualquier operación de catálogo
+    // 3. Registrar adaptador de datos antes de cualquier operación de catálogo
     setAdaptador(new LocalJsonAdapter("../data/catalogo-capas.json"));
 
-    // 3. Inicializar el Map único con sus dos vistas (2D y 3D)
+    // 4. Inicializar el Map único con sus dos vistas (2D y 3D)
     // await porque crear el mapa es asíncono
     // espera que las acciones de initMap esten ok antes de renderizar otro componente de la interfaz
     await mapManager.initMap({
@@ -109,7 +174,7 @@ async function main() {
     });
     
 
-    // 4. Montar UI
+    // 5. Montar UI
     // El orden importa: la toolbar y el selector están en la cabecera (visibles de entrada).
     // El árbol y la leyenda se construyen cuando "municipio-cargado" se emite con EVENTBUS
     renderMunicipioSelector("#municipio-selector-container", DEPLOYMENT); // styles & eventBus.emit("municipio-cargado")
@@ -118,7 +183,7 @@ async function main() {
     initLegendPanel("#legend-container", "map-view");  // conecta con styles, index (mapa inicia en 2d)
     initToolbar("#toolbar-container"); // conecta con styles
 
-    // 5. Restaurar estado tras cambio de idioma (si lo hay)
+    // 6. Restaurar estado tras cambio de idioma (si lo hay)
     //    consumirRestore() lee y borra la clave en una sola operación
     const restore = consumirRestore();
     if (restore) {
