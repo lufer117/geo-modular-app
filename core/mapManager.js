@@ -39,7 +39,7 @@ let _sceneEl           = null; // guarda el web component <arcgis-scene> (conten
 let _vistaActiva       = "2D"; // guarda el estado global, default 2D
 let _maskLayer         = null; // GraphicsLayer usada para la máscara municipal
 let _sceneReadyPromise = null;  // Guarda la Promesa de inicialización 3D en background
-
+let _municipioViewpoint = null; // Viewpoint del último municipio cargado
 
 // ─── INICIALIZACIÓN ───────────────────────────────────────────────────────
 
@@ -105,12 +105,45 @@ export async function initMap({ mapContainerId, sceneContainerId }) { // paramet
   // <arcgis-map>.goTo (m) : Sets the view to a given target.
   await _mapEl.view.goTo({ center: [-3.7038, 40.4168], zoom: 6 });
 
-  // SceneView en lazy empieza a prepararse en paralelo mientras usuario usa 2D
-  // toggleVista() esperará esta promesa solo la primera vez que se necesite 3D.
-  _sceneReadyPromise = _sceneEl.viewOnReady().then(() => { // (m)
+  // ─── OVERRIDE DEL BOTÓN HOME — MapView (2D) ───────────────────────────────
+  // arcgis-home en SDK v5 usa view.initialExtent (extensión al arrancar),
+  // no view.homeViewpoint. Como la vista se inicializa antes de seleccionar
+  // municipio, initialExtent es siempre el mundo entero.
+  // Solución: interceptar el click y redirigir a _municipioViewpoint si existe.
+  // Si no hay municipio activo aún, el botón hace su comportamiento por defecto.
+  // El listener de MapView se registra aquí porque viewOnReady() ya se completó
+  // y el Light DOM de <arcgis-map> está garantizado.
+  const homeMap = _mapEl.querySelector("arcgis-home");
+  if (homeMap) {
+    homeMap.addEventListener("click", (e) => {
+      if (!_municipioViewpoint) return; // sin municipio → comportamiento nativo
+      e.stopImmediatePropagation();     // cancela el handler interno del componente
+      _mapEl.view.goTo(_municipioViewpoint, { animate: true, duration: 800 });
+    });
+  }
+
+  // ─── SCENEVIEW LAZY ───────────────────────────────────────────────────────
+  // Se inicializa en background para no bloquear el arranque.
+  // toggleVista() esperará esta promesa solo la primera vez que se active 3D.
+  _sceneReadyPromise = _sceneEl.viewOnReady().then(() => {
     console.info("[mapManager] SceneView (3D) lista (background)");
-    _sceneEl.view.viewpoint = _mapEl.view.viewpoint.clone(); //copia de _mapE1 : accede a la vista (p), accede al viewpoint (p) y clona (m) posición, centro, zoom, tilt, escala, orientación y cámara de 2D a 3D.
+    _sceneEl.view.viewpoint = _mapEl.view.viewpoint.clone();
+
+    // ─── OVERRIDE DEL BOTÓN HOME — SceneView (3D) ─────────────────────────
+    // Se registra aquí, no antes, porque la SceneView y su Light DOM
+    // solo están garantizados cuando viewOnReady() se resuelve.
+    // Registrarlo en initMap() antes de este punto podría devolver null
+    // si el componente aún no ha renderizado sus hijos.
+    const homeScene = _sceneEl.querySelector("arcgis-home");
+    if (homeScene) {
+      homeScene.addEventListener("click", (e) => {
+        if (!_municipioViewpoint) return;
+        e.stopImmediatePropagation();
+        _sceneEl.view.goTo(_municipioViewpoint, { animate: true, duration: 800 });
+      });
+    }
   });
+
 }
 
 // ─── TOGGLE 2D / 3D ──────────────────────────────────────────────────────
@@ -127,9 +160,18 @@ export async function initMap({ mapContainerId, sceneContainerId }) { // paramet
 
 
 export async function toggleVista() {
+  // Si la promesa existe, espera a que la SceneView esté lista antes de alternar la vista. Solo se espera la primera vez.
   if (_sceneReadyPromise) {
     await _sceneReadyPromise;
     _sceneReadyPromise = null;
+
+    // Al inicializar la SceneView por primera vez, si ya hay un municipio activo,
+    // aplicar su homeViewpoint. Sin esto, el Home en 3D siempre volvería al mundo
+    // porque la SceneView no existía cuando irAlMunicipio() se ejecutó en 2D.
+    if (_municipioViewpoint && _sceneEl?.view) {
+    _sceneEl.view.homeViewpoint = _municipioViewpoint;
+    }
+  
   }
 
   const is2D = _vistaActiva === "2D";
@@ -329,6 +371,7 @@ export function limpiarMascara() {
 
 // Ejecutada por municipioSelector.js con mapManager.irAlMunicipio(municipioData.bbox)
 export async function irAlMunicipio(bbox) {
+  
   // uso de ?. Evita que la aplicación se detenga con un error si el elemento (_mapEl o _sceneEl) aún no está disponible en el DOM
   const view = _vistaActiva === "2D" ? _mapEl?.view : _sceneEl?.view; //detectar si el modo actual es 2D, si es true selecciona <arcgis-map>, si es false <arcgis-scene>
 
@@ -342,9 +385,10 @@ export async function irAlMunicipio(bbox) {
   // devolverá un array de una sola posición [ClaseExtent]
   // const [Extent] pide el primer elemento del array y lo guarda en la variable Extent
   // Extent es la CLASE o molde, no es un objeto geográfico todavía
-  const [Extent] = await Promise.all([
-    $arcgis.import("esri/geometry/Extent")
-  ]);
+  const [Extent, Viewpoint] = await Promise.all([
+  $arcgis.import("esri/geometry/Extent"),
+  $arcgis.import("esri/Viewpoint")
+])
 
   // Instancia concreta que usa Extent como molde
   const extent = new Extent({
@@ -355,19 +399,17 @@ export async function irAlMunicipio(bbox) {
 
   await view.goTo(extent.expand(1.2), { animate: true, duration: 1200 }); //.goTo(m) de _mapEl o _sceneEl, .expand(m) de extent
 
-  // Fijar homeViewpoint al municipio activo.
-  // Se ejecuta DESPUÉS de goTo() para capturar el viewpoint final
-  // una vez que la animación ha terminado.
-  // Los <arcgis-home> son hijos Light DOM de <arcgis-map>/<arcgis-scene>,
-  // así que querySelector() los encuentra sin problemas de Shadow DOM.
-  const homeEl = _vistaActiva === "2D"
-    ? _mapEl.querySelector("arcgis-home")
-    : _sceneEl.querySelector("arcgis-home");
+  
+  // Guardar viewpoint del municipio para que el botón Home pueda navegar de vuelta.
+  // El override del click está en initMap() — aquí solo se actualiza el valor.
+  // Se construye desde el Extent (no desde view.viewpoint.clone()) para garantizar
+  // targetGeometry de tipo "extent", que el SDK interpreta de forma determinista.
+  _municipioViewpoint = new Viewpoint({ targetGeometry: extent.expand(1.2) })
 
-  if (homeEl) {
-    homeEl.homeViewpoint = view.viewpoint.clone();
-  }
+  console.info("[mapManager] Punto de retorno 'Home' actualizado para el municipio");
 
+
+  
 }
 
 // ─── BASEMAP ──────────────────────────────────────────────────────────────
