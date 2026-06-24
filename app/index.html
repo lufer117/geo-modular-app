@@ -87,23 +87,16 @@
             data-action="toggle-leyenda"
           ></calcite-action>
 
-        </calcite-action-group>
-
-        <!--
-          slot="actions-end": ancla visualmente al fondo del action bar.
-          Separa el toggle 2D/3D de las herramientas de datos — son
-          responsabilidades distintas (cambio de vista vs exploración).
-        -->
-        <calcite-action-group slot="actions-end">
-          <calcite-action
-            id="action-toggle-vista"
-            icon="3d-glasses"
-            text="Toggle 2D/3D"
-            data-i18n="action.toggle3d"
-            data-i18n-attr="text"
-            data-action="toggle-vista"
-          ></calcite-action>
-        </calcite-action-group>
+               
+        <calcite-action
+          id="action-toggle-vista"
+          icon="3d"
+          text="Toggle 2D/3D"
+          data-i18n="action.toggle3d"
+          data-i18n-attr="text"
+          data-action="toggle-vista"
+        ></calcite-action>
+      </calcite-action-group>
 
       </calcite-action-bar>
 
@@ -143,18 +136,18 @@
 
       <!-- Vista 2D — activa por defecto -->
       <arcgis-map id="map-view" class="vista-activa">
-        <arcgis-zoom             position="top-left"></arcgis-zoom>
-        <arcgis-home             position="top-left"></arcgis-home>
-        <arcgis-scale-bar        position="bottom-left" unit="metric"></arcgis-scale-bar>
-        <arcgis-coordinates-tool position="bottom-right"></arcgis-coordinates-tool>
+        <arcgis-zoom             slot="top-left"></arcgis-zoom>
+        <arcgis-home             slot="top-left"></arcgis-home>
+        <arcgis-scale-bar        slot="bottom-left" unit="metric"></arcgis-scale-bar>
+        <arcgis-coordinates-tool slot="bottom-right"></arcgis-coordinates-tool>
       </arcgis-map>
 
       <!-- Vista 3D — oculta al inicio -->
-      <arcgis-scene id="scene-view">
-        <arcgis-zoom              position="top-left"></arcgis-zoom>
-        <arcgis-home              position="top-left"></arcgis-home>
-        <arcgis-navigation-toggle position="top-left"></arcgis-navigation-toggle>
-        <arcgis-scale-bar         position="bottom-left" unit="metric"></arcgis-scale-bar>
+      <arcgis-scene id="scene-view" class="vista-inactiva">
+        <arcgis-zoom              slot="top-left"></arcgis-zoom>
+        <arcgis-home              slot="top-left"></arcgis-home>
+        <arcgis-navigation-toggle slot="top-left"></arcgis-navigation-toggle>
+        <arcgis-scale-bar         slot="bottom-left" unit="metric"></arcgis-scale-bar>
       </arcgis-scene>
 
       <!--

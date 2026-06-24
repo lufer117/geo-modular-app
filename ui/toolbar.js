@@ -1,6 +1,6 @@
   // ui/toolbar.js
   // Responsabilidad: selector de idioma en la cabecera.
-  // El toggle 2D/3D se trasladó a ui/actionBar.js
+  
 
   import { DEPLOYMENT }        from "../config/deployment.js";
   import { t, getLang, setLang } from "../config/i18n/i18nManager.js";

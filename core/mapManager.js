@@ -28,6 +28,8 @@
  * La máscara siempre se reposiciona al final para quedar sobre los datos.
  */
 
+import * as eventBus from "../utils/eventBus.js";
+
 // ── Variables privadas del módulo ───────────────────────────────────────────────
 // Las variables viven mientras la página este cargada
 // El exterior solo accede a lo que se exporta explicitamente 
@@ -125,42 +127,46 @@ export async function initMap({ mapContainerId, sceneContainerId }) { // paramet
 
 
 export async function toggleVista() {
-  // Guarda de seguridad. Esperar SceneView solo la primera vez — después no hace falta esperar
-  if (_sceneReadyPromise) { //evalua si la variable contiene la promesa o si no hay ninguna tarea pendiente de carga (null)
-    await _sceneReadyPromise; // si promesa activa = true -> await
-    _sceneReadyPromise = null; // si promesa activa = false, se limpia variable = null -> la próxima vez el if será false por asignarle "null" y salta el paso
+  if (_sceneReadyPromise) {
+    await _sceneReadyPromise;
+    _sceneReadyPromise = null;
   }
 
-  // detectar la vista actual "===" evaluación lógica
-  //¿Es el valor actual de _vistaActiva exactamente igual al string "2D"?".
-  // Devuelve: true/false
-  const is2D = _vistaActiva === "2D"; 
+  const is2D = _vistaActiva === "2D";
+  const sourceView = is2D ? _mapEl.view : _sceneEl.view;
+  const targetView = is2D ? _sceneEl.view : _mapEl.view;
 
-  // Elegir vista origen y destino
-  // Si is2D true : sourceView = 2D y targetView = 3D
-  // Si is2D false : sourceView = 3D y targetView = 2D
-  // operador compacto (if...else)
-  const sourceView = is2D ? _mapEl.view : _sceneEl.view; //if is2D true ? (entonces) sourceView = _mapEl.view : (si falso)  sourceView = _sceneEl.view
-  const targetView = is2D ? _sceneEl.view : _mapEl.view; //if is2D false ? (entonces) targetView = _sceneEl.view : (si falso) targetView = _mapEl.view 
-
-  // Clonar viewpoint y sincronizar posición antes del cambio visual
-  // mueve la otra vista a la misma posición
+  // Capturar viewpoint ANTES de cambiar visibilidad
   const vp = sourceView.viewpoint.clone();
-  await targetView.goTo(vp); //goTo (m) devuelve una promesa que se resuelve cuando la animación de transición termina.
 
-  // Cambio visual alternando visibilidad (no destruye)
-  // classList: manipula clases css en elementos del DOM
+  // 1. Cambiar visibilidad primero — el componente destino debe estar
+  //    activo antes de recibir goTo(), si no la SceneView está suspendida
+  //    y no procesa la animación.
   if (is2D) {
-    _sceneEl.classList.add("vista-activa"); //webapis js/element
-    _mapEl.classList.remove("vista-activa"); 
+    _mapEl.hidden   = true;
+    _sceneEl.hidden = false;
     _vistaActiva = "3D";
   } else {
-    _mapEl.classList.add("vista-activa");
-    _sceneEl.classList.remove("vista-activa");
+    _sceneEl.hidden = true;
+    _mapEl.hidden   = false;
     _vistaActiva = "2D";
   }
 
+  // Sincronizar también las clases de estado visual para evitar
+  // que una vista siga oculta por CSS cuando el atributo hidden cambia.
+  const activeEl = is2D ? _sceneEl : _mapEl;
+  const inactiveEl = is2D ? _mapEl : _sceneEl;
+
+  activeEl.classList.add("vista-activa");
+  activeEl.classList.remove("vista-inactiva");
+  inactiveEl.classList.add("vista-inactiva");
+  inactiveEl.classList.remove("vista-activa");
+
+  // 2. Sincronizar posición DESPUÉS de activar el componente
+  await targetView.goTo(vp);
+
   console.info(`[mapManager] Vista cambiada a ${_vistaActiva}`);
+  eventBus.emit("vista-cambiada", { modo: _vistaActiva });
   return _vistaActiva;
 }
 
@@ -348,6 +354,20 @@ export async function irAlMunicipio(bbox) {
   });
 
   await view.goTo(extent.expand(1.2), { animate: true, duration: 1200 }); //.goTo(m) de _mapEl o _sceneEl, .expand(m) de extent
+
+  // Fijar homeViewpoint al municipio activo.
+  // Se ejecuta DESPUÉS de goTo() para capturar el viewpoint final
+  // una vez que la animación ha terminado.
+  // Los <arcgis-home> son hijos Light DOM de <arcgis-map>/<arcgis-scene>,
+  // así que querySelector() los encuentra sin problemas de Shadow DOM.
+  const homeEl = _vistaActiva === "2D"
+    ? _mapEl.querySelector("arcgis-home")
+    : _sceneEl.querySelector("arcgis-home");
+
+  if (homeEl) {
+    homeEl.homeViewpoint = view.viewpoint.clone();
+  }
+
 }
 
 // ─── BASEMAP ──────────────────────────────────────────────────────────────

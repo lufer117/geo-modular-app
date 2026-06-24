@@ -166,11 +166,11 @@ function _actualizarBotonVista(modo) {
   if (!_actionVista) return;
 
   if (modo === "3D") {
-    _actionVista.icon  = "2d-explore";       // icono de "volver a 2D"
+    _actionVista.icon  = "2d";       // icono de "volver a 2D"
     _actionVista.text  = t("action.toggle2d");
     _actionVista.active = true;
   } else {
-    _actionVista.icon  = "3d-glasses";       // icono de "ir a 3D"
+    _actionVista.icon  = "3d";       // icono de "ir a 3D"
     _actionVista.text  = t("action.toggle3d");
     _actionVista.active = false;
   }

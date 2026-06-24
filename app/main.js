@@ -178,12 +178,13 @@ async function main() {
     // 5. Montar UI
     // El orden importa: la toolbar y el selector están en la cabecera (visibles de entrada).
     // El árbol y la leyenda se construyen cuando "municipio-cargado" se emite con EVENTBUS
+    initActionBar(); // inicializa actionbar
     renderMunicipioSelector("#municipio-selector-container", DEPLOYMENT); // styles & eventBus.emit("municipio-cargado")
     renderBasemapSelector("#basemap-selector-container"); // conecta con styles
     initLayerTree("#layer-tree-container"); // conecta con styles 
     initLegendPanel("map-view");  // conecta con styles, index (mapa inicia en 2d)
     initToolbar(document.getElementById("lang-selector-container")); //toolbar se especializa en el cambio de idioma
-    initActionBar(); // inicializa actionbar
+    
 
     // 6. Restaurar estado tras cambio de idioma (si lo hay)
     //    consumirRestore() lee y borra la clave en una sola operación
@@ -197,7 +198,7 @@ async function main() {
       }
       if (restore.vista === "3D") {
         await mapManager.toggleVista();
-        setVistaActiva("3D"); // actualiza el icono del action button
+        // setVistaActiva("3D"); // actualiza el icono del action button . Redundante
       }
     }
 
