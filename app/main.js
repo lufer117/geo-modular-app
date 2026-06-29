@@ -41,7 +41,7 @@ import { renderBasemapSelector }   from "../ui/basemapSelector.js";
 import { initLayerTree }           from "../ui/layerTree.js";
 import { initLegendPanel }         from "../ui/legendPanel.js";
 import { initToolbar }             from "../ui/toolbar.js";
-
+import * as eventBus from '../utils/eventBus.js';
 
 
 
@@ -111,7 +111,7 @@ function aplicarBranding(branding) {
   // Logo de empresa — se inyecta como elemento fijo en el extremo derecho del header
   // y comparte alineación con el selector de idioma en content-end.
   if (branding.logo_empresa) {
-    _inyectarLogoEmpresa(branding.logo_empresa);
+    _inyectarLogoEmpresa(branding.logo_empresa);  
   }
 }
 
@@ -182,6 +182,19 @@ async function main() {
     initLegendPanel("map-view");  // conecta con styles, index (mapa inicia en 2d)
     initToolbar(document.getElementById("lang-selector-container")); //toolbar se especializa en el cambio de idioma
     
+          // ─── AÑADIR AQUÍ LA LÓGICA DINÁMICA ───
+      
+
+      eventBus.on("municipio-cargado", ({ municipioData }) => {
+        const navLogo = document.querySelector("calcite-navigation-logo");
+        
+        // Si el municipio tiene un logo definido en municipios.js, lo aplicamos
+        if (navLogo && municipioData.logo) {
+          navLogo.setAttribute("thumbnail", municipioData.logo);
+          navLogo.setAttribute("heading", municipioData.nombre);
+          navLogo.removeAttribute("icon"); // Calcite requiere quitar el icono para mostrar el thumbnail
+        }
+      })
 
     // 6. Restaurar estado tras cambio de idioma (si lo hay)
     //    consumirRestore() lee y borra la clave en una sola operación

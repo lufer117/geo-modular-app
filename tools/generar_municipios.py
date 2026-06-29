@@ -235,10 +235,17 @@ def to_js_entry(codigo_ine: str, nombre: str, provincia_code: str,
     bbox_str   = json.dumps(bbox)
     n_vertices = sum(len(r) for r in rings)
 
+    # Lógica para la extensión del logo
+    # Puedes usar .png por defecto o mapearlo según el código INE
+    extensiones = {"48020": "webp", "31201": "jpg"} # Ejemplo de excepciones
+    ext = extensiones.get(codigo_ine, "png")
+    logo_path = f"../assets/logos/{codigo_ine}.{ext}"
+
     return (
         "  {\n"
         f"    codigo_ine:     \"{codigo_ine}\",\n"
         f"    nombre:         \"{nombre}\",\n"
+        f"    logo:           \"{logo_path}\",\n"
         f"    provincia_code: \"{provincia_code}\",\n"
         f"    ccaa_code:      \"{ccaa_code}\",\n"
         f"    bbox: {bbox_str},\n"

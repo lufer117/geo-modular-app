@@ -11,6 +11,7 @@ export const MUNICIPIOS = [
   {
     codigo_ine:     "48020",
     nombre:         "Bilbao",
+    logo:           "../assets/logos/48020.webp",
     provincia_code: "48",
     ccaa_code:      "16",
     bbox: [-2.985962, 43.213711, -2.880261, 43.294925],
@@ -22,6 +23,7 @@ export const MUNICIPIOS = [
   {
     codigo_ine:     "20069",
     nombre:         "Donostia/San Sebastián",
+    logo:           "../assets/logos/20069.svg",
     provincia_code: "20",
     ccaa_code:      "16",
     bbox: [-2.086808, 43.217837, -1.887884, 43.338146],
@@ -33,6 +35,7 @@ export const MUNICIPIOS = [
   {
     codigo_ine:     "01059",
     nombre:         "Vitoria-Gasteiz",
+    logo:           "../assets/logos/01059.svg",
     provincia_code: "01",
     ccaa_code:      "16",
     bbox: [-2.854825, 42.764681, -2.543883, 42.936708],
@@ -44,6 +47,7 @@ export const MUNICIPIOS = [
   {
     codigo_ine:     "48013",
     nombre:         "Barakaldo",
+    logo:           "../assets/logos/48013.png",
     provincia_code: "48",
     ccaa_code:      "16",
     bbox: [-3.049061, 43.237876, -2.970624, 43.305213],
@@ -55,6 +59,7 @@ export const MUNICIPIOS = [
   {
     codigo_ine:     "48044",
     nombre:         "Getxo",
+    logo:           "../assets/logos/48044.png",
     provincia_code: "48",
     ccaa_code:      "16",
     bbox: [-3.039605, 43.319865, -2.96705, 43.383954],
@@ -66,6 +71,7 @@ export const MUNICIPIOS = [
   {
     codigo_ine:     "31201",
     nombre:         "Pamplona/Iruña",
+    logo:           "../assets/logos/31201.jpg",
     provincia_code: "31",
     ccaa_code:      "15",
     bbox: [-1.695008, 42.788839, -1.604578, 42.84271],
@@ -77,6 +83,7 @@ export const MUNICIPIOS = [
   {
     codigo_ine:     "31232",
     nombre:         "Tudela",
+    logo:           "../assets/logos/31232.webp",
     provincia_code: "31",
     ccaa_code:      "15",
     bbox: [-1.838064, 41.992597, -1.484756, 42.163724],
@@ -88,6 +95,7 @@ export const MUNICIPIOS = [
   {
     codigo_ine:     "31084",
     nombre:         "Etxarri Aranatz",
+    logo:           "../assets/logos/31084.png",
     provincia_code: "31",
     ccaa_code:      "15",
     bbox: [-2.117444, 42.871853, -2.040082, 42.976323],
@@ -99,6 +107,7 @@ export const MUNICIPIOS = [
   {
     codigo_ine:     "26089",
     nombre:         "Logroño",
+    logo:           "../assets/logos/26089.webp",
     provincia_code: "26",
     ccaa_code:      "17",
     bbox: [-2.542124, 42.429017, -2.341968, 42.519723],
@@ -110,6 +119,7 @@ export const MUNICIPIOS = [
   {
     codigo_ine:     "09059",
     nombre:         "Burgos",
+    logo:           "../assets/logos/09059.png",
     provincia_code: "09",
     ccaa_code:      "07",
     bbox: [-3.794372, 42.285578, -3.585383, 42.404284],
