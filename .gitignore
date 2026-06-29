@@ -11,6 +11,7 @@ Thumbs.db
 
 # Configuración de instancia — varía por cliente y entorno
 config/deployment.js
+config/deployment_final.js
 
 # Carpetas de build/distribución
 dist/

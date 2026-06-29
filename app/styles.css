@@ -89,6 +89,18 @@ arcgis-scene[hidden] {
   min-width: 280px;
 }
 
+/* ── Cabecera: acciones a la derecha ────────────────────────────────────── */
+
+#lang-selector-container,
+#logo-empresa-container {
+  display: flex;
+  align-items: center;
+}
+
+#lang-selector-container {
+  margin-inline-end: 0.75rem;
+}
+
 /* ── Cabecera: logos ───────────────────────────────────────────────── */
 /* ── Logo de empresa (Bilbomática) ───────────────────────────────────── */
 .logo-empresa {
@@ -96,6 +108,7 @@ arcgis-scene[hidden] {
   align-items: center;
   padding: 0 var(--calcite-spacing-md, 12px);
   border-left: 1px solid var(--calcite-color-border-3);
+  margin-inline-start: 0.25rem;
 }
 
 .logo-empresa-img {

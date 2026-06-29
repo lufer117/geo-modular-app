@@ -48,7 +48,8 @@
         toolbar-container ahora solo aloja el selector de idioma.
         El toggle 2D/3D se traslada al action bar (actionBar.js).
       -->
-      <div slot="user" id="lang-selector-container"></div>
+      <div slot="content-end" id="lang-selector-container"></div>
+       
 
     </calcite-navigation>
 
@@ -61,10 +62,10 @@
 
       <!--
         calcite-action-bar: barra de iconos vertical en el borde izquierdo.
-        expanded="false" → solo iconos, sin etiquetas de texto.
-        Los calcite-action disparan "calciteActionClick" que actionBar.js escucha.
+        Los calcite-action muestran solo iconos; el texto vive como tooltip nativo
+        mediante title/label y actionBar.js sincroniza el estado de la vista.
       -->
-      <calcite-action-bar slot="action-bar" expanded="false" id="main-action-bar">
+      <calcite-action-bar slot="action-bar" id="main-action-bar">
 
         <!-- Grupo principal: herramientas de exploración de datos -->
         <calcite-action-group>
@@ -72,18 +73,14 @@
           <calcite-action
             id="action-capas"
             icon="layers"
-            text="Capas"
-            data-i18n="action.capas"
-            data-i18n-attr="text"
+            data-i18n-props='{"text":"action.capas","title":"action.capas","label":"action.capas"}'
             data-panel="panel-capas"
           ></calcite-action>
 
           <calcite-action
             id="action-leyenda"
             icon="legend"
-            text="Leyenda"
-            data-i18n="action.leyenda"
-            data-i18n-attr="text"
+            data-i18n-props='{"text":"action.leyenda","title":"action.leyenda","label":"action.leyenda"}'
             data-action="toggle-leyenda"
           ></calcite-action>
 
@@ -91,12 +88,13 @@
         <calcite-action
           id="action-toggle-vista"
           icon="3d"
-          text="Toggle 2D/3D"
-          data-i18n="action.toggle3d"
-          data-i18n-attr="text"
+          data-i18n-props='{"text":"action.toggle3d","title":"action.toggle3d","label":"action.toggle3d"}'
           data-action="toggle-vista"
         ></calcite-action>
-      </calcite-action-group>
+       
+      
+
+        </calcite-action-group>
 
       </calcite-action-bar>
 
@@ -136,17 +134,17 @@
 
       <!-- Vista 2D — activa por defecto -->
       <arcgis-map id="map-view" class="vista-activa">
-        <arcgis-zoom             slot="top-left"></arcgis-zoom>
-        <arcgis-home             slot="top-left"></arcgis-home>
+        <arcgis-zoom             slot="top-right"></arcgis-zoom>
+        <arcgis-home             slot="top-right"></arcgis-home>
         <arcgis-scale-bar        slot="bottom-left" unit="metric"></arcgis-scale-bar>
         <arcgis-coordinates-tool slot="bottom-right"></arcgis-coordinates-tool>
       </arcgis-map>
 
       <!-- Vista 3D — oculta al inicio -->
       <arcgis-scene id="scene-view" class="vista-inactiva">
-        <arcgis-zoom              slot="top-left"></arcgis-zoom>
-        <arcgis-home              slot="top-left"></arcgis-home>
-        <arcgis-navigation-toggle slot="top-left"></arcgis-navigation-toggle>
+        <arcgis-zoom              slot="top-right"></arcgis-zoom>
+        <arcgis-home              slot="top-right"></arcgis-home>
+        <arcgis-navigation-toggle slot="top-right"></arcgis-navigation-toggle>
         <arcgis-scale-bar         slot="bottom-left" unit="metric"></arcgis-scale-bar>
       </arcgis-scene>
 

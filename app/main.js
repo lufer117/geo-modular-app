@@ -108,8 +108,8 @@ function aplicarBranding(branding) {
     navLogo.removeAttribute("icon");   // icon y thumbnail son mutuamente excluyentes en Calcite
   }
 
-  // Logo de empresa — se inyecta como elemento fijo en el slot "user" de la navegación
-  // o junto al logo principal, según el diseño elegido
+  // Logo de empresa — se inyecta como elemento fijo en el extremo derecho del header
+  // y comparte alineación con el selector de idioma en content-end.
   if (branding.logo_empresa) {
     _inyectarLogoEmpresa(branding.logo_empresa);
   }
@@ -117,8 +117,7 @@ function aplicarBranding(branding) {
 
 function _inyectarLogoEmpresa(src) {
   // El logo de la empresa va fijo en el extremo derecho del header,
-  // separado del logo del cliente. Slot "user" ya tiene el selector de idioma,
-  // así que creamos un contenedor dedicado.
+  // después del selector de idioma, para que ambos queden alineados sin solaparse.
   const existing = document.getElementById("logo-empresa-container");
   if (existing) return; // idempotente — no duplicar si se llama dos veces
 
@@ -137,11 +136,9 @@ function _inyectarLogoEmpresa(src) {
   wrapper.appendChild(img);
 
   // Se inserta en el slot content-end de calcite-navigation,
-  // antes del toolbar-container para que quede a la derecha del todo
+  // después del selector de idioma para mantener el orden visual.
   const nav = document.querySelector("calcite-navigation");
   if (nav) {
-    const endSlot = document.getElementById("toolbar-container")?.parentElement;
-    // Insertar directamente en la navegación como slot content-end adicional
     wrapper.setAttribute("slot", "content-end");
     nav.appendChild(wrapper);
   }

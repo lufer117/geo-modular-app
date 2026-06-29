@@ -1,9 +1,14 @@
 {
   "app.title": "Geo app",
-  "app.description": "Adaptive Municipal Data Viewer",
+  "app.description": "Adaptive Data Viewer",
 
   "nav.municipio.label": "Municipality:",
   "nav.municipio.placeholder": "— Select a municipality —",
+
+  "action.capas": "Layers",
+  "action.leyenda": "Legend",
+  "action.toggle3d": "Toggle 2D/3D",
+  "action.toggle2d": "Toggle 3D/2D",
 
   "panel.layers.heading": "Layers",
   "panel.layers.description": "Select a municipality to see its layers",
@@ -11,8 +16,7 @@
   "panel.capas.heading": "Available layers",
   "panel.legend.heading": "Legend",
 
-  "toolbar.toggle3d": "3D View",
-  "toolbar.toggle2d": "2D View",
+
   "toolbar.lang.label": "Language",
 
   "layers.loading": "Loading...",
