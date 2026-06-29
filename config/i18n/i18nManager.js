@@ -9,7 +9,7 @@
  *   - Carga del JSON de traducciones correspondiente
  *   - Aplicación de textos estáticos al DOM via atributos data-i18n
  *   - Exposición de t() para textos dinámicos generados por JS
- *   - Cambio de idioma en runtime con persistencia de estado
+ *   - Cambio de idioma en runtime con actualización reactiva del DOM
  *
  * ── POR QUÉ UN MÓDULO CENTRAL ────────────────────────────────────────────
  * Distribuir la lógica de idioma entre módulos (toolbar, layerTree, etc.)
@@ -19,7 +19,8 @@
  * ── ESTRATEGIA DE ACTUALIZACIÓN EN RUNTIME ───────────────────────────────
  * Textos estáticos del shell (index.html): atributos data-i18n → init() los aplica.
  * Textos dinámicos (árbol de capas, mensajes de estado): t() en cada módulo JS.
- * Al cambiar idioma: persiste estado (municipio + vista) → reload → init() re-aplica.
+ * Al cambiar idioma: actualiza el idioma activo, reaplica el DOM estático
+ * y emite un evento para que los módulos que generan texto en JS se refresquen.
  *
  * ── LIMITACIÓN DOCUMENTADA ───────────────────────────────────────────────
  * esriConfig.locale se establece desde window.__GIS_LANG__ en el script inline
@@ -30,11 +31,10 @@
  */
 
 import { DEPLOYMENT } from "../deployment.js";
+import { emit } from "../../utils/eventBus.js";
 
 // ── Constantes ──────────────────────────────────────────────────────────────
 const STORAGE_KEY  = "geo-app-lang";
-const RESTORE_KEY  = "geo-app-restore";
-
 // Idiomas que el sistema conoce. Añadir aquí + crear su JSON es suficiente.
 const IDIOMAS_SOPORTADOS = ["es", "en", "eu", "gl", "ca", "va"];
 
@@ -54,13 +54,12 @@ let _langActivo = "es";
  */
 
 export async function init() {
-  _langActivo = _resolverIdioma();
+  const traduccionesResueltas = await _resolverYcargarIdioma();
+  _langActivo = traduccionesResueltas.lang;
+  _traducciones = traduccionesResueltas.traducciones;
 
   // Sincronizar el <html lang=""> con el idioma activo
   document.documentElement.lang = _langActivo;
-
-  // Cargar las traducciones del idioma resuelto
-  _traducciones = await _cargarTraducciones(_langActivo);
 
   // Aplicar textos estáticos del shell (elementos con data-i18n en index.html)
   _aplicarDOM();
@@ -94,17 +93,16 @@ export function getLang() {
 }
 
 /**
- * Cambia el idioma en runtime.
- * Persiste el estado de la app (municipio + vista) en localStorage
- * antes de recargar para restaurarlo después del reload.
+ * Cambia el idioma en runtime sin recargar la página.
+ * 1. Carga el JSON de traducciones del idioma destino
+ * 2. Notifica al SDK de ArcGIS vía intl.setLocale() → Web Components se actualizan
+ * 3. Re-aplica data-i18n al DOM estático
+ * 4. Emite "idioma-cambiado" → módulos JS rehidratan sus textos dinámicos
  *
  * @param {string} code - Código ISO del idioma destino (ej: "eu")
- * @param {Object} opts
- * @param {string|null} opts.municipio  - codigo_ine del municipio activo (puede ser null)
- * @param {string}      opts.vista      - "2D" | "3D"
  */
 
-export function setLang(code, { municipio = null, vista = "2D" } = {}) {
+export async function setLang(code) {
   // Validar que el idioma es soportado por el sistema Y por el deployment actual
   const idiomasPermitidos = DEPLOYMENT.idiomas ?? ["es"];
   if (!idiomasPermitidos.includes(code)) {
@@ -114,41 +112,38 @@ export function setLang(code, { municipio = null, vista = "2D" } = {}) {
 
   if (code === _langActivo) return; // No recargar si ya estamos en ese idioma
 
-  // 1. Persistir idioma elegido
-  localStorage.setItem(STORAGE_KEY, code);
+  const traduccionesResueltas = await _cargarTraducciones(code);
 
-  // 2. Persistir estado de la app para restaurarlo tras el reload
-  //    Solo guardamos lo que necesitamos — nada más.
-  if (municipio || vista !== "2D") {
-    localStorage.setItem(RESTORE_KEY, JSON.stringify({ municipio, vista }));
-  }
+  _langActivo = traduccionesResueltas.lang;
+  _traducciones = traduccionesResueltas.traducciones;
 
-  // 3. Recargar — init() leerá el nuevo idioma de localStorage
-  location.reload();
-}
+  // Persistir el idioma realmente resuelto para que el siguiente arranque
+  // recupere exactamente la misma localización que la UI está mostrando.
+  localStorage.setItem(STORAGE_KEY, _langActivo);
 
-/**
- * Lee y elimina el estado de restauración guardado antes del cambio de idioma.
- * Llamar una sola vez desde main.js justo después de init().
- *
- * @returns {{ municipio: string|null, vista: string }|null}
- */
+  document.documentElement.lang = _langActivo;
 
-export function consumirRestore() {
-  const raw = localStorage.getItem(RESTORE_KEY);
-  if (!raw) return null;
+  //notificar al SDK de ArcGIS
+  // intl.setLocale() actualiza automáticamente todos los Web Components
+  // del SDK (arcgis-legend, arcgis-zoom, etc.) y los de Calcite.
+  // Es experimental según Esri pero cubre exactamente nuestro caso de uso:
+  // no usamos labels de FeatureLayer ni expresiones Arcade en la UI de idioma
 
-  localStorage.removeItem(RESTORE_KEY); // Consumir: leer y borrar en una sola operación
+  const intl = await $arcgis.import("esri/intl");
+  intl.setLocale(_langActivo);
 
-  try {
-    return JSON.parse(raw);
-  } catch {
-    console.warn("[i18n] Estado de restore corrupto, ignorando.");
-    return null;
-  }
+  _aplicarDOM();
+
+  // Los módulos con texto generado en JS se rehidratan escuchando este evento.
+  emit("idioma-cambiado", { lang: _langActivo });
 }
 
 // ── Privado ─────────────────────────────────────────────────────────────────
+
+async function _resolverYcargarIdioma() {
+  const lang = _resolverIdioma();
+  return await _cargarTraducciones(lang);
+}
 
 /**
  * Resuelve el idioma activo aplicando las prioridades definidas:
@@ -192,16 +187,25 @@ async function _cargarTraducciones(lang) {
   try {
     const res = await fetch(`../config/i18n/${lang}.json`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.json();
+    return {
+      lang,
+      traducciones: await res.json()
+    };
   } catch (err) {
     console.warn(`[i18n] No se pudo cargar "${lang}.json", usando "es" como fallback:`, err);
 
     // Fallback: intentar cargar español
     if (lang !== "es") {
       const res = await fetch("../config/i18n/es.json");
-      return await res.json();
+      return {
+        lang: "es",
+        traducciones: await res.json()
+      };
     }
-    return {}; // Si ni español carga, devolver objeto vacío (t() retornará la clave)
+    return {
+      lang: "es",
+      traducciones: {}
+    }; // Si ni español carga, devolver objeto vacío (t() retornará la clave)
   }
 }
 

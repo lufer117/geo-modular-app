@@ -3,9 +3,11 @@
   
 
   import { DEPLOYMENT }        from "../config/deployment.js";
-  import { t, getLang, setLang } from "../config/i18n/i18nManager.js";
+  import { getLang, setLang }  from "../config/i18n/i18nManager.js";
   import { getMunicipioActivo }  from "./municipioSelector.js";
   import * as mapManager from "../core/mapManager.js";
+  import { clearContainer } from "../utils/domUtils.js";
+  import { on } from "../utils/eventBus.js";
 
   /**
    * Inicializa el toolbar.
@@ -16,12 +18,19 @@
     if (!container) return;
     if (DEPLOYMENT.idiomas.length <= 1) return;
 
+    _containerEl = container;
     _renderSelectorIdioma(container);
+    _registrarListenersIdioma();
   }
 
   // ─── Privadas ─────────────────────────────────────────────────────────────────
 
+  let _containerEl = null;
+  let _idiomaListenerRegistrado = false;
+
   function _renderSelectorIdioma(container) {
+    clearContainer(container);
+
     const langActivo = getLang();
 
     // calcite-button-group: agrupa los botones de idioma visualmente.
@@ -50,3 +59,14 @@
 
     container.appendChild(grupo);
   }
+
+function _registrarListenersIdioma() {
+  if (_idiomaListenerRegistrado) return;
+  _idiomaListenerRegistrado = true;
+
+  on("idioma-cambiado", () => {
+    if (_containerEl) {
+      _renderSelectorIdioma(_containerEl);
+    }
+  });
+}

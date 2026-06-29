@@ -49,11 +49,16 @@ import * as mapManager           from "../core/mapManager.js";
 import { crearCapa }             from "../core/layerFactory.js";
 import { inicializarCapa }       from "../core/layerInitializer.js";
 import { emit }                  from "../utils/eventBus.js";
+import { on }                    from "../utils/eventBus.js";
+import { clearContainer }        from "../utils/domUtils.js";
 import { t }                     from "../config/i18n/i18nManager.js";
 
 // Semáforo: evitar doble carga si el usuario cambia de municipio rápidamente
 let _cargando = false;
 let _municipioActivo = null;
+let _containerEl = null;
+let _deploymentRef = { municipios: [] };
+let _idiomaListenerRegistrado = false;
 
 export function getMunicipioActivo() {
   return _municipioActivo;
@@ -84,6 +89,13 @@ export function renderMunicipioSelector(container, deployment = { municipios: []
     console.error("[municipioSelector] Contenedor no encontrado:", container);
     return;
   }
+
+  _containerEl = el;
+  _deploymentRef = deployment;
+
+  clearContainer(el);
+
+  _registrarListenerIdioma();
 
   // ── Calcular municipios visibles según el ámbito del deployment ──
   // deployment.municipios vacío = modo demo: sin filtro, se muestran todos.
@@ -125,6 +137,10 @@ export function renderMunicipioSelector(container, deployment = { municipios: []
     select.appendChild(opt);
   });
 
+  if (_municipioActivo) {
+    select.value = _municipioActivo;
+  }
+
   select.addEventListener("calciteSelectChange", _onMunicipioChange);
 
   label.appendChild(select);
@@ -136,8 +152,12 @@ export function renderMunicipioSelector(container, deployment = { municipios: []
   // Llamamos a _cargarMunicipio en lugar de simular el evento Calcite porque
   // el evento puede no dispararse de forma fiable con un único elemento.
   if (municipiosVisibles.length === 1) {
-    select.value = municipiosVisibles[0].codigo_ine;
-    _cargarMunicipio(municipiosVisibles[0].codigo_ine);
+    const unicoCodigo = municipiosVisibles[0].codigo_ine;
+    select.value = unicoCodigo;
+
+    if (_municipioActivo !== unicoCodigo) {
+      _cargarMunicipio(unicoCodigo);
+    }
   }
 }
 
@@ -251,4 +271,15 @@ function _setLoading(isLoading) {
   isLoading
     ? select.setAttribute("loading", "")
     : select.removeAttribute("loading");
+}
+
+function _registrarListenerIdioma() {
+  if (_idiomaListenerRegistrado) return;
+  _idiomaListenerRegistrado = true;
+
+  on("idioma-cambiado", () => {
+    if (_containerEl) {
+      renderMunicipioSelector(_containerEl, _deploymentRef);
+    }
+  });
 }

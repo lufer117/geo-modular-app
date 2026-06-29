@@ -31,11 +31,11 @@ import * as mapManager from "../core/mapManager.js";
 
 
 // ── Lang ─────────────────────────────────────────────────────────────────
-import { init as initI18n, consumirRestore } from "../config/i18n/i18nManager.js";
+import { init as initI18n } from "../config/i18n/i18nManager.js";
 
 // ── UI ────────────────────────────────────────────────────────────────────
 // Cada función importada monta una parte visual
-import { initActionBar, setVistaActiva } from "../ui/actionBar.js";
+import { initActionBar } from "../ui/actionBar.js";
 import { renderMunicipioSelector } from "../ui/municipioSelector.js";
 import { renderBasemapSelector }   from "../ui/basemapSelector.js";
 import { initLayerTree }           from "../ui/layerTree.js";
@@ -195,22 +195,6 @@ async function main() {
           navLogo.removeAttribute("icon"); // Calcite requiere quitar el icono para mostrar el thumbnail
         }
       })
-
-    // 6. Restaurar estado tras cambio de idioma (si lo hay)
-    //    consumirRestore() lee y borra la clave en una sola operación
-    const restore = consumirRestore();
-    if (restore) {
-      if (restore.municipio) {
-        // Reutilizar el pipeline interno de municipioSelector
-        // importándolo directamente para no duplicar lógica
-        const { cargarMunicipioPorCodigo } = await import("../ui/municipioSelector.js");
-        await cargarMunicipioPorCodigo(restore.municipio);
-      }
-      if (restore.vista === "3D") {
-        await mapManager.toggleVista();
-        // setVistaActiva("3D"); // actualiza el icono del action button . Redundante
-      }
-    }
 
     console.info("=== GIS Municipal — Listo ===");
 

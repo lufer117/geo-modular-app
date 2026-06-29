@@ -77,6 +77,7 @@ function _registrarListeners() {
 
   // Sincronización desde eventBus — no cambia
   eventBus.on("vista-cambiada", ({ modo }) => _actualizarBotonVista(modo));
+  eventBus.on("idioma-cambiado", () => _actualizarBotonVista(mapManager.getVistaActiva()));
 }
 
 
