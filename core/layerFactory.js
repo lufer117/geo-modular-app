@@ -213,7 +213,9 @@ function _buildParams(config) { //config es json
             ? { sublayers: config.sublayers.map(sl => ({
                 name:    sl.id,
                 title:   sl.title,
-                visible: sl.visible ?? false
+                visible: sl.visible ?? false,
+                legendUrl: _construirLegendUrl(config.url, sl.id)
+
               })) }
             : {})
       };
@@ -313,7 +315,31 @@ function _crsToWkid(crs) {
   return 4326;
 }
 
-
+/**
+ * Construye la URL de GetLegendGraphic para una sublayer WMS individual,
+ * siguiendo el estándar OGC soportado por GeoServer, MapServer y ArcGIS Server.
+ *
+ * Por qué se construye aquí y no se declara en el catálogo: la URL es 100%
+ * derivable de (url base del servicio + nombre técnico de la sublayer) — no
+ * es información editorial, es mecánica. Guardarla en el catálogo duplicaría
+ * datos que ya están ahí (config.url + sl.id) sin ganar nada, violando DRY.
+ *
+ * @param {string} serviceUrl - URL base del servicio WMS (config.url)
+ * @param {string} sublayerName - Nombre técnico LAYERS de la sublayer
+ * @returns {string} URL completa de GetLegendGraphic
+ */
+function _construirLegendUrl(serviceUrl, sublayerName) {
+  const params = new URLSearchParams({
+    service: "WMS",
+    version: "1.3.0",
+    request: "GetLegendGraphic",
+    format: "image/png",
+    width: "20",
+    height: "20",
+    layer: sublayerName
+  });
+  return `${serviceUrl}?${params.toString()}`;
+}
 
 // ─── REFERENCES ──────────────────────────────────
 
