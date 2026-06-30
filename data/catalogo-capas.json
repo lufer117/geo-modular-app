@@ -1,7 +1,7 @@
 [
   {
     "id": "fega-mapa-servicio-wms-en-la-nube-sigpac-wms",
-    "title": "Servicio WMS en la Nube SIGPAC",
+    "title": "SIGPAC",
     "bloque_tematico": "Agricultura",
     "subtema": "Parcelario agrícola PAC",
     "proveedor": "FEGA - MAPA",
@@ -26,8 +26,31 @@
     "prioridad": "P0 - MVP",
     "cobertura": {
       "tipo": "nacional"
-    }
+    },
+    "sublayers": [
+    { "id": "AU.Sigpac:recinto", "title": "Recintos SIGPAC", "visible": false },
+    { "id": "AU.Sigpac:cultivo_declarado", "title": "Cultivo Declarado 2025", "visible": false },
+    { "id": "AU.Sigpac:e_paisaje", "title": "E.Paisaje - Área", "visible": false },
+    { "id": "AU.Sigpac:e_paisaje_linea", "title": "E.Paisaje - línea", "visible": false },
+    { "id": "AU.Sigpac:e_paisaje_punto", "title": "E.Paisaje - Punto", "visible": false }
+  ]
   },
+
+  {
+  "id": "catastro-ovc-wms",
+  "title": "Cartografía Catastral (WMS)",
+  "bloque_tematico": "Administración del territorio",
+  "subtema": "Catastro",
+  "proveedor": "Dirección General del Catastro",
+  "tipo": "WMS",
+  "url": "https://ovc.catastro.meh.es/Cartografia/WMS/ServidorWMS.aspx",
+  "disponibilidad_municipal": "BBOX",
+  "cobertura": {
+    "tipo": "nacional"
+  },
+  "prioridad": "P0",
+  "tags": ["parcelas", "edificios", "referencia catastral", "propiedad", "catastro"]
+},
 
   {
     "id": "ign-cnig-redes-geodesicas-del-ign-de-espana-wfs",

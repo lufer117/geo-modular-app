@@ -194,21 +194,44 @@ function _buildParams(config) { //config es json
       return {
         ...base,
         url: config.url,
-        // sublayers: mapea los nombres de capa del catálogo al formato que WMSLayer espera.
-        // Si el catálogo no define sublayers, WMSLayer usa todas las que declare el servicio.
+        // sublayers: mapea las sublayers curadas del catálogo al formato que WMSLayer espera.
+        //
+        // CAMBIO (01.07.26): config.sublayers pasa de array de strings a array de
+        // objetos { id, title, visible }. Motivo — ver 3DECISIONS.md 30.06.26:
+        // la curación de qué sublayers se exponen y cómo se llaman es responsabilidad
+        // editorial del catálogo, no del servidor WMS.
+        //
+        // CRÍTICO: visible se fuerza explícitamente desde el catálogo (sl.visible ?? false).
+        // Sin esto, WMSLayer hereda el visible que declare el GetCapabilities del servidor,
+        // que casi siempre es `true` por defecto → causa raíz del bug "sublayers entran
+        // con check". El catálogo manda, no el proveedor externo.
+        //
+        // title también viaja en el objeto Esri: evita que layerTree.js tenga que
+        // decidir entre el title editorial del catálogo y el title crudo que devuelve
+        // el servidor (a veces técnico, en mayúsculas, o en otro idioma).
         ...(config.sublayers?.length
-          ? { sublayers: config.sublayers.map(name => ({ name })) } // Arcgis espera [{ name: "Catastro" },{ name: "Parcelas" }]
-          : {})
+            ? { sublayers: config.sublayers.map(sl => ({
+                name:    sl.id,
+                title:   sl.title,
+                visible: sl.visible ?? false
+              })) }
+            : {})
       };
 
     case "WMTS":
       return {
-        ...base,
-        url: config.url,
-        ...(config.sublayers?.[0]
-          ? { activeLayer: { id: config.sublayers[0] } }
-          : {})
-      };
+      ...base,
+      url: config.url,
+      // CAMBIO (01.07.26): config.sublayers[0] ya no es un string plano, es un
+      // objeto { id, title, visible } — mismo formato unificado que WMS (ver caso
+      // "WMS" arriba). WMTS solo soporta una capa activa a la vez (activeLayer),
+      // a diferencia de WMS que admite varias sublayers simultáneas — por eso aquí
+      // seguimos tomando solo el primer elemento del array, pero leyendo .id en
+      // vez de tratarlo como string.
+      ...(config.sublayers?.[0]
+        ? { activeLayer: { id: config.sublayers[0].id } }
+        : {})
+    }
 
     case "WFS":
       return {

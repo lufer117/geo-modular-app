@@ -7,6 +7,7 @@
  *   bloque_tematico → nivel 1  (SIN checkbox, expandible, negrita)
  *   subtema         → nivel 2  (SIN checkbox, expandible)
  *   title (capa)    → nivel 3  (seleccionable → activa/desactiva la capa)
+ *     ├── [WMS con sublayers curadas] → nivel 4 (sublayers ya cargadas, sin fetch)
  *     └── [WFS sin name] → nivel 4  (FeatureTypes descubiertos via Capabilities)
  *                          (solo estos tienen checkbox efectivo)
  *
@@ -28,6 +29,18 @@
  *   4. fetchFeatureTypes(url) → array de FeatureTypeInfo
  *   5. Se inyectan nodos hijo en el árbol (uno por FeatureType)
  *   6. Al activar un hijo → aplicarBboxWfs() + addCapa() (lazy)
+ *
+ * ── WMS CON SUBLAYERS CURADAS (sin discovery automático) ──────────────────
+ * A diferencia de WFS, donde cualquier FeatureType expuesto es potencialmente
+ * útil, el servidor WMS mezcla geometría real con elementos de renderizado
+ * puro (labels). Por eso aquí NO se hace discovery vía GetCapabilities:
+ * el catálogo declara explícitamente qué sublayers se exponen y cómo se
+ * llaman (config.sublayers: [{id, title, visible}]) — ver 3DECISIONS.md 30.06.26.
+ *
+ * layerFactory ya instancia la WMSLayer con su array layer.sublayers
+ * poblado y con visible correcto (forzado desde catálogo, no heredado del
+ * servidor). Por eso el renderizado aquí es síncrono: solo se pinta lo que
+ * ya existe, sin esperar ningún fetch.
  *
  * ── POR QUÉ selection-mode="ancestors" y NO calcite-checkbox manual ───────
  * calcite-tree-item intercepta todos los pointer events para su mecanismo
@@ -158,6 +171,26 @@ function _renderTree(layers, configs, lazyLayerIds) {
       pares.forEach(({ config, layer }) => {
         const globalIndex = configs.indexOf(config);
 
+        // ── Nodo WMS con sublayers curadas ──────────────────────────────
+        // A diferencia del discovery WFS, las sublayers WMS NO se descubren
+        // en runtime vía GetCapabilities: layerFactory ya las instanció con
+        // el objeto layer.sublayers poblado (ver layerFactory._buildParams,
+        // caso "WMS"). Aquí solo pintamos lo que ya existe — sin fetch,
+        // sin estado "expandido" que cachear, sin spinner real.
+        //
+        // Por qué NO es discovery automático (ver 3DECISIONS.md 30.06.26):
+        // a diferencia de WFS donde cualquier FeatureType expuesto es
+        // potencialmente útil, el servidor WMS mezcla geometría real con
+        // elementos de renderizado puro (labels). El catálogo decide qué
+        // sublayers se exponen vía config.sublayers — curación editorial,
+        // no automatización del Capabilities.
+        if (config.tipo === "WMS" && config.sublayers?.length) {
+          subtemaChildren.appendChild(
+            _crearItemWmsConSublayers(config, layer, globalIndex)
+          );
+          return;
+        }
+
         // ── Nodo WFS sin name: discovery mode ─────────────────────────
         // Una entrada WFS sin campo "name" en el catálogo es un servicio
         // con múltiples FeatureTypes. Se renderiza como nodo expandible
@@ -167,7 +200,7 @@ function _renderTree(layers, configs, lazyLayerIds) {
             _crearItemWfsDiscovery(config, globalIndex)
           );
         } else {
-          // Nodo hoja estándar (WMS, WMTS, WFS con name, GeoJSON…)
+          // Nodo hoja estándar (WMS sin sublayers, WMTS, WFS con name, GeoJSON…)
           subtemaChildren.appendChild(
             _crearItemCapa(config, layer, globalIndex)
           );
@@ -204,6 +237,13 @@ function _handleLayerSelect(e) {
   // Se gestiona en _handleWfsHijoSelect.
   if (item.dataset.wfsHijo === "true") {
     _handleWfsHijoSelect(item, layerId);
+    return;
+  }
+
+  // Nodo hijo de sublayer WMS: la instancia ya existe desde la carga inicial
+  // (no es lazy como WFS). Se gestiona en _handleWmsSublayerSelect.
+  if (item.dataset.wmsSublayer === "true") {
+    _handleWmsSublayerSelect(item, layerId);
     return;
   }
 
@@ -261,6 +301,50 @@ function _handleWfsHijoSelect(item, hijoId) {
     config: { id: hijoId, title: layer.title, tipo: "WFS" }
   });
   console.info(`[layerTree] WFS hijo "${hijoId}" → visible: ${visible}`);
+}
+
+/**
+ * Activa/desactiva una sublayer WMS individual.
+ *
+ * ── DIFERENCIA CON _handleWfsHijoSelect ──────────────────────────────────
+ * No hay lazy-load: la WMSLayer padre ya está en el mapa desde la carga
+ * inicial del municipio (las WMS no se excluyen de capasInmediatas como
+ * sí ocurre con WFS — ver municipioSelector.js paso 4). Por tanto no hace
+ * falta comprobar `!layer.map` ni llamar a mapManager.addCapa(): solo se
+ * alterna sublayer.visible.
+ *
+ * Importante: alternar sublayer.visible no fuerza layer.visible = true en
+ * la capa padre. Si el usuario activa una sublayer pero el WMS padre está
+ * con visible=false, no se verá nada. Por eso forzamos layer.visible = true
+ * al activar una sublayer — mismo patrón de "activar el contenedor cuando
+ * se activa el contenido" usado en otros puntos de la app.
+ *
+ * @param {HTMLElement} item   - El calcite-tree-item de la sublayer
+ * @param {string}      hijoId - ID derivado: "{idPadre}::{sublayer.name}"
+ */
+function _handleWmsSublayerSelect(item, hijoId) {
+  const visible   = !item.hasAttribute("selected");
+  const layer     = item._parentLayer;
+  const sublayer  = item._sublayerInstance;
+
+  if (!layer || !sublayer) {
+    console.warn(`[layerTree] Sublayer WMS sin instancia: "${hijoId}"`);
+    return;
+  }
+
+  // Si se activa una sublayer y el WMS padre está oculto, lo mostramos.
+  // Sin esto, sublayer.visible=true sería invisible para el usuario.
+  if (visible && !layer.visible) {
+    layer.visible = true;
+  }
+
+  sublayer.visible = visible;
+  emit(visible ? "capa-activada" : "capa-desactivada", {
+    layerId: hijoId,
+    layer,
+    config: { id: hijoId, title: sublayer.title ?? sublayer.name, tipo: "WMS" }
+  });
+  console.info(`[layerTree] WMS sublayer "${hijoId}" → visible: ${visible}`);
 }
 
 /**
@@ -392,6 +476,97 @@ function _crearItemCapa(config, layer, globalIndex) {
   item.appendChild(span);
 
   // _añadirBadges(item, config);
+
+  return item;
+}
+
+/**
+ * Crea el nodo Calcite para un servicio WMS con sublayers curadas en catálogo.
+ *
+ * ── DIFERENCIA CLAVE CON WFS DISCOVERY ───────────────────────────────────
+ * No hay fetch ni GetCapabilities en este punto: layerFactory ya instanció
+ * la WMSLayer con su array layer.sublayers poblado (ver _buildParams, caso
+ * "WMS"). Cada elemento de layer.sublayers ya trae name/title/visible
+ * correctos porque layerFactory los construyó desde config.sublayers del
+ * catálogo, forzando visible=false salvo que el catálogo diga lo contrario.
+ * Por eso esta función es síncrona: solo recorre y pinta, no espera nada.
+ *
+ * El nodo padre (la entrada WMS en sí) se renderiza igual que _crearItemCapa
+ * —activable como conjunto— porque el usuario puede querer activar/desactivar
+ * todas las sublayers a la vez sin entrar al detalle. Sus hijos son las
+ * sublayers individuales.
+ *
+ * @param {Object} config      - Config del catálogo (tipo WMS, con sublayers)
+ * @param {WMSLayer} layer     - Instancia ya cargada con sublayers
+ * @param {number} globalIndex - Índice en _configsRef (para trazabilidad)
+ */
+function _crearItemWmsConSublayers(config, layer, globalIndex) {
+  const item = document.createElement("calcite-tree-item");
+  item.dataset.layerId    = config.id;
+  item.dataset.layerIndex = globalIndex;
+
+  if (layer.visible) {
+    item.setAttribute("selected", "");
+  }
+
+  const label = document.createElement("span");
+  label.className   = "layer-label layer-label--wms-service";
+  label.textContent = config.title;
+  item.appendChild(label);
+
+  const badge = document.createElement("calcite-chip");
+  badge.setAttribute("scale", "s");
+  badge.setAttribute("kind", "neutral");
+  badge.setAttribute("icon", "layers");
+  badge.textContent = "WMS";
+  item.appendChild(badge);
+
+  const childrenTree = document.createElement("calcite-tree");
+  childrenTree.slot  = "children";
+
+  // Recorre layer.sublayers (objeto Esri ya cargado) en vez de config.sublayers
+  // (JSON crudo del catálogo) para asegurar que pintamos exactamente lo que
+  // el SDK terminó construyendo — incluye name/title/visible ya resueltos.
+  const sublayersEsri = layer.sublayers?.toArray?.() ?? [];
+
+  sublayersEsri.forEach(sublayerEsri => {
+    childrenTree.appendChild(
+      _crearItemWmsSublayer(sublayerEsri, layer, config.id)
+    );
+  });
+
+  item.appendChild(childrenTree);
+  return item;
+}
+
+/**
+ * Crea el nodo Calcite para una sublayer WMS individual.
+ *
+ * La instancia de la sublayer (y de su capa padre) se almacena directamente
+ * en el nodo DOM —mismo patrón que item._layerInstance en hijos WFS— para
+ * acceso O(1) desde el listener de selección sin necesitar un Map externo.
+ *
+ * @param {Sublayer} sublayerEsri - Objeto Sublayer del SDK, ya con visible correcto
+ * @param {WMSLayer} parentLayer  - Instancia WMSLayer padre
+ * @param {string} parentId       - config.id del WMS padre
+ */
+function _crearItemWmsSublayer(sublayerEsri, parentLayer, parentId) {
+  const hijoId = `${parentId}::${sublayerEsri.name}`;
+
+  const item = document.createElement("calcite-tree-item");
+  item.dataset.layerId     = hijoId;
+  item.dataset.wmsSublayer = "true"; // Identificador para _handleLayerSelect
+  item._parentLayer        = parentLayer;
+  item._sublayerInstance   = sublayerEsri;
+
+  if (sublayerEsri.visible) {
+    item.setAttribute("selected", "");
+  }
+
+  const span = document.createElement("span");
+  span.className   = "layer-label";
+  span.textContent = sublayerEsri.title || sublayerEsri.name;
+  item.appendChild(span);
 
   return item;
 }
