@@ -6,6 +6,7 @@
     "subtema": "Parcelario agrícola PAC",
     "proveedor": "FEGA - MAPA",
     "tipo": "WMS",
+    "featureInfoFormat": "application/json",
     "url": "https://sigpac-hubcloud.es/wms",
     "capabilities_url": "https://sigpac-hubcloud.es/wms?request=GetCapabilities&service=WMS",
     "formato": "",
@@ -28,7 +29,7 @@
       "tipo": "nacional"
     },
     "sublayers": [
-    { "id": "AU.Sigpac:recinto", "title": "Recintos SIGPAC", "visible": false },
+    { "id": "AU.Sigpac:recinto", "title": "Recintos SIGPAC", "visible": false  },
     { "id": "AU.Sigpac:cultivo_declarado", "title": "Cultivo Declarado 2025", "visible": false },
     { "id": "AU.Sigpac:e_paisaje", "title": "E.Paisaje - Área", "visible": false },
     { "id": "AU.Sigpac:e_paisaje_linea", "title": "E.Paisaje - línea", "visible": false },
@@ -39,7 +40,7 @@
   {
   "id": "catastro-ovc-wms",
   "title": "Cartografía Catastral (WMS)",
-  "bloque_tematico": "Administración del territorio",
+  "bloque_tematico": "Catastro",
   "subtema": "Catastro",
   "proveedor": "Dirección General del Catastro",
   "tipo": "WMS",
@@ -49,7 +50,13 @@
     "tipo": "nacional"
   },
   "prioridad": "P0",
-  "tags": ["parcelas", "edificios", "referencia catastral", "propiedad", "catastro"]
+  "tags": ["parcelas", "edificios", "referencia catastral", "propiedad", "catastro"],
+  "sublayers": [
+    { "id": "Catastro", "title": "Catastro", "visible": false },
+    { "id": "PARCELA", "title": "Parcela", "visible": false },
+    { "id": "SUBPARCE", "title": "Subparcela", "visible": false },
+    { "id": "CONSTRU", "title": "Construcciones", "visible": false }
+  ]
 },
 
   {

@@ -265,6 +265,9 @@ function _handleLayerSelect(e) {
   }
 
   layer.visible = visible;
+
+ 
+
   emit(visible ? "capa-activada" : "capa-desactivada", { layerId, layer, config });
   console.info(`[layerTree] "${layerId}" → visible: ${visible}`);
 }
@@ -288,9 +291,30 @@ function _handleWfsHijoSelect(item, hijoId) {
     return;
   }
 
+  // TEMPORAL — depuración, capturar solo si es la capa que nos interesa
+  if (hijoId.includes("RED_ERGNSS")) {
+    window._debugLayer = layer;
+    console.log("[DEBUG] Capturada instancia:", hijoId);
+  }
+
   // Lazy: añadir al mapa solo la primera vez que se activa
   if (visible && !layer.map) {
     mapManager.addCapa(layer);
+    
+    layer.load()
+      .then(() => {
+        // POPUP POST-LOAD — timing crítico.
+        // WFSLayer.load() reconstruye internamente el popupTemplate y
+        // resetea fieldInfos a null, pisando cualquier asignación hecha
+        // en construcción (layerFactory._aplicarPopupGenerico).
+        // createPopupTemplate() es el método nativo del SDK para este
+        // caso: genera el template completo desde layer.fields ya
+        // disponibles, sin que tengamos que construirlo a mano.
+        layer.popupTemplate = layer.createPopupTemplate();
+      })
+      .catch(err => {
+        console.error(`[layerTree] Error al cargar capa WFS hija "${hijoId}":`, err);
+      });
   }
 
   layer.visible = visible;
@@ -679,7 +703,7 @@ async function _crearHijoWfs(featureType, configPadre, disponible = true) {
   // Si falla, el nodo mostrará un estado de error en lugar de quedar huérfano.
   const layer = await crearCapaWfsHija(featureType, configPadre);
 
-
+  
   const item = document.createElement("calcite-tree-item");
   item.dataset.layerId = hijoId;
   item.dataset.wfsHijo = "true"; // Identificador para _handleLayerSelect
@@ -856,6 +880,8 @@ async function _checkConPool(featureTypes, serviceUrl, bbox, { concurrencia = 4 
 
   return resultados;
 }
+
+
 
 /**
  * Añade badges visuales (P0, INSPIRE) a un calcite-tree-item.

@@ -85,7 +85,17 @@ export async function crearCapa(config) {
   try { // para que la capa mala ↑ if!modulePath no rompa la app
     const LayerClass = await $arcgis.import(modulePath); // se carga el módulo que se necesita "WMSLayer". LayerClass lo guarda como plantilla de una layer que se instanciará más adelante. Ej, "new LayerClass(...) = new WMSLayer(...)""
     const params     = _buildParams(config); //Traduce las propiedades de nuestro JSON (como url o title) al formato exacto que espera el constructor de ArcGIS
-    return new LayerClass(params); // Si el tipo es "WMS" → "new WMSLayer(...)". La capa ya es creada en memoria para ser añadida cuando layerInitializer la procese  
+    const layer      = new LayerClass(params); // Crea la capa en memoria, lista para añadir al mapa
+    
+    // Popup genérico automático (sin curación editorial todavía — fase de
+    // validación). Cubre WFS/FEATURE (atributos cliente) y WMS atómico
+    // (GetFeatureInfo a nivel de servicio completo). WMS con sublayers ya
+    // recibió su popupTemplate por sublayer dentro de _buildParams.
+    _aplicarPopupGenerico(layer, config);
+
+    
+
+    return layer;
 
   } catch (err) {
     console.error(`[layerFactory] Error al crear capa "${config.id}":`, err);
@@ -130,7 +140,7 @@ export async function crearCapaWfsHija(featureType, configPadre) {
     // El separador "::" es suficientemente raro en los nombres OGC para evitar colisiones.
     const hijoId = `${configPadre.id}::${featureType.name}`; //IGN::Municipios Catastro::Municipios. Si usa solo : los servicios OGC también lo usan y puede haber colisión
 
-    return new WFSLayer({
+    const layer = new WFSLayer({
       id:      hijoId,
       title:   featureType.title,
       url:     configPadre.url,
@@ -147,6 +157,12 @@ export async function crearCapaWfsHija(featureType, configPadre) {
       // Arrancan ocultas; el usuario las activa desde el árbol de capas.
       visible: false
     });
+
+    // Mismo helper que el flujo estándar — las capas WFS hijas también
+    // tienen atributos cliente reales, mismo mecanismo fieldInfos.
+    _aplicarPopupGenerico(layer, { tipo: "WFS" });
+
+    return layer;
 
   } catch (err) {
     console.error(
@@ -194,6 +210,7 @@ function _buildParams(config) { //config es json
       return {
         ...base,
         url: config.url,
+        featureInfoFormat: config.featureInfoFormat ?? "text/plain",
         // sublayers: mapea las sublayers curadas del catálogo al formato que WMSLayer espera.
         //
         // CAMBIO (01.07.26): config.sublayers pasa de array de strings a array de
@@ -214,7 +231,17 @@ function _buildParams(config) { //config es json
                 name:    sl.id,
                 title:   sl.title,
                 visible: sl.visible ?? false,
-                legendUrl: _construirLegendUrl(config.url, sl.id)
+                queryable: true,
+                popupEnabled: true,     
+                legendUrl: _construirLegendUrl(config.url, sl.id),
+                // GetFeatureInfo aislado a esta sublayer concreta. Se declara
+                // en construcción (no post-load) porque Sublayer acepta
+                // popupTemplate como propiedad del constructor igual que
+                // name/title/visible — evita esperar a layer.load().
+                popupTemplate: {
+                  title: sl.title,
+                  content: []
+                }
 
               })) }
             : {})
@@ -315,6 +342,7 @@ function _crsToWkid(crs) {
   return 4326;
 }
 
+// ─── Constructor URL de GetLegendGraphic ───────────────────────────────────────────
 /**
  * Construye la URL de GetLegendGraphic para una sublayer WMS individual,
  * siguiendo el estándar OGC soportado por GeoServer, MapServer y ArcGIS Server.
@@ -340,6 +368,58 @@ function _construirLegendUrl(serviceUrl, sublayerName) {
   });
   return `${serviceUrl}?${params.toString()}`;
 }
+
+// ─── Popup generico ───────────────────────────────────────────
+/**
+ * Aplica un popupTemplate genérico automático a capas que NO tienen
+ * curación editorial de popup en el catálogo (fase de validación rápida,
+ * previa a la Opción C — popup curado por campo `popup` en catalogo-capas.json).
+ *
+ * ── POR QUÉ DOS MECANISMOS DISTINTOS SEGÚN TIPO ──────────────────────────
+ * WFS/FEATURE cargan geometría + atributos en cliente → el SDK puede
+ * introspeccionar campos reales (fieldInfos: [] = autodetección total).
+ * WMS es imagen renderizada, no hay tabla de atributos en cliente → el
+ * popup dispara GetFeatureInfo contra el servidor (protocolo OGC distinto).
+ * "{*}" como content le dice al SDK que renderice la respuesta cruda del
+ * servidor para esa consulta puntual.
+ *
+ * ── POR QUÉ WMS-CON-SUBLAYERS NO SE TOCA AQUÍ ────────────────────────────
+ * Si config.sublayers existe, el popup ya se asignó por sublayer dentro de
+ * _buildParams (más preciso: aísla la respuesta a la sublayer clickeada).
+ * Aplicar aquí también pisaría esa configuración más fina con un popup a
+ * nivel de capa completa — la granularidad del popup espeja la granularidad
+ * de curación del catálogo, mismo principio que sublayers (30/06/26).
+ *
+ * @param {Layer} layer - Instancia ya creada (WFSLayer, FeatureLayer, WMSLayer)
+ * @param {Object} config - Config original del catálogo (o config mínimo
+ *   { tipo } cuando se invoca desde crearCapaWfsHija, que no tiene catálogo)
+ */
+function _aplicarPopupGenerico(layer, config) {
+  if (config.tipo === "WFS" || config.tipo === "FEATURE") {
+    layer.popupTemplate = {
+      title: layer.title || "Información",
+      content: [{ type: "fields"}]
+    };
+  } else if (config.tipo === "WMS") {
+
+    // El SDK v5 busca popupTemplate en la sublayer clickeada, no en la capa madre.
+    // Necesitamos recorrer las sublayers que el SDK ya cargó (que pueden ser más
+    // que las declaradas en el catálogo — el servidor puede tener capas adicionales).
+    if (!config.sublayers?.length) { 
+      // WMS atómico — popup a nivel de capa
+      layer.popupTemplate = {
+        title: layer.title || "Información",
+        content: "{*}"
+        };
+      } 
+  // GEOJSON, WMTS, ArcGIS_REST: sin popup automático todavía —
+  // fuera del alcance acordado en esta iteración.
+  }
+}
+
+
+
+
 
 // ─── REFERENCES ──────────────────────────────────
 

@@ -49,6 +49,8 @@ export async function inicializarCapa(layer, config, municipioData) {
   if (!layer || !config || !municipioData) return;
 
   try {
+
+    
     switch (config.disponibilidad_municipal) {
 
       case "BBOX":
