@@ -432,12 +432,16 @@ async function _handleWfsDiscovery(item) {
         });
         availabilityMap = new Map(featureTypes.map((ft, i) => [ft.name, results[i]]));
     } else {
-      // Sin bbox no podemos filtrar → asumir disponibles (degradación segura)
+      // Sin bbox no podemos verificar disponibilidad espacial → degradación segura:
+      // asumir todos los FeatureTypes disponibles y dejar que el usuario decida.
+      // Si el servidor no tiene datos en esta zona, la capa quedará vacía pero
+      // no bloqueará el discovery.
       console.warn("[layerTree] _municipioData.bbox no disponible; omitiendo check BBOX");
-      // availabilityMap = new Map(featureTypes.map(ft => [ft.name, true]));
+      availabilityMap = new Map(featureTypes.map(ft => [ft.name, true]));
+      
       // BUG MARCADO: aquí se usa `results[i]` aunque `results` no existe en esta rama.
-      // Si se corrige, esta rama debería mapear a `true` por defecto.
-      availabilityMap = new Map(featureTypes.map((ft, i) => [ft.name, results[i]]));
+      // Si se corrige, esta rama debería mapear a `true` por defecto.q
+      // availabilityMap = new Map(featureTypes.map((ft, i) => [ft.name, results[i]]));
     }
 
     // Crear instancias y nodos DOM en paralelo.
