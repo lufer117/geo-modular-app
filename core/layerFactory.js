@@ -207,45 +207,102 @@ function _buildParams(config) { //config es json
   switch (config.tipo) { // la función adapta el JSON del catalogo a los requisitos del SDK según el servicio
 
     case "WMS":
-      return {
-        ...base,
-        url: config.url,
-        featureInfoFormat: config.featureInfoFormat ?? "text/plain",
-        // sublayers: mapea las sublayers curadas del catálogo al formato que WMSLayer espera.
-        //
-        // CAMBIO (01.07.26): config.sublayers pasa de array de strings a array de
-        // objetos { id, title, visible }. Motivo — ver 3DECISIONS.md 30.06.26:
-        // la curación de qué sublayers se exponen y cómo se llaman es responsabilidad
-        // editorial del catálogo, no del servidor WMS.
-        //
-        // CRÍTICO: visible se fuerza explícitamente desde el catálogo (sl.visible ?? false).
-        // Sin esto, WMSLayer hereda el visible que declare el GetCapabilities del servidor,
-        // que casi siempre es `true` por defecto → causa raíz del bug "sublayers entran
-        // con check". El catálogo manda, no el proveedor externo.
-        //
-        // title también viaja en el objeto Esri: evita que layerTree.js tenga que
-        // decidir entre el title editorial del catálogo y el title crudo que devuelve
-        // el servidor (a veces técnico, en mayúsculas, o en otro idioma).
-        ...(config.sublayers?.length
-            ? { sublayers: config.sublayers.map(sl => ({
-                name:    sl.id,
-                title:   sl.title,
-                visible: sl.visible ?? false,
-                queryable: true,
-                popupEnabled: true,     
-                legendUrl: _construirLegendUrl(config.url, sl.id),
-                // GetFeatureInfo aislado a esta sublayer concreta. Se declara
-                // en construcción (no post-load) porque Sublayer acepta
-                // popupTemplate como propiedad del constructor igual que
-                // name/title/visible — evita esperar a layer.load().
-                popupTemplate: {
-                  title: sl.title,
-                  content: []
-                }
+  return {
+    ...base,
+    url: config.url,
 
-              })) }
-            : {})
-      };
+    // featureInfoFormat a nivel de WMSLayer (no de Sublayer).
+    // El SDK usa este valor para construir la petición GetFeatureInfo automática
+    // al hacer clic sobre la capa. "text/html" produce popups enriquecidos;
+    // "text/plain" es el fallback seguro para servidores que no soportan HTML.
+    // Se declara aquí (capa padre) porque afecta a todas las sublayers por igual.
+    featureInfoFormat: config.featureInfoFormat ?? "text/html",
+
+    // sublayers: mapea las sublayers curadas del catálogo al formato que WMSLayer espera.
+    //
+    // PATRÓN DE CURACIÓN EDITORIAL (30.06.26 — 3DECISIONS.md):
+    // A diferencia de WFS (donde el discovery automático es seguro porque cualquier
+    // FeatureType expuesto es útil), los servicios WMS mezclan capas de geometría
+    // con elementos de renderizado puro (labels, grids). El catálogo decide qué
+    // sublayers se exponen y con qué título — el servidor no manda.
+    //
+    // Sin sublayers en catálogo → capa atómica (comportamiento legacy sin cambios).
+    // Con sublayers en catálogo → se mapean aquí individualmente.
+    ...(config.sublayers?.length
+      ? {
+          sublayers: config.sublayers.map(sl => {
+            // Objeto base de la sublayer con propiedades siempre presentes.
+            // name es el identificador técnico que el servidor WMS reconoce
+            // en el parámetro LAYERS de la petición GetMap/GetFeatureInfo.
+            // title es el nombre editorial del catálogo, no el del servidor.
+            const sublayerObj = {
+              name:  sl.id,
+              title: sl.title,
+
+              // CRÍTICO: visible se fuerza desde el catálogo (sl.visible ?? false).
+              // Sin esto, WMSLayer hereda el visible del GetCapabilities del servidor,
+              // que casi siempre es `true` por defecto → bug "sublayers entran con check".
+              // El catálogo manda, no el proveedor externo.
+              visible: sl.visible ?? false,
+
+              // queryable: habilita GetFeatureInfo para esta sublayer.
+              // Se declara explícitamente porque algunos servidores lo exponen como
+              // queryable="0" en Capabilities aunque realmente lo soporten.
+              // El catálogo asume que si la incluimos, es consultable.
+              queryable: sl.queryable ?? true,
+
+              // popupEnabled: condición necesaria (además de queryable y featureInfoFormat)
+              // para que el SDK abra el popup al hacer clic. No se hereda del servidor
+              // ni se infiere desde queryable — debe declararse explícitamente.
+              // Sin esta propiedad, queryable y featureInfoFormat son condición necesaria
+              // pero no suficiente (01.07.26 — 3DECISIONS.md).
+              popupEnabled: sl.popupEnabled ?? true,
+
+              // popupTemplate vacío declarado en construcción (no post-load).
+              // Sublayer acepta popupTemplate como propiedad del constructor, igual que
+              // name/title/visible. El SDK rellenará el contenido con la respuesta
+              // GetFeatureInfo al hacer clic. content:[] es el placeholder que indica
+              // "sin template propio → usar la respuesta del servidor directamente".
+              popupTemplate: {
+                title:   sl.title,
+                content: []
+              }
+            };
+
+            // LEYENDA — lógica de tres casos
+            //
+            // CASO A: catálogo declara legendUrl como string → URL válida conocida.
+            //   Se pasa al SDK directamente. Útil para servicios con URL de leyenda
+            //   no estándar o que el catálogo quiere sobreescribir.
+            //
+            // CASO B: catálogo declara legendUrl como null → el servidor no soporta
+            //   GetLegendGraphic (ej. Catastro OVC). NO se añade la propiedad al
+            //   objeto sublayer. El SDK intentará leer <LegendURL> del Capabilities,
+            //   que en Catastro está anidada bajo la layer padre como simbolos.png.
+            //
+            // CASO C: legendUrl ausente en catálogo (undefined) → comportamiento por defecto.
+            //   _construirLegendUrl() genera la URL estándar de GetLegendGraphic.
+            //   Funciona para servicios conformes al estándar OGC (IGN, GeoServer, IDENA...).
+            //
+            // NUNCA se pasa legendUrl: null al objeto Esri. El SDK interpreta null como
+            // "sin leyenda" y muestra "no legend". undefined (propiedad ausente) activa
+            // el mecanismo automático de lectura desde Capabilities.
+            if (typeof sl.legendUrl === "string") {
+              // Caso A: URL explícita en catálogo
+              sublayerObj.legendUrl = sl.legendUrl;
+            } else if (sl.legendUrl === undefined) {
+              // Caso C: no declarada → generar URL estándar GetLegendGraphic
+              const generada = _construirLegendUrl(config.url, sl.id);
+              if (generada) sublayerObj.legendUrl = generada;
+            }
+            // Caso B: sl.legendUrl === null → no añadir propiedad → SDK lee Capabilities
+
+            return sublayerObj;
+          })
+        }
+      : {}  // Sin sublayers en catálogo → WMSLayer atómica, SDK gestiona todo
+    )
+  };
 
     case "WMTS":
       return {

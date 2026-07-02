@@ -32,7 +32,7 @@
     { "id": "AU.Sigpac:recinto", "title": "Recintos SIGPAC", "visible": false  },
     { "id": "AU.Sigpac:cultivo_declarado", "title": "Cultivo Declarado 2025", "visible": false },
     { "id": "AU.Sigpac:e_paisaje", "title": "E.Paisaje - Área", "visible": false },
-    { "id": "AU.Sigpac:e_paisaje_linea", "title": "E.Paisaje - línea", "visible": false },
+    { "id": "AU.Sigpac:e_paisaje_linea", "title": "E.Paisaje - línea", "visible": false},
     { "id": "AU.Sigpac:e_paisaje_punto", "title": "E.Paisaje - Punto", "visible": false }
   ]
   },
@@ -52,12 +52,12 @@
   "prioridad": "P0",
   "tags": ["parcelas", "edificios", "referencia catastral", "propiedad", "catastro"],
   "sublayers": [
-    { "id": "Catastro", "title": "Catastro", "visible": false },
-    { "id": "PARCELA", "title": "Parcela", "visible": false },
-    { "id": "SUBPARCE", "title": "Subparcela", "visible": false },
-    { "id": "CONSTRU", "title": "Construcciones", "visible": false }
+    { "id": "Catastro", "title": "Catastro", "visible": false, "legendUrl": "https://ovc.catastro.meh.es/Cartografia/WMS/simbolos.png" },
+    { "id": "PARCELA", "title": "Parcela", "visible": false, "legendUrl": "https://ovc.catastro.meh.es/Cartografia/WMS/simbolos.png"  },
+    { "id": "SUBPARCE", "title": "Subparcela", "visible": false, "legendUrl": "https://ovc.catastro.meh.es/Cartografia/WMS/simbolos.png"  },
+    { "id": "CONSTRU", "title": "Construcciones", "visible": false, "legendUrl": "https://ovc.catastro.meh.es/Cartografia/WMS/simbolos.png"}
   ]
-},
+  },
 
   {
     "id": "ign-cnig-redes-geodesicas-del-ign-de-espana-wfs",
