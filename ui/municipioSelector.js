@@ -112,7 +112,24 @@ export function renderMunicipioSelector(container, deployment = { municipios: []
     return;
   }
 
-  // ── Construir el selector Calcite ──
+  // ── Municipio único: carga automática, sin selector en el DOM ────────────
+  // Con un solo municipio configurado el selector no aporta valor al usuario
+  // final: no hay nada que elegir. El contenedor queda vacío intencionalmente
+  // para no romper el layout del slot content-center de calcite-navigation.
+  // La carga se dispara aquí directamente, sin esperar interacción.
+  // _municipioActivo como guardia evita doble carga si idioma-cambiado
+  // vuelve a invocar renderMunicipioSelector con el mismo municipio.
+  if (municipiosVisibles.length === 1) {
+    const unicoCodigo = municipiosVisibles[0].codigo_ine;
+    if (_municipioActivo !== unicoCodigo) {
+      _cargarMunicipio(unicoCodigo);
+    }
+    return; // ← sale sin construir ningún elemento DOM
+  }
+
+  // ── Varios municipios: construir el selector Calcite ─────────────────────
+  // A partir de aquí el código es idéntico al actual, sin cambios.
+  
   const label = document.createElement("calcite-label");
   label.setAttribute("layout", "inline");
   label.textContent = t("nav.municipio.label"); // no hardcoded
@@ -146,19 +163,7 @@ export function renderMunicipioSelector(container, deployment = { municipios: []
   label.appendChild(select);
   el.appendChild(label);
 
-  // ── Carga automática para instancias de un solo municipio ──
-  // Cuando el deployment declara exactamente un municipio, no esperamos
-  // interacción del usuario: seleccionamos directamente y disparamos la carga.
-  // Llamamos a _cargarMunicipio en lugar de simular el evento Calcite porque
-  // el evento puede no dispararse de forma fiable con un único elemento.
-  if (municipiosVisibles.length === 1) {
-    const unicoCodigo = municipiosVisibles[0].codigo_ine;
-    select.value = unicoCodigo;
-
-    if (_municipioActivo !== unicoCodigo) {
-      _cargarMunicipio(unicoCodigo);
-    }
-  }
+  
 }
 
 // ─── Handlers privados ────────────────────────────────────────────────────────
