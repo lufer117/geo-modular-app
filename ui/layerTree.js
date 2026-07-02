@@ -435,6 +435,8 @@ async function _handleWfsDiscovery(item) {
       // Sin bbox no podemos filtrar → asumir disponibles (degradación segura)
       console.warn("[layerTree] _municipioData.bbox no disponible; omitiendo check BBOX");
       // availabilityMap = new Map(featureTypes.map(ft => [ft.name, true]));
+      // BUG MARCADO: aquí se usa `results[i]` aunque `results` no existe en esta rama.
+      // Si se corrige, esta rama debería mapear a `true` por defecto.
       availabilityMap = new Map(featureTypes.map((ft, i) => [ft.name, results[i]]));
     }
 
