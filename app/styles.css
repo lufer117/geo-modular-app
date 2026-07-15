@@ -30,14 +30,20 @@ calcite-shell {
   display: block;
   height: 100vh;
   width: 100vw;
+  --app-nav-height: 65px; /* altura real de calcite-navigation */
 }
 
 /* ── Contenedor del mapa ─────────────────────────────────────────────────── */
 #map-container {
-  position: relative;
-  width: 100%;
-  height: 100%;
+  position: fixed;
+  top: var(--app-nav-height);   /* ← altura exacta de calcite-navigation */
+  left: 58px;
+  right: 0;
+  bottom: 0;
+  width: auto;
+  height: auto;
   overflow: hidden;
+  z-index: 0;
 }
 
 /* Ambas vistas superpuestas — ocupan el mismo espacio */
@@ -47,6 +53,8 @@ arcgis-scene {
   inset: 0;
   width: 100%;
   height: 100%;
+  /* Asegurar que los slots del SDK no queden bajo otros elementos */
+  isolation: isolate;  /* ← crea contexto de apilamiento propio */
 }
 
 /* El atributo hidden nativo detiene el rendering del SDK.
@@ -62,13 +70,14 @@ arcgis-scene[hidden] {
   visibility: visible;
   opacity: 1;
   pointer-events: auto;
+  z-index: 1;
 }
 .vista-inactiva {
+  visibility: hidden;   /* ← detiene el render del shadow DOM */
   opacity: 0;
   pointer-events: none;
-  z-index: -1;
+  z-index: 0;
 }
-
 /* .hidden se mantiene para otros elementos de la app (banners, etc.) */
 .hidden {
   display: none !important;
@@ -179,7 +188,7 @@ calcite-shell-panel {
 .legend-float {
   position: absolute;
   top: auto;           /* se sobreescribirá por JS al primer drag */
-  bottom: 60px;        /* posición inicial antes del primer drag */
+  bottom: auto;        /* posición inicial antes del primer drag */
   left: 58px;          /* a la derecha del action bar colapsado */
   width: 200px;
   max-height: 320px;
@@ -239,7 +248,7 @@ calcite-shell-panel {
   position: absolute;
   bottom: 44px;        /* era 10px — ahora por encima del coordinates tool */
   right: 10px;
-  z-index: 10;
+  z-index: 5;
   background: var(--calcite-color-foreground-1);
   border: 1px solid var(--calcite-color-border-3);
   border-radius: var(--calcite-border-radius);

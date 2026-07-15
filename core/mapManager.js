@@ -209,6 +209,7 @@ export async function toggleVista() {
 
   console.info(`[mapManager] Vista cambiada a ${_vistaActiva}`);
   eventBus.emit("vista-cambiada", { modo: _vistaActiva });
+  
   return _vistaActiva;
 }
 

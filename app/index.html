@@ -138,8 +138,15 @@
         <arcgis-zoom             slot="top-right"></arcgis-zoom>
         <arcgis-home             slot="top-right"></arcgis-home>
         <arcgis-popup></arcgis-popup>
-        <arcgis-scale-bar        slot="bottom-left" unit="metric"></arcgis-scale-bar>
-        <arcgis-coordinates-tool slot="bottom-right"></arcgis-coordinates-tool>
+        <arcgis-scale-bar        slot="bottom-right" unit="metric"></arcgis-scale-bar>
+        <arcgis-coordinate-conversion
+          slot="top-start"
+          view="Map"
+          mode="live"
+          orientation="auto"
+          hide-settings-button
+          hide-input-button>
+        </arcgis-coordinate-conversion>
       </arcgis-map>
 
       <!-- Vista 3D — oculta al inicio -->
@@ -150,6 +157,8 @@
         <arcgis-navigation-toggle slot="top-right"></arcgis-navigation-toggle>
         <arcgis-scale-bar         slot="bottom-left" unit="metric"></arcgis-scale-bar>
       </arcgis-scene>
+
+      
 
       <!--
         Contenedor de la leyenda flotante.
