@@ -157,21 +157,21 @@
         Posición: esquina inferior derecha, sobre el mapa.
         Oculto por defecto; actionBar.js lo muestra/oculta.
       -->
-      <div id="legend-float-container" class="legend-float hidden">
-        <div class="legend-float-header">
-          <span
-            class="legend-float-title"
-            data-i18n="panel.legend.heading"
-          ></span>
-          <calcite-action
-            id="legend-float-close"
-            icon="x"
-            scale="s"
-            appearance="transparent"
-          ></calcite-action>
-        </div>
-        <div id="legend-container"></div>
+    <div id="legend-float-container" class="legend-float hidden">
+      <div class="legend-float-header">
+        <span
+          class="legend-float-title legend-drag-handle"
+          data-i18n="panel.legend.heading"
+        ></span>
+        <calcite-action
+          id="legend-float-close"
+          icon="x"
+          scale="s"
+          appearance="transparent"
+        ></calcite-action>
       </div>
+      <div id="legend-container"></div>
+    </div>
 
       <!--
         Trigger de leyenda sobre el mapa.
