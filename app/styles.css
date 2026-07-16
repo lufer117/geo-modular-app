@@ -37,7 +37,7 @@ calcite-shell {
 #map-container {
   position: fixed;
   top: var(--app-nav-height);   /* ← altura exacta de calcite-navigation */
-  left: 58px;
+  left: 0;
   right: 0;
   bottom: 0;
   width: auto;
@@ -127,7 +127,30 @@ arcgis-scene[hidden] {
   opacity: 0.9;
 }
 
+/* ── ActionBar ───────────────────────────────────────────── */
 
+calcite-shell-panel {
+  --calcite-shell-panel-background-color: transparent;
+  --calcite-shell-panel-shadow: none;
+  height: fit-content !important;
+  align-self: flex-start;  /* ← evita que el flex del shell lo estire */
+}
+
+
+calcite-shell-panel[collapsed] {
+  --calcite-shell-panel-width: 0px;
+}
+
+#main-action-bar {
+  --calcite-action-bar-background: var(--calcite-color-foreground-1);
+  position: relative;
+  z-index: 1;
+}
+
+calcite-shell-panel::part(container) {
+  background: transparent;
+  box-shadow: none;
+}
 
 /* ── Panel lateral: secciones ───────────────────────────────────────────── */
 
@@ -143,6 +166,8 @@ calcite-block {
   width: 100%;
 }
 
+
+
 /* ── Scroll del panel de capas ───────────────────────────────────────────────
    Por qué: overflow-y:auto depende de que el navegador detecte que el
    contenido supera la altura disponible — con Shadow DOM de Calcite ese
@@ -150,9 +175,6 @@ calcite-block {
    visible, eliminando la condición de detección.
    ─────────────────────────────────────────────────────────────────────────── */
 
-calcite-shell-panel {
-  height: 100%;
-}
 
 #panel-capas {
   height: 100%;
@@ -163,6 +185,8 @@ calcite-shell-panel {
   overflow-y: scroll;   /* scroll fijo, no condicional */
   max-height: 70vh;     /* techo explícito por si el cálculo de altura falla */
 }
+
+
 
 /* ── Árbol de capas ──────────────────────────────────────────────────────── */
 
@@ -285,6 +309,8 @@ calcite-shell-panel {
   text-align: center;
   font-size: var(--calcite-font-size--1, 0.875rem);
 }
+
+
 
 /* ══════════════════════════════════════════════════════════════════
    ÁRBOL DE CAPAS 

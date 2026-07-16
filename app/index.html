@@ -25,12 +25,18 @@
 
   <script type="module" src="https://js.arcgis.com/5.0/"></script>
   <link rel="stylesheet" href="https://js.arcgis.com/5.0/esri/themes/light/main.css" />
-
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
 
-  <calcite-shell>
+  <!--
+    calcite-shell: contenedor raíz de toda la app.
+    content-behind: el mapa ocupa todo el viewport incluyendo
+    el área bajo los paneles laterales — los paneles flotan encima.
+    Sin este atributo, el shell reserva espacio lateral para los paneles
+    y el mapa se encoge cuando se abren.
+  -->
+  <calcite-shell content-behind>
 
     <!-- ═══ CABECERA ══════════════════════════════════════════════════════ -->
     <calcite-navigation slot="header">
@@ -43,35 +49,52 @@
 
       <div slot="content-center" id="municipio-selector-container"></div>
 
-      <!--
-        toolbar-container ahora solo aloja el selector de idioma.
-        El toggle 2D/3D se traslada al action bar (actionBar.js).
-      -->
       <div slot="content-end" id="lang-selector-container"></div>
-       
 
     </calcite-navigation>
 
-    <!-- ═══ ACTION BAR + PANELES LATERALES ═══════════════════════════════
-      calcite-shell-panel con display-mode="float" hace que los paneles
-      floten sobre el mapa sin reducir su área. El action bar vive dentro
-      del shell-panel y controla qué panel está abierto.
-    ════════════════════════════════════════════════════════════════════════ -->
-    <calcite-shell-panel slot="panel-start" display-mode="float" id="shell-panel-start" collapsed>
+    <!-- ═══ PANEL LATERAL ════════════════════════════════════════════════
+      Patrón oficial Calcite para apps GIS:
+      - calcite-shell-panel con display-mode="float" flota sobre el mapa
+        sin empujarlo ni reservar espacio lateral.
+      - El action-bar va en slot="action-bar" DENTRO del shell-panel.
+        Así el panel de contenido "sale" del action-bar hacia la derecha
+        al abrirse — comportamiento nativo del componente.
+      - collapsed al inicio: solo se ve el action-bar (franja delgada),
+        sin fondo blanco. El panel de contenido está cerrado (closed).
+      - Al hacer clic en una acción: collapsed=false + panel.closed=false
+        → el panel aparece a la derecha del action-bar.
+      - Al cerrar con X: panel.closed=true + collapsed=true.
+    ═════════════════════════════════════════════════════════════════════ -->
+    <calcite-shell-panel
+      slot="panel-start"
+      display-mode="float-all"
+      id="shell-panel-start"
+      collapsed
+      width-scale="l"
+    >
 
       <!--
-        calcite-action-bar: barra de iconos vertical en el borde izquierdo.
-        Los calcite-action muestran solo iconos; el texto vive como tooltip nativo
-        mediante title/label y actionBar.js sincroniza el estado de la vista.
+        calcite-action-bar en su slot correcto dentro del shell-panel.
+        Con esto el panel de capas "emerge" del action-bar al abrirse.
+        overflow-actions-disabled: evita que las acciones se colapsen
+        en un menú desbordante — preferimos scroll vertical.
+        El botón de expandir/colapsar texto es nativo del componente.
       -->
-      <calcite-action-bar slot="action-bar" id="main-action-bar">
+      <calcite-action-bar
+        slot="action-bar"
+        id="main-action-bar"
+        overflow-actions-disabled
+        expand-disabled
+      >
+        <!-- <calcite-tooltip slot="expand-tooltip">Expandir / Colapsar</calcite-tooltip> -->
 
-        <!-- Grupo principal: herramientas de exploración de datos -->
         <calcite-action-group>
 
           <calcite-action
             id="action-capas"
             icon="layers"
+            text="Capas"
             data-i18n-props='{"text":"action.capas","title":"action.capas","label":"action.capas"}'
             data-panel="panel-capas"
           ></calcite-action>
@@ -79,31 +102,35 @@
           <calcite-action
             id="action-leyenda"
             icon="legend"
+            text="Leyenda"
             data-i18n-props='{"text":"action.leyenda","title":"action.leyenda","label":"action.leyenda"}'
             data-action="toggle-leyenda"
           ></calcite-action>
 
-               
-        <calcite-action
-          id="action-toggle-vista"
-          icon="3d"
-          data-i18n-props='{"text":"action.toggle3d","title":"action.toggle3d","label":"action.toggle3d"}'
-          data-action="toggle-vista"
-        ></calcite-action>
-       
-      
+          <calcite-action
+            id="action-toggle-vista"
+            icon="3d"
+            text="3D"
+            data-i18n-props='{"text":"action.toggle3d","title":"action.toggle3d","label":"action.toggle3d"}'
+            data-action="toggle-vista"
+          ></calcite-action>
 
         </calcite-action-group>
 
       </calcite-action-bar>
 
-      <!-- Panel de capas — abierto/cerrado por actionBar.js -->
+      <!--
+        Panel de contenido: hermano del action-bar dentro del shell-panel.
+        closed al inicio — se abre desde actionBar.js al hacer clic en
+        el icono de capas.
+        closable: muestra botón X nativo; actionBar.js escucha
+        calcitePanelClose para colapsar el shell-panel también.
+      -->
       <calcite-panel
         id="panel-capas"
         data-i18n-props='{"heading":"panel.capas.heading"}'
         closable
         closed
-        scroll
       >
 
         <calcite-block
@@ -117,7 +144,7 @@
 
         <calcite-block
           id="capas-block"
-          heading="Cargando..." 
+          heading="Cargando..."
           data-i18n="panel.capas.heading"
           data-i18n-attr="heading"
           expanded
@@ -129,7 +156,10 @@
 
     </calcite-shell-panel>
 
-    <!-- ═══ ÁREA CENTRAL: MAPA ════════════════════════════════════════════ -->
+    <!-- ═══ ÁREA CENTRAL: MAPA ════════════════════════════════════════════
+      position:fixed en CSS para que los slots bottom-* del SDK
+      queden anclados al viewport y no sean recortados por el shell.
+    ═════════════════════════════════════════════════════════════════════ -->
     <div id="map-container">
 
       <!-- Vista 2D — activa por defecto -->
@@ -140,12 +170,11 @@
         <arcgis-scale-bar        slot="bottom-right" unit="metric"></arcgis-scale-bar>
         <arcgis-coordinate-conversion
           slot="top-start"
-          view="Map"
           mode="live"
           orientation="auto"
           hide-settings-button
-          hide-input-button>
-        </arcgis-coordinate-conversion>
+          hide-input-button
+        ></arcgis-coordinate-conversion>
       </arcgis-map>
 
       <!-- Vista 3D — oculta al inicio -->
@@ -157,37 +186,38 @@
         <arcgis-scale-bar         slot="bottom-left" unit="metric"></arcgis-scale-bar>
       </arcgis-scene>
 
-      
-
       <!--
-        Contenedor de la leyenda flotante.
-        legendPanel.js monta el <arcgis-legend> aquí.
-        Posición: esquina inferior derecha, sobre el mapa.
-        Oculto por defecto; actionBar.js lo muestra/oculta.
+        Leyenda flotante arrastrable.
+        legendPanel.js monta el <arcgis-legend> en #legend-container.
+        actionBar.js gestiona visibilidad y drag.
+        Oculto por defecto con clase .hidden.
       -->
-    <div id="legend-float-container" class="legend-float hidden">
-      <div class="legend-float-header">
-        <span
-          class="legend-float-title legend-drag-handle"
-          data-i18n="panel.legend.heading"
-        ></span>
-        <calcite-action
-          id="legend-float-close"
-          icon="x"
-          scale="s"
-          appearance="transparent"
-        ></calcite-action>
+      <div id="legend-float-container" class="legend-float hidden">
+        <div class="legend-float-header">
+          <span
+            class="legend-float-title legend-drag-handle"
+            data-i18n="panel.legend.heading"
+          ></span>
+          <calcite-action
+            id="legend-float-close"
+            icon="x"
+            scale="s"
+            appearance="transparent"
+          ></calcite-action>
+        </div>
+        <div id="legend-container"></div>
       </div>
-      <div id="legend-container"></div>
-    </div>
 
       <!--
-        Trigger de leyenda sobre el mapa.
-        Segundo punto de entrada: el usuario puede abrir la leyenda
-        directamente desde el mapa sin pasar por el action bar.
-        actionBar.js lo conecta al mismo toggle.
+        Botón trigger de leyenda sobre el mapa.
+        Segundo punto de entrada para abrir la leyenda flotante
+        sin pasar por el action bar.
       -->
-      <button id="legend-map-trigger" class="legend-map-trigger" data-i18n="panel.legend.heading"></button>
+      <button
+        id="legend-map-trigger"
+        class="legend-map-trigger"
+        data-i18n="panel.legend.heading"
+      ></button>
 
     </div>
 

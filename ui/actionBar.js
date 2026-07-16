@@ -81,6 +81,12 @@ function _registrarListeners() {
   _actionCapas.addEventListener("click",   () => _togglePanel("panel-capas", _actionCapas));
   _actionLeyenda.addEventListener("click", () => _setLeyendaVisible(!_legendVisible));
   _actionVista.addEventListener("click",   () => _handleToggleVista());
+  // El botón X nativo del calcite-panel emite calcitePanelClose.
+  // Cuando el usuario cierra el panel con la X, colapsamos el shell-panel también.
+  _panelCapas.addEventListener("calcitePanelClose", () => {
+    if (_shellPanelStart) _shellPanelStart.collapsed = true;
+    if (_actionCapas)    _actionCapas.active = false;
+  });
 
   // Estos dos no cambian
   _legendClose.addEventListener("click",   () => _setLeyendaVisible(false));
@@ -215,6 +221,7 @@ function _togglePanel(panelId, actionEl) {
   if (!panel) return;
 
   const estaAbierto = !panel.closed;
+  
 
   // Cerrar todos los paneles y desactivar todos los botones de panel
   _cerrarTodosLosPaneles();
@@ -305,4 +312,4 @@ function _actualizarBotonVista(modo) {
     _actionVista.active = false;
   }
 }
-
+ 
