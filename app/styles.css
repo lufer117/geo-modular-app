@@ -292,6 +292,21 @@ calcite-block {
   border-color: var(--calcite-color-brand);
 }
 
+
+
+/* ── Coordenadas ───────────────────────────────────────────────── */
+arcgis-coordinate-conversion {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  opacity: 0.70;
+
+  /* border-radius: 10px; */
+  /* box-shadow: 0 2px 8px rgba(255, 255, 255, 0.3); */
+  outline: none;
+}
 /* ── Banner de error fatal ───────────────────────────────────────────────── */
 
 .app-error-banner {
@@ -313,7 +328,7 @@ calcite-block {
 
 
 /* ══════════════════════════════════════════════════════════════════
-   ÁRBOL DE CAPAS 
+   ÁRBOL DE CAPAS
    ══════════════════════════════════════════════════════════════════ */
 
 /* Nivel 1: bloque temático — negrita y color de acento */

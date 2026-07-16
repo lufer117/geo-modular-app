@@ -209,6 +209,13 @@ export async function toggleVista() {
 
   console.info(`[mapManager] Vista cambiada a ${_vistaActiva}`);
   eventBus.emit("vista-cambiada", { modo: _vistaActiva });
+
+  // Actualizar reference-element del componente de coordenadas al cambiar vista
+  document.querySelector("arcgis-coordinate-conversion")
+    ?.setAttribute("reference-element", _vistaActiva === "3D" ? "scene-view" : "map-view");
+
+
+  
   
   return _vistaActiva;
 }
