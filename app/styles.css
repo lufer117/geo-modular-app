@@ -223,9 +223,8 @@ calcite-block {
    Sin bottom/right fijos porque el drag los sustituye por top/left en JS */
 .legend-float {
   position: absolute;
-  top: auto;           /* se sobreescribirá por JS al primer drag */
-  bottom: auto;        /* posición inicial antes del primer drag */
-  left: 58px;          /* a la derecha del action bar colapsado */
+  /* ELIMINAR top: auto y bottom: auto y left: 58px */
+  /* La posición inicial la calcula _posicionarJuntoAlTrigger() */
   width: 200px;
   max-height: 320px;
   background: var(--calcite-color-foreground-1);
@@ -235,10 +234,9 @@ calcite-block {
   z-index: 10;
   display: flex;
   flex-direction: column;
-  user-select: none;   /* evita selección de texto al arrastrar */
-  transition: opacity 0.15s, visibility 0.15s;  /* transición suave al aparecer/desaparecer sin reflow */
+  user-select: none;
+  transition: opacity 0.15s, visibility 0.15s;
 }
-
 /* Ocultar con visibility en lugar de display:none —
    evita que arcgis-legend se desmonte y re-renderice (causa del parpadeo) */
 .legend-float.hidden {
@@ -282,7 +280,7 @@ calcite-block {
 /* trigger sube para no tapar coordinates-tool (~32px alto)*/
 .legend-map-trigger {
   position: absolute;
-  bottom: 44px;        /* era 10px — ahora por encima del coordinates tool */
+  bottom: 20px;        /* era 10px — ahora por encima del coordinates tool */
   right: 10px;
   z-index: 5;
   background: var(--calcite-color-foreground-1);
