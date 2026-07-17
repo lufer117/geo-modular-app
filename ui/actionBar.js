@@ -83,10 +83,10 @@ function _registrarListeners() {
   _actionVista.addEventListener("click",   () => _handleToggleVista());
   // El botón X nativo del calcite-panel emite calcitePanelClose.
   // Cuando el usuario cierra el panel con la X, colapsamos el shell-panel también.
-  _panelCapas.addEventListener("calcitePanelClose", () => {
-    if (_shellPanelStart) _shellPanelStart.collapsed = true;
-    if (_actionCapas)    _actionCapas.active = false;
-  });
+  // _panelCapas.addEventListener("calcitePanelClose", () => {
+  //   if (_shellPanelStart) _shellPanelStart.collapsed = true;
+  //   if (_actionCapas)    _actionCapas.active = false;
+  // });
 
   // Estos dos no cambian
   _legendClose.addEventListener("click",   () => _setLeyendaVisible(false));

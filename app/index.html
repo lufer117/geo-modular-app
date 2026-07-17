@@ -123,13 +123,15 @@
         Panel de contenido: hermano del action-bar dentro del shell-panel.
         closed al inicio — se abre desde actionBar.js al hacer clic en
         el icono de capas.
-        closable: muestra botón X nativo; actionBar.js escucha
-        calcitePanelClose para colapsar el shell-panel también.
+
+        para mostrar X de cerrar panel añadir
+
+        data-i18n-props='{"heading":"panel.capas.heading"}'
+        closable
+        
       -->
       <calcite-panel
         id="panel-capas"
-        data-i18n-props='{"heading":"panel.capas.heading"}'
-        closable
         closed
       >
 
@@ -147,7 +149,8 @@
           heading="Cargando..."
           data-i18n="panel.capas.heading"
           data-i18n-attr="heading"
-          expanded
+          collapsible
+          collapsed
         >
           <div id="layer-tree-container"></div>
         </calcite-block>
@@ -167,7 +170,7 @@
         <arcgis-zoom             slot="top-right"></arcgis-zoom>
         <arcgis-home             slot="top-right"></arcgis-home>
         <arcgis-popup></arcgis-popup>
-        <arcgis-scale-bar        slot="bottom-right" unit="metric"></arcgis-scale-bar>
+        <arcgis-scale-bar        slot="bottom-left" unit="metric"></arcgis-scale-bar>
       </arcgis-map>
 
       <!-- Vista 3D — oculta al inicio -->
