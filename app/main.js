@@ -42,6 +42,7 @@ import { initLayerTree }           from "../ui/layerTree.js";
 import { initLegendPanel }         from "../ui/legendPanel.js";
 import { initToolbar }             from "../ui/toolbar.js";
 import * as eventBus from '../utils/eventBus.js';
+import { initMapControls } from "../ui/mapControls.js";
 
 
 
@@ -176,6 +177,7 @@ async function main() {
     // El orden importa: la toolbar y el selector están en la cabecera (visibles de entrada).
     // El árbol y la leyenda se construyen cuando "municipio-cargado" se emite con EVENTBUS
     initActionBar(); // inicializa actionbar
+    initMapControls(); // inicializa controles del mapa
     renderMunicipioSelector("#municipio-selector-container", DEPLOYMENT); // styles & eventBus.emit("municipio-cargado")
     renderBasemapSelector("#basemap-selector-container"); // conecta con styles
     initLayerTree("#layer-tree-container"); // conecta con styles 

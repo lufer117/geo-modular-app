@@ -97,18 +97,9 @@
             text="Capas"
             data-i18n-props='{"text":"action.capas","title":"action.capas","label":"action.capas"}'
             data-panel="panel-capas"
-          ></calcite-action>
+          ></calcite-action>        
 
-          
-
-          <calcite-action
-            id="action-toggle-vista"
-            icon="3d"
-            text="3D"
-            data-i18n-props='{"text":"action.toggle3d","title":"action.toggle3d","label":"action.toggle3d"}'
-            data-action="toggle-vista"
-          ></calcite-action>
-
+        
         </calcite-action-group>
 
       </calcite-action-bar>
@@ -163,6 +154,21 @@
       <arcgis-map id="map-view" class="vista-activa">
         <arcgis-zoom             slot="top-right"></arcgis-zoom>
         <arcgis-home             slot="top-right"></arcgis-home>
+        <arcgis-compass slot="top-right"></arcgis-compass>
+        <arcgis-locate  slot="top-right"></arcgis-locate>
+
+        <!-- Toggle en slot="top-right" → el SDK lo apila debajo del locate -->
+        <calcite-button
+          id="btn-toggle-vista"
+          slot="top-right"
+          icon-start="3d"
+          appearance="outline-fill"
+          kind="neutral"
+          scale="m"
+          label="Alternar 2D/3D"
+          title="Alternar 2D/3D"
+        ></calcite-button>
+
         <arcgis-popup></arcgis-popup>
         <arcgis-scale-bar        slot="bottom-left" unit="metric"></arcgis-scale-bar>
       </arcgis-map>
@@ -171,6 +177,21 @@
       <arcgis-scene id="scene-view" class="vista-inactiva">
         <arcgis-zoom              slot="top-right"></arcgis-zoom>
         <arcgis-home              slot="top-right"></arcgis-home>
+        <arcgis-compass slot="top-right"></arcgis-compass>
+        <arcgis-locate  slot="top-right"></arcgis-locate>
+
+        <!-- Mismo botón de la vista 2d — apunta al mismo id, queda solo uno activo -->
+        <calcite-button
+          id="btn-toggle-vista-scene"
+          slot="top-right"
+          icon-start="2d"
+          appearance="outline-fill"
+          kind="neutral"
+          scale="m"
+          label="Alternar 2D/3D"
+          title="Alternar 2D/3D"
+        ></calcite-button>
+        
         <arcgis-popup></arcgis-popup>
         <arcgis-navigation-toggle slot="top-right"></arcgis-navigation-toggle>
         <arcgis-scale-bar         slot="bottom-left" unit="metric"></arcgis-scale-bar>
@@ -185,7 +206,9 @@
           hide-settings-button
           hide-input-button
         ></arcgis-coordinate-conversion>
-  
+      
+      
+
 
       <!--
         Leyenda flotante arrastrable.
