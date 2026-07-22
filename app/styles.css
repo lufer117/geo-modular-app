@@ -322,17 +322,6 @@ arcgis-coordinate-conversion {
 
 
 
-/* ── Toggle 2D/3D sobre el mapa ─────────────────────────────────────────── */
-/* Alineado con los controles nativos del SDK (zoom, home, compass) que
-   el SDK posiciona en top-right con un offset de ~15px desde el borde.
-   top: 55px deja espacio para zoom (2 botones ~88px) + home (~44px) = ~147px.
-   Ajusta si añades más widgets en slot="top-right". */
-#view-toggle-container {
-  position: absolute;
-  top: 155px;   /* debajo de zoom + home + compass */
-  right: 15px;
-  z-index: 5;
-}
 
 
 /* ── Banner de error fatal ───────────────────────────────────────────────── */

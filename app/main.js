@@ -40,7 +40,7 @@ import { renderMunicipioSelector } from "../ui/municipioSelector.js";
 import { renderBasemapSelector }   from "../ui/basemapSelector.js";
 import { initLayerTree }           from "../ui/layerTree.js";
 import { initLegendPanel }         from "../ui/legendPanel.js";
-import { initToolbar }             from "../ui/toolbar.js";
+import { initHeaderControls }      from "../ui/headerControls.js";
 import * as eventBus from '../utils/eventBus.js';
 import { initMapControls } from "../ui/mapControls.js";
 
@@ -174,7 +174,7 @@ async function main() {
     
 
     // 5. Montar UI
-    // El orden importa: la toolbar y el selector están en la cabecera (visibles de entrada).
+    // El orden importa: la headerControls y el selector están en la cabecera (visibles de entrada).
     // El árbol y la leyenda se construyen cuando "municipio-cargado" se emite con EVENTBUS
     initActionBar(); // inicializa actionbar
     initMapControls(); // inicializa controles del mapa
@@ -182,7 +182,7 @@ async function main() {
     renderBasemapSelector("#basemap-selector-container"); // conecta con styles
     initLayerTree("#layer-tree-container"); // conecta con styles 
     initLegendPanel("map-view");  // conecta con styles, index (mapa inicia en 2d)
-    initToolbar(document.getElementById("lang-selector-container")); //toolbar se especializa en el cambio de idioma
+    initHeaderControls(document.getElementById("lang-selector-container")); // headerControls se especializa en el cambio de idioma
     
           // ─── AÑADIR AQUÍ LA LÓGICA DINÁMICA ───
       

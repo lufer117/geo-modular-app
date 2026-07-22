@@ -15,8 +15,7 @@
   "panel.capas.heading": "Geruza erabilgarriak",
   "panel.legend.heading": "Kondaira",
 
-
-  "toolbar.lang.label": "Hizkuntza",
+  "lang.selector.label": "Hizkuntza",
 
   "layers.loading": "Kargatzen...",
   "layers.empty": "Ez dago daturik eremu honetan",
@@ -25,4 +24,3 @@
   "layers.wfs.empty": "Ez da geruza motarik aurkitu",
   "layers.wfs.error": "Errorea zerbitzua kontsultatzean"
 }
-

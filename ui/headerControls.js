@@ -1,4 +1,4 @@
-  // ui/toolbar.js
+  // ui/headerControls.js
   // Responsabilidad: selector de idioma en la cabecera.
   
 
@@ -10,11 +10,11 @@
   import { on } from "../utils/eventBus.js";
 
   /**
-   * Inicializa el toolbar.
+   * Inicializa los controles del header.
    * Si el deployment tiene un solo idioma, no renderiza nada.
    * @param {HTMLElement} container — div#lang-selector-container
    */
-  export function initToolbar(container) {
+  export function initHeaderControls(container) {
     if (!container) return;
     if (DEPLOYMENT.idiomas.length <= 1) return;
 

@@ -10,16 +10,13 @@
   "action.toggle3d": "Alternar 2D/3D",
   "action.toggle2d": "Alternar 3D/2D",
 
- 
   "panel.layers.heading": "Capas",
   "panel.layers.description": "Selecciona un municipio para ver sus capas",
   "panel.basemap.heading": "Mapa base",
   "panel.capas.heading": "Capas disponibles",
   "panel.legend.heading": "Leyenda",
 
-  "toolbar.toggle3d": "Vista 3D",
-  "toolbar.toggle2d": "Vista 2D",
-  "toolbar.lang.label": "Idioma",
+  "lang.selector.label": "Idioma",
 
   "layers.loading": "Cargando...",
   "layers.empty": "Sin datos en esta zona",

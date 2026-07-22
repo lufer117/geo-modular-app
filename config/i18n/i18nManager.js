@@ -12,7 +12,7 @@
  *   - Cambio de idioma en runtime con actualización reactiva del DOM
  *
  * ── POR QUÉ UN MÓDULO CENTRAL ────────────────────────────────────────────
- * Distribuir la lógica de idioma entre módulos (toolbar, layerTree, etc.)
+ * Distribuir la lógica de idioma entre módulos (headerControls, layerTree, etc.)
  * crearía dependencias cruzadas y dificultaría añadir un nuevo idioma.
  * Con este módulo, añadir un idioma = añadir un JSON + una línea en deployment.
  *

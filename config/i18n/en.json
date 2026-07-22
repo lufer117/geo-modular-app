@@ -16,8 +16,7 @@
   "panel.capas.heading": "Available layers",
   "panel.legend.heading": "Legend",
 
-
-  "toolbar.lang.label": "Language",
+  "lang.selector.label": "Language",
 
   "layers.loading": "Loading...",
   "layers.empty": "No data in this area",
