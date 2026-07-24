@@ -71,7 +71,7 @@
       display-mode="float-all"
       id="shell-panel-start"
       collapsed
-      width-scale="l"
+      width-scale="m"
     >
 
       <!--
@@ -197,19 +197,6 @@
         <arcgis-scale-bar         slot="bottom-left" unit="metric"></arcgis-scale-bar>
       </arcgis-scene>
 
-      <!-- Coordenadas flotantes -->
-    
-      <arcgis-coordinate-conversion
-          reference-element="map-view"         
-          mode="live"
-          orientation="auto"
-          hide-settings-button
-          hide-input-button
-        ></arcgis-coordinate-conversion>
-      
-      
-
-
       <!--
         Leyenda flotante arrastrable.
         legendPanel.js monta el <arcgis-legend> en #legend-container.
@@ -233,15 +220,28 @@
       </div>
 
       <!--
-        Botón trigger de leyenda sobre el mapa.
+        Calcite action trigger de leyenda sobre el mapa.
         Segundo punto de entrada para abrir la leyenda flotante
-        sin pasar por el action bar.
       -->
-      <button
+      <calcite-action
         id="legend-map-trigger"
         class="legend-map-trigger"
+        icon="legend-plus"
+        text="Leyenda"
+        data-i18n-attr="text"
         data-i18n="panel.legend.heading"
-      ></button>
+        scale="m"
+      ></calcite-action>
+
+      <!-- Coordenadas flotantes -->
+    
+      <arcgis-coordinate-conversion
+          reference-element="map-view"         
+          mode="live"
+          orientation="auto"
+          hide-settings-button
+          hide-input-button
+        ></arcgis-coordinate-conversion>      
 
     </div>
 

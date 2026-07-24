@@ -278,30 +278,30 @@ calcite-block {
 }
 
 /* trigger sube para no tapar coordinates-tool (~32px alto)*/
+
 .legend-map-trigger {
   position: absolute;
-  bottom: 20px;        /* era 10px — ahora por encima del coordinates tool */
-  right: 10px;
   z-index: 5;
   background: var(--calcite-color-foreground-1);
-  border: 1px solid var(--calcite-color-border-3);
-  border-radius: var(--calcite-border-radius);
-  padding: 4px 10px;
-  font-size: var(--calcite-font-size--2);
-  color: var(--calcite-color-text-2);
-  cursor: pointer;
-  transition: background 0.15s;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s ease;
 }
 
-.legend-map-trigger:hover {
-  background: var(--calcite-color-foreground-2);
+.legend-map-trigger.legend-trigger--posicionado {
+  opacity: 1;
+  visibility: visible;
 }
 
-.legend-map-trigger.legend-trigger--active {
-  color: var(--calcite-color-brand);
-  border-color: var(--calcite-color-brand);
+
+.legend-map-trigger::part(button) {
+  outline: none;
 }
 
+.legend-map-trigger:focus-visible::part(button) {
+  outline: 2px solid var(--calcite-color-brand);
+  outline-offset: 2px;
+}
 
 
 /* ── Coordenadas ───────────────────────────────────────────────── */

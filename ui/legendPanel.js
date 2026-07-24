@@ -26,6 +26,7 @@ let _legendClose   = null; // <calcite-action id="legend-float-close"> — botó
 
 // ─── Estado interno ───────────────────────────────────────────────────────────
 let _legendVisible = false;
+let _vistaActual = "map-view"; // trackea qué toggle usar como referencia de posición
 
 // Estado del drag — scope de módulo para que _moverPanel los lea
 let _dragging = false;
@@ -49,11 +50,14 @@ export function initLegendPanel(initialViewId = "map-view") {
     return;
   }
 
+   _vistaActual = initialViewId; // guardar la vista inicial para que el trigger sepa a qué vista referenciarse
+
   // Crear el Web Component nativo de ArcGIS Maps SDK v5.
   // Es reactivo por diseño: se vincula a una vista mediante 'reference-element'
   // y se actualiza automáticamente cuando cambian las capas visibles.
   _legendEl = document.createElement("arcgis-legend");
   _legendEl.setAttribute("reference-element", initialViewId);
+
 
   // Solo mostrar capas con visibilidad activa en el mapa — leyenda limpia.
   _legendEl.setAttribute("hide-layers-not-in-view", "");
@@ -64,6 +68,7 @@ export function initLegendPanel(initialViewId = "map-view") {
   _registrarListeners();
   _initDrag();
   _restaurarPosicion();
+  _posicionarTriggerBajoToggle(); // posición inicial del trigger
 
   console.info(`[legendPanel] Inicializado y vinculado a #${initialViewId}`);
 }
@@ -99,8 +104,13 @@ function _registrarListeners() {
   // La leyenda siempre muestra el contenido de lo que el usuario está viendo.
   on("vista-cambiada", ({ modo }) => {
     const targetId = modo === "3D" ? "scene-view" : "map-view";
+    _vistaActual = targetId; 
     actualizarReferencia(targetId);
+    _posicionarTriggerBajoToggle(); // reposicionar el trigger para que quede bajo el toggle de vista
   });
+
+  // si el layout cambia (viewport, DPI, más botones apilados encima)
+  window.addEventListener("resize", _posicionarTriggerBajoToggle);
 
   // Hook disponible para extensiones futuras (badge de capas activas, etc.)
   on("municipio-cargado", () => {
@@ -123,13 +133,56 @@ function _setLeyendaVisible(visible) {
   _legendVisible = visible;
 
   _legendFloat.classList.toggle("hidden", !visible);
-  _legendTrigger.classList.toggle("legend-trigger--active", visible);
+  _legendTrigger.classList.toggle("active", visible);
 
   // Al abrir: posicionar junto al trigger solo si el usuario no ha arrastrado aún.
   // Si style.left tiene valor, el usuario ya eligió una posición — respetarla.
   if (visible && _legendFloat.style.left === "") {
     _posicionarJuntoAlTrigger();
   }
+}
+
+/**
+ * Posiciona el trigger de leyenda justo debajo del botón toggle 2D/3D activo.
+ *
+ * El toggle vive en el slot nativo top-right del SDK (apilado junto a zoom,
+ * home, compass, locate) — su posición vertical no es una coordenada fija,
+ * depende de cuántos controles nativos haya encima. Por eso se calcula en
+ * runtime con getBoundingClientRect() en lugar de asumir un valor en CSS,
+ * igual que el panel flotante calcula su posición junto al trigger.
+ *
+ * Se recalcula en cada cambio de vista (el toggle activo es un botón físico
+ * distinto para 2D y 3D) y en resize (el apilamiento nativo puede reflow-earse).
+ */
+function _posicionarTriggerBajoToggle() {
+  if (!_legendTrigger) return;
+
+  const toggleId = _vistaActual === "scene-view" ? "btn-toggle-vista-scene" : "btn-toggle-vista";
+  const toggleBtn = document.getElementById(toggleId);
+  const container = document.getElementById("map-container");
+
+  if (!toggleBtn || !container) return;// seguridad: se queda oculto si el toggle aún no está renderizado
+
+  const toggleRect    = toggleBtn.getBoundingClientRect();
+  const containerRect = container.getBoundingClientRect();
+
+  // Guard clave: si el toggle aún no tiene layout real (0x0), no es una posición
+  // válida — no revelamos el trigger con coordenadas basura. 
+  if (toggleRect.width === 0 && toggleRect.height === 0) return;
+
+  const MARGIN = 12; // separación visual respecto al toggle
+  const top = toggleRect.bottom - containerRect.top + MARGIN; //align top del trigger con bottom del toggle + margen
+  const right = containerRect.right - toggleRect.right; //align right del trigger con right del toggle
+
+  // #map-container es position:fixed → left/top del trigger son relativos a él.
+  // Se limpia 'bottom' porque coexistir con 'top' en el mismo eje causa conflicto CSS.
+  _legendTrigger.style.top    = `${top}px`;
+  _legendTrigger.style.right  = `${right}px`;
+  _legendTrigger.style.bottom = "";
+
+  // Solo se revela cuando ya tiene coordenadas confirmadas válidas.
+  _legendTrigger.classList.add("legend-trigger--posicionado");
+  
 }
 
 /**
