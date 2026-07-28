@@ -25,6 +25,8 @@
   "layers.wfs.empty": "No se encontraron tipos de capa",
   "layers.wfs.error": "Error al consultar el servicio",
 
+  
+
   "tools.panel.heading": "Herramientas",
   "tools.distancia": "Distancia",
   "tools.area": "Área",
@@ -32,5 +34,6 @@
   "tools.area3d": "Área (3D)",
   "tools.dibujo": "Dibujar",
   "tools.limpiar": "Limpiar",
-  "tools.imprimir": "Imprimir"
+  "tools.imprimir": "Imprimir",
+  "tools.proximamente": "Próximamente"
 }

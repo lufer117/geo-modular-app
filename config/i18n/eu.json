@@ -22,5 +22,15 @@
   "layers.error": "Errorea geruzak kargatzean",
   "layers.wfs.expanding": "Geruza motak kontsultatzen...",
   "layers.wfs.empty": "Ez da geruza motarik aurkitu",
-  "layers.wfs.error": "Errorea zerbitzua kontsultatzean"
+  "layers.wfs.error": "Errorea zerbitzua kontsultatzean",
+
+  "tools.panel.heading": "Tresnak",
+  "tools.distancia": "Distantzia",
+  "tools.area": "Azalera",
+  "tools.linea3d": "Distantzia (3D)",
+  "tools.area3d": "Azalera (3D)",
+  "tools.dibujo": "Marraztu",
+  "tools.limpiar": "Garbitu",
+  "tools.imprimir": "Inprimatu",
+  "tools.proximamente": "Laster"
 }

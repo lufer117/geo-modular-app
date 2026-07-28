@@ -23,5 +23,15 @@
   "layers.error": "Error loading layer",
   "layers.wfs.expanding": "Querying layer types...",
   "layers.wfs.empty": "No layer types found",
-  "layers.wfs.error": "Error querying service"
+  "layers.wfs.error": "Error querying service",
+
+  "tools.panel.heading": "Tools",
+  "tools.distancia": "Distance",
+  "tools.area": "Area",
+  "tools.linea3d": "Distance (3D)",
+  "tools.area3d": "Area (3D)",
+  "tools.dibujo": "Draw",
+  "tools.limpiar": "Clear",
+  "tools.imprimir": "Print",
+  "tools.proximamente": "Coming soon"
 }

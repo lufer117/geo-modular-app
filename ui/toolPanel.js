@@ -84,7 +84,12 @@ const ACCIONES_SIN_WIDGET = {
  * @param {Array} herramientasConfig - DEPLOYMENT.herramientas
  */
 export async function initToolPanel(herramientasConfig = []) {
-  _herramientas = herramientasConfig.filter(h => h.habilitada);
+  // Ya NO se filtra por `habilitada` aquí: las herramientas con
+  // habilitada:false deben seguir renderizando su icono como "futura
+  // opción" (placeholder deshabilitado), no desaparecer del panel.
+  // El filtro por habilitada se aplica punto a punto en _construirActionBar
+  // y en _crearSketchLayerSiHaceFalta (solo se instancia lo habilitado).
+  _herramientas = herramientasConfig;
   _vistaActual  = mapManager.getVistaActiva();
 
   const actionBar = document.getElementById("tools-action-bar");
@@ -115,10 +120,28 @@ function _construirActionBar(actionBar) {
     const btn = document.createElement("calcite-action");
     btn.id = `tool-${h.id}`;
     btn.icon = h.icono;
-    btn.text = t(`tools.${h.id}`);
-    btn.setAttribute("title", t(`tools.${h.id}`));
-    btn.setAttribute("label", t(`tools.${h.id}`));
 
+    if (!h.habilitada) {
+      // Placeholder "futura opción": icono visible en el panel, sin
+      // acción — cumple 3DECISIONS.md 27.07.26 ("documentado en UI pero
+      // sin widget instanciado nunca"). Sin listener de click, sin
+      // llamada a _crearPanelHerramienta: nada se instancia para una
+      // herramienta deshabilitada, aunque el botón sea visible.
+      const textoFuturo = `${t(`tools.${h.id}`)} (${t("tools.proximamente")})`;
+      btn.disabled = true;
+      btn.text = textoFuturo;
+      btn.setAttribute("title", textoFuturo);
+      btn.setAttribute("label", textoFuturo);
+
+      _botones.set(h.id, btn);
+      group.appendChild(btn);
+      return; // siguiente herramienta — no crea panel ni entrada en _tools
+    }
+
+    const texto = t(`tools.${h.id}`);
+    btn.text = texto;
+    btn.setAttribute("title", texto);
+    btn.setAttribute("label", texto);
     btn.addEventListener("click", () => _handleClick(h));
 
     _botones.set(h.id, btn);
@@ -310,7 +333,7 @@ function _crearWrapperFlotante(h) {
  * compartido, mismo principio que la máscara municipal en mapManager.
  */
 async function _crearSketchLayerSiHaceFalta() {
-  const necesitaSketch = _herramientas.some(h => h.componente === "arcgis-sketch");
+  const necesitaSketch = _herramientas.some(h => h.habilitada && h.componente === "arcgis-sketch");
   if (!necesitaSketch) return;
 
   const [GraphicsLayer] = await Promise.all([
@@ -408,28 +431,39 @@ function _registrarListenersGlobales() {
     _desactivarTodasLasHerramientas();
     _herramientaActiva = null;
 
-    // Sketch es la única herramienta con instancia compartida — conmuta
+    // Cualquier herramienta con instancia COMPARTIDA (hoy solo sketch,
+    // pero el criterio es estructural, no un id fijo) conmuta su
     // reference-element para seguir apuntando a la vista activa.
-    const dibujo = _tools.get("dibujo");
-    if (dibujo) {
-      dibujo.elementos["2D"].setAttribute("reference-element", modo === "3D" ? "scene-view" : "map-view");
-    }
+    // Detección por estructura (elementos["2D"] === elementos["3D"]),
+    // no por id editorial — mismo criterio ya usado en _mostrarSoloVistaActiva.
+    // Un deployment.js puede llamar a esta herramienta "anotaciones" en vez
+    // de "dibujo"; el id es configuración y no debe filtrarse a la lógica.
+    _tools.forEach(tool => {
+      if (tool.elementos["2D"] === tool.elementos["3D"]) {
+        tool.elementos["2D"].setAttribute(
+          "reference-element",
+          modo === "3D" ? "scene-view" : "map-view"
+        );
+      }
+    });
   });
 
   // Re-traducir botones y títulos de panel al cambiar idioma — se crearon
   // dinámicamente, así que no pasaron por el escaneo inicial data-i18n.
   on("idioma-cambiado", () => {
     _herramientas.forEach(h => {
-      const texto = t(`tools.${h.id}`);
       const btn = _botones.get(h.id);
       if (btn) {
+        const texto = h.habilitada
+          ? t(`tools.${h.id}`)
+          : `${t(`tools.${h.id}`)} (${t("tools.proximamente")})`;
         btn.text = texto;
         btn.setAttribute("title", texto);
         btn.setAttribute("label", texto);
       }
       const tool = _tools.get(h.id);
       if (tool) {
-        tool.wrapper.querySelector(".tool-widget-title").textContent = texto;
+        tool.wrapper.querySelector(".tool-widget-title").textContent = t(`tools.${h.id}`);
       }
     });
   });
