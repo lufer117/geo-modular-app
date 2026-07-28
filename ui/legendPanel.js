@@ -68,7 +68,7 @@ export function initLegendPanel(initialViewId = "map-view") {
   _registrarListeners();
   _initDrag();
   _restaurarPosicion();
-  _posicionarTriggerBajoToggle(); // posición inicial del trigger
+_posicionarTriggerBajoUltimoControl(); // posición inicial del trigger
 
   console.info(`[legendPanel] Inicializado y vinculado a #${initialViewId}`);
 }
@@ -106,11 +106,11 @@ function _registrarListeners() {
     const targetId = modo === "3D" ? "scene-view" : "map-view";
     _vistaActual = targetId; 
     actualizarReferencia(targetId);
-    _posicionarTriggerBajoToggle(); // reposicionar el trigger para que quede bajo el toggle de vista
+    _posicionarTriggerBajoUltimoControl(); // reposicionar el trigger para que quede bajo el toggle de vista
   });
 
   // si el layout cambia (viewport, DPI, más botones apilados encima)
-  window.addEventListener("resize", _posicionarTriggerBajoToggle);
+  window.addEventListener("resize", _posicionarTriggerBajoUltimoControl);
 
   // Hook disponible para extensiones futuras (badge de capas activas, etc.)
   on("municipio-cargado", () => {
@@ -143,36 +143,47 @@ function _setLeyendaVisible(visible) {
 }
 
 /**
- * Posiciona el trigger de leyenda justo debajo del botón toggle 2D/3D activo.
+ * Posiciona el trigger de leyenda justo debajo del último control nativo
+ * apilado en la columna top-right del SDK, para la vista activa.
  *
- * El toggle vive en el slot nativo top-right del SDK (apilado junto a zoom,
- * home, compass, locate) — su posición vertical no es una coordenada fija,
- * depende de cuántos controles nativos haya encima. Por eso se calcula en
- * runtime con getBoundingClientRect() en lugar de asumir un valor en CSS,
- * igual que el panel flotante calcula su posición junto al trigger.
+ * Por qué NO referenciar directamente el botón toggle:
+ * el toggle vive dentro del slot nativo top-right junto a zoom/home/compass/
+ * locate — y en 3D el SDK añade además arcgis-navigation-toggle (control de
+ * "padding mode"), que se apila DESPUÉS del toggle en el DOM. Referenciar el
+ * toggle asume que es el último elemento de la columna, cierto en 2D pero
+ * falso en 3D — el trigger terminaba posicionado encima de navigation-toggle.
+ * Confirmado por inspección de DOM real: en <arcgis-scene>, el orden de
+ * slot="top-right" es zoom → home → compass → locate → toggle → navigation-toggle.
  *
- * Se recalcula en cada cambio de vista (el toggle activo es un botón físico
- * distinto para 2D y 3D) y en resize (el apilamiento nativo puede reflow-earse).
+ * Solución: en vez de asumir cuál es el último control, se pregunta al DOM
+ * cuál es realmente el último hijo con slot="top-right" de la vista activa.
+ * Así el trigger sigue la columna completa sea cual sea su composición real
+ * (2D, 3D, o si el SDK añade/quita controles en una futura versión) sin
+ * necesidad de mantener una lista de "cuántos controles hay antes del mío".
  */
-function _posicionarTriggerBajoToggle() {
+
+function _posicionarTriggerBajoUltimoControl() {
   if (!_legendTrigger) return;
 
-  const toggleId = _vistaActual === "scene-view" ? "btn-toggle-vista-scene" : "btn-toggle-vista";
-  const toggleBtn = document.getElementById(toggleId);
+  const viewElId = _vistaActual; // "map-view" | "scene-view"
+  const viewEl = document.getElementById(viewElId);
   const container = document.getElementById("map-container");
 
-  if (!toggleBtn || !container) return;// seguridad: se queda oculto si el toggle aún no está renderizado
+  if (!viewEl || !container) return;
 
-  const toggleRect    = toggleBtn.getBoundingClientRect();
+  const ultimoControl = _obtenerUltimoControlTopRight(viewEl);
+  if (!ultimoControl) return; // sin controles nativos aún — nada que referenciar
+
+  const controlRect   = ultimoControl.getBoundingClientRect();
   const containerRect = container.getBoundingClientRect();
 
-  // Guard clave: si el toggle aún no tiene layout real (0x0), no es una posición
-  // válida — no revelamos el trigger con coordenadas basura. 
-  if (toggleRect.width === 0 && toggleRect.height === 0) return;
+  // Guard clave: si el control aún no tiene layout real (0x0), no es una
+  // posición válida — no revelamos el trigger con coordenadas basura.
+  if (controlRect.width === 0 && controlRect.height === 0) return;
 
-  const MARGIN = 12; // separación visual respecto al toggle
-  const top = toggleRect.bottom - containerRect.top + MARGIN; //align top del trigger con bottom del toggle + margen
-  const right = containerRect.right - toggleRect.right; //align right del trigger con right del toggle
+  const MARGIN = 12; // separación visual respecto al último control
+  const top   = controlRect.bottom - containerRect.top + MARGIN;
+  const right = containerRect.right - controlRect.right;
 
   // #map-container es position:fixed → left/top del trigger son relativos a él.
   // Se limpia 'bottom' porque coexistir con 'top' en el mismo eje causa conflicto CSS.
@@ -182,7 +193,24 @@ function _posicionarTriggerBajoToggle() {
 
   // Solo se revela cuando ya tiene coordenadas confirmadas válidas.
   _legendTrigger.classList.add("legend-trigger--posicionado");
-  
+}
+
+/**
+ * Devuelve el último hijo light-DOM de la vista con slot="top-right".
+ * El SDK apila los controles nativos (zoom, home, compass, locate, toggle,
+ * navigation-toggle en 3D...) en el orden en que aparecen como children —
+ * el último del array es, por construcción del slot, el que queda más abajo
+ * visualmente en la columna. No se asume cuántos controles hay ni cuál es
+ * "el nuestro": se pregunta al DOM real de la vista activa.
+ *
+ * @param {HTMLElement} viewEl - <arcgis-map> o <arcgis-scene> activo
+ * @returns {HTMLElement|null}
+ */
+function _obtenerUltimoControlTopRight(viewEl) {
+  const controles = Array.from(viewEl.children).filter(
+    (el) => el.getAttribute("slot") === "top-right"
+  );
+  return controles.length ? controles[controles.length - 1] : null;
 }
 
 /**
