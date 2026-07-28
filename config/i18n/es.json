@@ -23,5 +23,14 @@
   "layers.error": "Error al cargar",
   "layers.wfs.expanding": "Consultando tipos de capa...",
   "layers.wfs.empty": "No se encontraron tipos de capa",
-  "layers.wfs.error": "Error al consultar el servicio"
+  "layers.wfs.error": "Error al consultar el servicio",
+
+  "tools.panel.heading": "Herramientas",
+  "tools.distancia": "Distancia",
+  "tools.area": "Área",
+  "tools.linea3d": "Distancia (3D)",
+  "tools.area3d": "Área (3D)",
+  "tools.dibujo": "Dibujar",
+  "tools.limpiar": "Limpiar",
+  "tools.imprimir": "Imprimir"
 }

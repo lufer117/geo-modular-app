@@ -243,12 +243,44 @@
           hide-input-button
         ></arcgis-coordinate-conversion>      
 
+       <!-- ═══ HERRAMIENTAS ══════════════════════════════════════════════════
+        El action-bar interno y los widgets se construyen dinámicamente en
+        ui/toolPanel.js a partir de DEPLOYMENT.herramientas. Aquí solo vive
+        el ancla fija: el expand-trigger y su action-bar vacío.
+        Motivo: igual que layerTree.js construye el árbol en JS a partir del
+        catálogo, este panel no puede tener HTML fijo — su contenido varía
+        por cliente.
+      ═══════════════════════════════════════════════════════════════════ -->
+      <arcgis-expand
+        id="tools-expand"
+        class="tools-expand"
+        expand-icon="wrench"
+        collapsed-icon="wrench"
+        mode="floating"
+        data-i18n-attr="expand-tooltip"
+        data-i18n="tools.panel.heading"
+      >
+        <calcite-action-bar
+          id="tools-action-bar"
+          layout="horizontal"
+          overflow-actions-disabled
+          expand-disabled
+        ></calcite-action-bar>
+      </arcgis-expand>
+
+       <!-- Portal de paneles de herramientas — mismo nivel que legend-float-container,
+       mismo motivo: hereda el escape de overflow de #map-container (decisión 15.07.26).
+       No necesita estar fuera de calcite-shell. -->
+      <div id="tools-widgets-portal"></div>
+
     </div>
 
     <!-- ═══ BANNER DE ERROR ═══════════════════════════════════════════════ -->
     <div id="app-error" class="hidden app-error-banner" role="alert"></div>
 
   </calcite-shell>
+
+
 
   <script type="module" src="./main.js"></script>
 

@@ -321,8 +321,111 @@ arcgis-coordinate-conversion {
 }
 
 
+/* ─── Trigger de herramientas: bottom-right fijo ───────────────────────────
+   A diferencia de legend-map-trigger (posición dinámica bajo el toggle
+   2D/3D), este trigger vive en su propia esquina — zona independiente,
+   sin cálculo en runtime. Mismo criterio de "no competir por el mismo
+   espacio visual" que ya aplicamos separando leyenda de action-bar (P35).
+*/
+.tools-expand {
+  position: fixed;
+  bottom: 30px;
+  right: 16px;
+  z-index: 3;
+}
+#tools-action-bar {
+  width: max-content;
+}
 
+/* ═══════════════════════════════════════════════════════════════════════
+   PANEL FLOTANTE DE HERRAMIENTAS (medición + sketch)
+   ═══════════════════════════════════════════════════════════════════════ */
 
+/* Regla general: el wrapper mide su CONTENIDO, nunca al revés.
+   min/max son límites de seguridad, no medidas objetivo — evitan que un
+   widget minúsculo quede ridículamente estrecho o uno grande se salga
+   de pantalla, pero el tamaño real lo decide siempre lo que hay dentro.
+   Esto es lo que permite que el catálogo de herramientas cambie por
+   cliente (deployment.js) sin desajustar el layout: cada widget nuevo
+   que se añada o quite no requiere tocar este CSS. */
+.tool-widget-float {
+  position: fixed;
+  width: fit-content;
+  height: fit-content;
+
+  min-width: 220px;
+  max-width: min(90vw, 420px);
+  max-height: calc(100vh - var(--app-nav-height, 65px) - 32px);
+
+  display: flex;
+  flex-direction: column;
+
+  background: #ffffff;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+
+  z-index: 20;
+}
+
+.tool-widget-float[hidden] {
+  display: none !important;
+}
+
+.tool-widget-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: var(--calcite-color-foreground-2, #f4f4f4);
+  border-bottom: 1px solid var(--calcite-color-border-3, #e0e0e0);
+  cursor: default;
+  flex-shrink: 0;
+}
+
+.tool-widget-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: grab;
+  user-select: none;
+}
+
+.tool-widget-title:active {
+  cursor: grabbing;
+}
+
+.tool-widget-body {
+  padding: 12px;
+  overflow-x: visible;
+  overflow-y: auto;
+}
+
+/* ── Caso especial: arcgis-sketch en modo docked ─────────────────────────
+   El ancho/alto exacto NO se fija aquí: lo calcula toolPanel.js
+   (_dimensionarPanelSketch) a partir de cuántos botones tiene el toolbar
+   según sketchOpciones en deployment.js — así el overflow "..." que
+   Sketch dispara automáticamente cuando falta espacio (comportamiento
+   documentado del componente, no un bug) nunca se activa por un valor
+   adivinado en CSS.
+
+   Este bloque solo redefine los límites de seguridad heredados de la
+   regla general (más generosos, porque un toolbar con muchos
+   availableCreateTools puede superar los 420px por defecto) y quita el
+   padding genérico del body, que el propio toolbar de Sketch ya resuelve
+   con su espaciado interno — el padding genérico lo comprimía.
+
+   Selector por [data-widget-type="sketch"], no por id de herramienta:
+   el id (`h.id`) es una etiqueta de catálogo editorial y puede cambiar
+   entre clientes; el comportamiento depende del componente real, no del
+   nombre que le puso el catálogo. */
+.tool-widget-float[data-widget-type="sketch"] {
+  min-width: 220px;
+  max-width: min(90vw, 640px);
+}
+
+.tool-widget-float[data-widget-type="sketch"] .tool-widget-body {
+  padding: 0;
+}
 
 /* ── Banner de error fatal ───────────────────────────────────────────────── */
 

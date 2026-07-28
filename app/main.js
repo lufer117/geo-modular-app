@@ -43,6 +43,8 @@ import { initLegendPanel }         from "../ui/legendPanel.js";
 import { initHeaderControls }      from "../ui/headerControls.js";
 import * as eventBus from '../utils/eventBus.js';
 import { initMapControls } from "../ui/mapControls.js";
+import { initToolPanel } from "../ui/toolPanel.js";
+
 
 
 
@@ -182,6 +184,7 @@ async function main() {
     renderBasemapSelector("#basemap-selector-container"); // conecta con styles
     initLayerTree("#layer-tree-container"); // conecta con styles 
     initLegendPanel("map-view");  // conecta con styles, index (mapa inicia en 2d)
+    await initToolPanel(DEPLOYMENT.herramientas); // Async: crea GraphicsLayer de sketch via $arcgis.import, recibe el catálogo del cliente activo
     initHeaderControls(document.getElementById("lang-selector-container")); // headerControls se especializa en el cambio de idioma
     
           // ─── AÑADIR AQUÍ LA LÓGICA DINÁMICA ───
