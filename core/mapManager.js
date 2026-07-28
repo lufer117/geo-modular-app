@@ -205,7 +205,17 @@ export async function toggleVista() {
   inactiveEl.classList.remove("vista-activa");
 
   // 2. Sincronizar posición DESPUÉS de activar el componente
-  await targetView.goTo(vp);
+  //console.time("goTo");
+    // 2. Sincronizar posición DESPUÉS de activar el componente
+  // duration:0 al volver a 2D — evita animar el "aplanado" de cámara (tilt/heading),
+  // que no aporta contexto útil y es la causa medida de los ~525ms de loading
+  // en el botón toggle (ver 2ARCHITECTURE.md / medición console.time 28.07.26).
+  // Al entrar en 3D se conserva la animación por defecto: da contexto espacial
+  // de cómo el terreno se eleva desde el plano.
+  const opcionesGoTo = is2D ? {} : { duration: 0 };
+  await targetView.goTo(vp, opcionesGoTo);
+
+  // console.timeEnd("goTo"); // para verificar demora de animacion al volver de 3d a 2d  
 
   console.info(`[mapManager] Vista cambiada a ${_vistaActiva}`);
   eventBus.emit("vista-cambiada", { modo: _vistaActiva });
