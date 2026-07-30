@@ -40,9 +40,11 @@
 /**
  * Inicializa una capa aplicando los filtros correspondientes al municipio.
  *
- * @param {Layer}  layer         - Instancia Esri creada por layerFactory
+* @param {Layer}  layer         - Instancia Esri creada por layerFactory
  * @param {Object} config        - Configuración de la capa en el catálogo
- * @param {Object} municipioData - Datos del municipio activo (de municipios.js)
+ * @param {Object} municipioData - Municipio activo, ya resuelto
+ *   (ver territorioResolver.js). Forma: { codigo_ine, nombre,
+ *   provincia_code, ccaa_code, bbox, polygon }
  * @returns {Promise<void>}
  */
 export async function inicializarCapa(layer, config, municipioData) {

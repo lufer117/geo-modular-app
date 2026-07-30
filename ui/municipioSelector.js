@@ -6,12 +6,16 @@
  * ── RESPONSABILIDAD ──────────────────────────────────────────────────────
  * Renderizar un selector Calcite y, al elegir un municipio, orquestar
  * el pipeline completo de carga:
- * 
- *  En función del deployment recibido desde main.js:
  *
- *   municipios: []  → muestra todos los del catálogo (modo demo/TFM)
- *   municipios: [N] → restringe el selector al ámbito del cliente
- *   municipios: [1] → carga automática al arrancar sin esperar interacción
+ *  El módulo ya NO decide qué municipios mostrar — eso lo resuelve
+ *  config/territorioResolver.js (soporta ámbito municipio/provincia/ccaa).
+ *  main.js llama a resolverAmbitoTerritorial() y pasa el array ya filtrado
+ *  a renderMunicipioSelector(). Este módulo solo pinta lo que recibe.
+ *
+ *  Antes: importaba MUNICIPIOS estático y filtraba por deployment.municipios
+ *  — lógica que hoy vive duplicada en territorioResolver para los otros
+ *  ámbitos (provincia/ccaa). Eliminar la duplicación deja un único punto
+ *  de verdad sobre "qué municipios se muestran", sin importar el ámbito.
  *
  *   configEngine.fetchCapas(municipioData)
  *       ↓  array de configs filtradas por cobertura
@@ -32,10 +36,11 @@
  * No instancia capas directamente (delegado a layerFactory).
  * No construye el árbol DOM de capas (delegado a layerTree).
  * No conoce el formato de las capas Esri.
+ * Ya NO decide qué municipios son visibles (delegado a territorioResolver).
  */
 
 
-//  usuario interactúa con el select        deployment.municipios tiene 1 elemento
+//  usuario interactúa con el select        1 solo municipio en la lista recibida
 //         ↓                                           ↓
 //   _onMunicipioChange(event)           carga automática al arrancar
 //         ↓                                           ↓
@@ -43,7 +48,6 @@
 //                                     ↓
 //                           [pipeline completo — sin cambios]
 
-import { MUNICIPIOS }            from "../config/municipios.js";
 import * as configEngine         from "../config/configEngine.js";
 import * as mapManager           from "../core/mapManager.js";
 import { crearCapa }             from "../core/layerFactory.js";
@@ -58,6 +62,7 @@ let _cargando = false;
 let _municipioActivo = null;
 let _containerEl = null;
 let _deploymentRef = { municipios: [] };
+let _municipiosDisponibles = [];   // ← ya resuelto por territorioResolver, no se filtra aquí
 let _idiomaListenerRegistrado = false;
 
 export function getMunicipioActivo() {
@@ -77,10 +82,17 @@ export async function cargarMunicipioPorCodigo(codigoIne) {
 
 /**
  * Renderiza el selector de municipio en el contenedor indicado.
+ *
  * @param {HTMLElement|string} container - Elemento DOM o selector CSS
+ * @param {Object[]} municipiosDisponibles - Array ya resuelto por
+ *   territorioResolver.resolverAmbitoTerritorial() para el ámbito activo
+ *   del deployment (municipio/provincia/ccaa). Mismo shape que
+ *   data/municipios.json.
+ * @param {Object} deployment - DEPLOYMENT de config/deployment.js. Ya no se
+ *   usa para filtrar (eso ya vino resuelto en municipiosDisponibles) — se
+ *   conserva como referencia para el listener de "idioma-cambiado".
  */
-
-export function renderMunicipioSelector(container, deployment = { municipios: [] }) {
+export function renderMunicipioSelector(container, municipiosDisponibles = [], deployment = { municipios: [] }) {
   const el = typeof container === "string"
     ? document.querySelector(container)
     : container;
@@ -92,22 +104,18 @@ export function renderMunicipioSelector(container, deployment = { municipios: []
 
   _containerEl = el;
   _deploymentRef = deployment;
+  _municipiosDisponibles = municipiosDisponibles;
 
   clearContainer(el);
 
   _registrarListenerIdioma();
 
-  // ── Calcular municipios visibles según el ámbito del deployment ──
-  // deployment.municipios vacío = modo demo: sin filtro, se muestran todos.
-  // deployment.municipios con valores = modo producción: solo los del ámbito.
-  const municipiosVisibles = deployment.municipios?.length > 0
-    ? MUNICIPIOS.filter(m => deployment.municipios.includes(m.codigo_ine))
-    : MUNICIPIOS;
+  const municipiosVisibles = _municipiosDisponibles;
 
   if (municipiosVisibles.length === 0) {
     console.warn(
-      "[municipioSelector] Ningún municipio coincide con el deployment:",
-      deployment.municipios
+      "[municipioSelector] Ningún municipio disponible para este deployment:",
+      deployment
     );
     return;
   }
@@ -129,7 +137,7 @@ export function renderMunicipioSelector(container, deployment = { municipios: []
 
   // ── Varios municipios: construir el selector Calcite ─────────────────────
   // A partir de aquí el código es idéntico al actual, sin cambios.
-  
+
   const label = document.createElement("calcite-label");
   label.setAttribute("layout", "inline");
   label.textContent = t("nav.municipio.label"); // no hardcoded
@@ -150,7 +158,10 @@ export function renderMunicipioSelector(container, deployment = { municipios: []
   municipiosVisibles.forEach(m => {
     const opt = document.createElement("calcite-option");
     opt.value       = m.codigo_ine;
-    opt.textContent = `${m.nombre} (${m.provincia_nombre})`;
+    // Nota: se corrige aquí un bug preexistente — el campo usado era
+    // "provincia_nombre", que no existe en el schema de municipios.json
+    // (solo provincia_code). Mostraba literalmente "(undefined)".
+    opt.textContent = `${m.nombre} (${m.provincia_code})`;
     select.appendChild(opt);
   });
 
@@ -163,7 +174,7 @@ export function renderMunicipioSelector(container, deployment = { municipios: []
   label.appendChild(select);
   el.appendChild(label);
 
-  
+
 }
 
 // ─── Handlers privados ────────────────────────────────────────────────────────
@@ -188,10 +199,10 @@ async function _cargarMunicipio(codigoIne) {
   // Sin selección real o pipeline ya en curso → ignorar
   if (!codigoIne || _cargando) return;
 
-  const municipioData = MUNICIPIOS.find(m => m.codigo_ine === codigoIne);
+  const municipioData = _municipiosDisponibles.find(m => m.codigo_ine === codigoIne);
   if (!municipioData) return;
 
-  _municipioActivo = codigoIne; 
+  _municipioActivo = codigoIne;
 
   _cargando = true;
   _setLoading(true);
@@ -284,7 +295,7 @@ function _registrarListenerIdioma() {
 
   on("idioma-cambiado", () => {
     if (_containerEl) {
-      renderMunicipioSelector(_containerEl, _deploymentRef);
+      renderMunicipioSelector(_containerEl, _municipiosDisponibles, _deploymentRef);
     }
   });
 }

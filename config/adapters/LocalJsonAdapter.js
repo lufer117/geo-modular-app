@@ -1,75 +1,93 @@
 /**
  * config/adapters/LocalJsonAdapter.js
  *
- * Adaptador concreto que lee el catálogo de capas desde un JSON local.
+ * Adaptador concreto que lee cualquier dataset JSON local (catálogo de
+ * capas, municipios, provincias, CCAA...) siguiendo el patrón Repository.
  *
  * ── PATRÓN REPOSITORY ────────────────────────────────────────────────────
- * Implementa la interfaz que configEngine espera de cualquier adaptador:
- *   getCatalogo() → Promise<Capa[]>
+ * Implementa una interfaz genérica que cualquier consumidor puede usar
+ * sin conocer el origen del dato:
+ *   getData() → Promise<Array>
  *
- * configEngine sabe QUÉ necesita (el catálogo completo).
+ * El consumidor (configEngine, territorioResolver, etc.) sabe QUÉ necesita.
  * Este adaptador sabe CÓMO obtenerlo (fetch de archivo local).
  * Esa separación es la clave del patrón.
  *
- * ── EVOLUCIÓN PREVISTA ───────────────────────────────────────────────────
- *   LocalJsonAdapter  → lee catalogo-capas.json local        (activo ahora)
- *   RestApiAdapter    → llama a API REST propia               (medio plazo)
- *   PostGISAdapter    → consulta espacial real con bbox       (futuro)
+ * ── GENERALIZACIÓN (esta versión) ───────────────────────────────────────
+ * Hasta ahora esta clase solo se usaba para el catálogo de capas, y el
+ * método público se llamaba getCatalogo() — nombre acoplado a ese caso
+ * de uso concreto, aunque la implementación ya era genérica (recibe
+ * cualquier URL de JSON en el constructor).
  *
- * Cambiar de adaptador = cambiar UNA línea en main.js:
+ * Al reutilizar la misma clase para datasets de otro dominio (municipios,
+ * provincias, ccaa — ver config/territorioResolver.js), "getCatalogo()"
+ * deja de tener sentido semántico: no tiene sentido pedir el "catálogo"
+ * de una lista de municipios. Se renombra a getData(), genérico.
+ *
+ * Verificado el alcance real antes de renombrar (no se dejó alias):
+ * getCatalogo() solo se llamaba desde config/configEngine.js, en 2 líneas.
+ * Ambos usos se actualizan a getData() en el mismo cambio — ver ese archivo.
+ *
+ * ── EVOLUCIÓN PREVISTA ───────────────────────────────────────────────────
+ *   LocalJsonAdapter  → lee JSON local                        (activo ahora)
+ *   RestApiAdapter    → llama a API REST propia                (medio plazo)
+ *   PostGISAdapter    → consulta espacial real con bbox        (futuro)
+ *
+ * Cambiar de adaptador = cambiar UNA línea donde se instancie (main.js,
+ * territorioResolver.js...), sin tocar el consumidor:
  *   setAdaptador(new RestApiAdapter("https://api.example.com/capas"));
- * Nada más cambia en toda la aplicación.
  *
  * ── CACHE ────────────────────────────────────────────────────────────────
- * El catálogo se cachea en memoria tras el primer fetch.
- * Si el usuario cambia de municipio varias veces, no hay múltiples peticiones.
- * Útil aunque el JSON sea local (evita parsear JSON repetidamente).
+ * El dataset se cachea en memoria tras el primer fetch. Si el consumidor
+ * pide el dato varias veces (p. ej. varios cambios de municipio), no hay
+ * múltiples peticiones. Útil aunque el JSON sea local (evita parsear
+ * JSON repetidamente).
  */
 
 export class LocalJsonAdapter {
   /**
-   * @param {string} catalogoUrl - Ruta relativa o absoluta al JSON del catálogo
+   * @param {string} dataUrl - Ruta relativa o absoluta al JSON a leer
    */
-  constructor(catalogoUrl) {
-    this._catalogoUrl = catalogoUrl;
+  constructor(dataUrl) {
+    this._dataUrl = dataUrl;
     this._cache = null;  // null = no cargado todavía
   }
 
   /**
-   * Devuelve el array completo de capas del catálogo.
+   * Devuelve el array completo del dataset apuntado en el constructor.
    * Primera llamada: fetch + parse. Siguientes: desde cache en memoria.
-   * @returns {Promise<Capa[]>}
+   * @returns {Promise<Array>}
    */
-  async getCatalogo() {
+  async getData() {
     if (this._cache !== null) {
       return this._cache;
     }
 
     try {
-      const response = await fetch(this._catalogoUrl);
+      const response = await fetch(this._dataUrl);
 
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status} ${response.statusText} — ${this._catalogoUrl}`);
+        throw new Error(`HTTP ${response.status} ${response.statusText} — ${this._dataUrl}`);
       }
 
       this._cache = await response.json();
 
       console.info(
-        `[LocalJsonAdapter] Catálogo cargado: ${this._cache.length} capas desde "${this._catalogoUrl}"`
+        `[LocalJsonAdapter] Dataset cargado: ${this._cache.length} elementos desde "${this._dataUrl}"`
       );
 
       return this._cache;
 
     } catch (err) {
-      console.error("[LocalJsonAdapter] Error al cargar el catálogo:", err);
-      // Re-lanzar para que configEngine (y municipioSelector) puedan manejarlo
+      console.error("[LocalJsonAdapter] Error al cargar el dataset:", err);
+      // Re-lanzar para que el consumidor (configEngine, territorioResolver...) pueda manejarlo
       throw err;
     }
   }
 
   /**
    * Invalida la cache forzando un nuevo fetch en la siguiente llamada.
-   * Útil en desarrollo para recargar el catálogo tras editarlo.
+   * Útil en desarrollo para recargar el dataset tras editarlo.
    */
   invalidarCache() {
     this._cache = null;

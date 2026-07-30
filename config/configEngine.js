@@ -15,6 +15,14 @@
  * tocar ningún fichero de configuración por municipio, porque no existe
  * tal fichero. Las reglas de cobertura del catálogo lo gestionan todo.
  *
+ * ── AJUSTE (migración LocalJsonAdapter genérico) ──────────────────────────
+ * El adaptador ya no expone getCatalogo() sino getData() — nombre genérico,
+ * porque la misma clase LocalJsonAdapter ahora también se usa para leer
+ * municipios/provincias/ccaa desde territorioResolver.js, no solo capas.
+ * Ver config/adapters/LocalJsonAdapter.js para el detalle de esa migración.
+ * El contrato de este módulo sigue siendo el mismo: cualquier adaptador
+ * inyectado debe exponer getData() → Promise<Capa[]>.
+ *
  * ── REGLAS DE COBERTURA ──────────────────────────────────────────────────
  *   "nacional"   → siempre incluir (aplica a toda España)
  *   "europeo"    → siempre incluir (cobertura supranacional)
@@ -33,12 +41,12 @@ let _adaptador = null;
  * Registra el adaptador de datos.
  * Llamar exactamente UNA VEZ en main.js antes de cualquier fetchCapas().
  *
- * @param {Object} adaptador - Debe implementar: getCatalogo() → Promise<Capa[]>
+ * @param {Object} adaptador - Debe implementar: getData() → Promise<Capa[]>
  */
 export function setAdaptador(adaptador) { 
-  if (typeof adaptador?.getCatalogo !== "function") { //comprueba que existe adaptador y obtiene el catalogo
+  if (typeof adaptador?.getData !== "function") { //comprueba que existe adaptador y que sabe obtener datos
     throw new Error(
-      "[configEngine] El adaptador debe implementar getCatalogo(): Promise<Capa[]>"
+      "[configEngine] El adaptador debe implementar getData(): Promise<Capa[]>"
     );
   }
   _adaptador = adaptador;
@@ -52,8 +60,9 @@ export function setAdaptador(adaptador) {
  * Devuelve las capas del catálogo que aplican al municipio dado.
  * Filtra por reglas de cobertura y ordena por prioridad (P0 → P1 → P2...).
  *
- * @param {Object} municipioData - Objeto de config/municipios.js
- *   { codigo_ine, nombre, provincia_code, ccaa_code, bbox, polygon }
+ * @param {Object} municipioData - Un municipio individual ya resuelto
+ *   (un elemento de municipiosDisponibles[], ver territorioResolver.js).
+ *   Forma esperada: { codigo_ine, nombre, provincia_code, ccaa_code, bbox, polygon }
  * @returns {Promise<Capa[]>} Array filtrado y ordenado
  */
 export async function fetchCapas(municipioData) {
@@ -63,7 +72,7 @@ export async function fetchCapas(municipioData) {
     );
   }
 
-  const catalogo = await _adaptador.getCatalogo();
+  const catalogo = await _adaptador.getData();
 
   const capas = catalogo.filter(capa => _aplicaAlMunicipio(capa, municipioData)); //recorre todas las capas, si devuelve true la capa entra
 
@@ -88,9 +97,11 @@ export async function fetchCapas(municipioData) {
  * Función pura, sin estado, testeable de forma aislada.
  *
  * @param {Object} capa       - Entrada del catalogo-capas.json
- * @param {Object} municipio  - Objeto de config/municipios.js
+ * @param {Object} municipio  - Municipio individual, misma forma que
+ *   municipioData en fetchCapas()
  * @returns {boolean}
  */
+
 function _aplicaAlMunicipio(capa, municipio) { //solo recibe si es true o false
   const cobertura = capa.cobertura; //obtiene cobertura de la capa según el catalogo
 

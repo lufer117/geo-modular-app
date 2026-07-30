@@ -315,9 +315,8 @@ export function addCapa(capa) {
  * exterior al municipio. Se rellena de gris semitransparente para que el
  * contexto geográfico exterior sea visible pero quede en segundo plano.
  *
- * 
- * 
- * @param {Object} polygon - { rings, spatialReference } de municipios.js municipioData.polygon
+ * @param {Object} polygon - { rings, spatialReference } — campo .polygon
+ *   del municipio activo ya resuelto
  * @returns {Promise<void>}
  */
 
@@ -340,7 +339,7 @@ export async function actualizarMascara(polygon) {
     spatialReference: { wkid: 4326 }
   });
 
-  // definición del polígono municipal -> municipioData.polygon de municipios.js ejecutado por municipioSelector.js
+// definición del polígono municipal -> municipioData.polygon
   const municipioPoly = new Polygon({
     rings:            polygon.rings,
     spatialReference: polygon.spatialReference ?? { wkid: 4326 }

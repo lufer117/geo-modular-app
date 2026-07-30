@@ -7,7 +7,8 @@
  * Arrancar la app en el orden correcto:
  *   1. Registrar el adaptador de datos (Repository Pattern)
  *   2. Inicializar el mapa
- *   3. Montar los módulos de UI
+ *   3. Resolver el ámbito territorial del deployment (municipio/provincia/ccaa)
+ *   4. Montar los módulos de UI
  * Sin lógica propia. Todo está delegado a los módulos especializados.
  *
  * ── LA ÚNICA DECISIÓN QUE TOMA main.js ───────────────────────────────────
@@ -17,11 +18,20 @@
  *    →  setAdaptador(new RestApiAdapter("https://api.ejemplo.com/capas"))
  *    →  setAdaptador(new PostGISAdapter(config))
  * Ningún otro archivo cambia.
+ *
+ * ── AJUSTE (soporte de ámbito territorial) ────────────────────────────────
+ * Se añade el paso 3.5: resolverAmbitoTerritorial(DEPLOYMENT) — ver
+ * config/territorioResolver.js. Antes, municipioSelector.js decidía por sí
+ * mismo qué municipios mostrar filtrando deployment.municipios contra el
+ * import estático de municipios.js. Ahora esa decisión se centraliza aquí
+ * y se le pasa ya resuelta, soportando también deployments a nivel
+ * provincia/ccaa (máscara territorial inicial antes de elegir municipio).
  */
 
 // ── Config ──────────────────────────────────────────────────────────────
 import { LocalJsonAdapter }        from "../config/adapters/LocalJsonAdapter.js";
 import { setAdaptador }            from "../config/configEngine.js"; // le dice al sistema qué fuente de datos usar
+import { resolverAmbitoTerritorial } from "../config/territorioResolver.js";
 import { DEPLOYMENT }              from "../config/deployment.js";
 
 
@@ -147,6 +157,43 @@ function _inyectarLogoEmpresa(src) {
   }
 }
 
+// ── Logo por-municipio (runtime) ──────────────────────────────────────────
+// Prueba en cascada qué extensión existe realmente para un codigo_ine,
+// en vez de mantener una tabla editorial a mano dentro del código (ver
+// 3DECISIONS.md, 30.07.26 — logo desacoplado de generar_geografia.py).
+
+const _LOGO_EXTENSIONES = ["webp", "jpg", "jpeg", "png", "svg"];
+
+/**
+ * Prueba si una imagen carga realmente en el navegador (existe en el
+ * servidor), sin asumir nada de antemano.
+ * @param {string} url
+ * @returns {Promise<boolean>}
+ */
+function _probarImagen(url) {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload  = () => resolve(true);
+    img.onerror = () => resolve(false);
+    img.src = url;
+  });
+}
+
+/**
+ * Resuelve la URL del logo de un municipio probando extensiones en orden.
+ * Devuelve null si no existe ningún archivo de logo para ese codigo_ine
+ * (caso normal para la mayoría de municipios — no todos tienen logo subido).
+ * @param {string} codigoIne
+ * @returns {Promise<string|null>}
+ */
+async function _resolverLogoMunicipio(codigoIne) {
+  for (const ext of _LOGO_EXTENSIONES) {
+    const url = `../assets/logos/${codigoIne}.${ext}`;
+    if (await _probarImagen(url)) return url;
+  }
+  return null;
+}
+
 // ── ARRANQUE ────────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -173,33 +220,64 @@ async function main() {
       mapContainerId:   "map-view", //conecta con index <div id="map-view"> y usado como parametro en initMap en mapManager.js
       sceneContainerId: "scene-view" // contacta con index <div id="scene-view"> y usado como parametro en initMap en mapManager.js
     });
-    
+
+    // 4.5. Resolver ámbito territorial del deployment activo.
+    //      "municipio" (caso actual, sin cambios de comportamiento) → sin máscara,
+    //      el usuario elige municipio y el pipeline existente se encarga.
+    //      "provincia" / "ccaa" → máscara territorial se aplica ya, antes de
+    //      que el usuario elija un municipio dentro de ese territorio.
+    const { municipiosDisponibles, mascaraInicial } = await resolverAmbitoTerritorial(DEPLOYMENT);
+
+    if (mascaraInicial) {
+      await mapManager.actualizarMascara(mascaraInicial.polygon);
+      await mapManager.irAlMunicipio(mascaraInicial.bbox);
+    }
+
 
     // 5. Montar UI
     // El orden importa: la headerControls y el selector están en la cabecera (visibles de entrada).
     // El árbol y la leyenda se construyen cuando "municipio-cargado" se emite con EVENTBUS
     initActionBar(); // inicializa actionbar
     initMapControls(); // inicializa controles del mapa
-    renderMunicipioSelector("#municipio-selector-container", DEPLOYMENT); // styles & eventBus.emit("municipio-cargado")
+    renderMunicipioSelector("#municipio-selector-container", municipiosDisponibles, DEPLOYMENT); // styles & eventBus.emit("municipio-cargado")
     renderBasemapSelector("#basemap-selector-container"); // conecta con styles
     initLayerTree("#layer-tree-container"); // conecta con styles 
     initLegendPanel("map-view");  // conecta con styles, index (mapa inicia en 2d)
     await initToolPanel(DEPLOYMENT.herramientas); // Async: crea GraphicsLayer de sketch via $arcgis.import, recibe el catálogo del cliente activo
     initHeaderControls(document.getElementById("lang-selector-container")); // headerControls se especializa en el cambio de idioma
-    
-          // ─── AÑADIR AQUÍ LA LÓGICA DINÁMICA ───
-      
 
-      eventBus.on("municipio-cargado", ({ municipioData }) => {
-        const navLogo = document.querySelector("calcite-navigation-logo");
-        
-        // Si el municipio tiene un logo definido en municipios.js, lo aplicamos
-        if (navLogo && municipioData.logo) {
-          navLogo.setAttribute("thumbnail", municipioData.logo);
-          navLogo.setAttribute("heading", municipioData.nombre);
-          navLogo.removeAttribute("icon"); // Calcite requiere quitar el icono para mostrar el thumbnail
-        }
-      })
+    // ── Logo por-municipio en el header (runtime, 30.07.26) ──────────────────
+    // Reemplaza el listener anterior que leía municipioData.logo — ese campo
+    // ya no existe en municipios.json desde que se desacopló geometría de
+    // presentación (ver 3DECISIONS.md). En su lugar, se prueba en cascada
+    // qué extensión de imagen existe realmente en assets/logos/ para el
+    // codigo_ine del municipio activo. Sin lista hardcodeada de excepciones:
+    // el navegador confirma qué archivo existe, no un mapa editorial a mano.
+    //
+    // Solo aplica al modelo "municipio" (deployment sin ambitoTerritorial,
+    // ej. demo). Cuando el deployment tiene ambitoTerritorial ("provincia"/
+    // "ccaa", ej. bizkaia, navarra), el logo del header representa a la
+    // entidad territorial (Diputación, Gobierno regional) y debe permanecer
+    // fijo — buscar un municipio dentro del territorio no debe pisar ese
+    // branding con el logo (si existiera) del municipio elegido.
+    const _permiteLogoPorMunicipio = !DEPLOYMENT.ambitoTerritorial;
+
+    eventBus.on("municipio-cargado", async ({ municipioData }) => {
+      if (!_permiteLogoPorMunicipio) return; // ámbito territorial: branding fijo, no se toca
+
+      const navLogo = document.querySelector("calcite-navigation-logo");
+      if (!navLogo) return;
+
+      const logoUrl = await _resolverLogoMunicipio(municipioData.codigo_ine);
+
+      navLogo.setAttribute("heading", municipioData.nombre);
+      if (logoUrl) {
+        navLogo.setAttribute("thumbnail", logoUrl);
+        navLogo.removeAttribute("icon"); // Calcite requiere quitar el icono para mostrar el thumbnail
+      }
+      // Si no se encontró ningún logo, se deja el icono/thumbnail que ya
+      // hubiera (por ejemplo el de deployment.branding) — no se fuerza nada.
+    });
 
     console.info("=== GIS Municipal — Listo ===");
 
@@ -240,7 +318,11 @@ document.addEventListener("DOMContentLoaded", main);
 // ↓
 // crear mapa/vistas
 // ↓
-// montar UI
+// resolverAmbitoTerritorial() → municipiosDisponibles + mascaraInicial
+// ↓
+// (si hay mascaraInicial) aplicar máscara territorial + zoom
+// ↓
+// montar UI (selector recibe municipiosDisponibles ya resuelto)
 // ↓
 // usuario selecciona municipio
 // ↓
