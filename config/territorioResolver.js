@@ -116,10 +116,11 @@ export async function resolverAmbitoTerritorial(deployment) {
 
 /**
  * Caso "municipio" — sin máscara territorial propia.
- * El comportamiento existente (municipioSelector.js filtra municipios.js
- * por deployment.municipios) no cambia. Este resolver solo homogeniza
- * el shape de retorno para que main.js llame siempre la misma función
- * sin importar el ámbito del deployment.
+ * El filtro por deployment.municipios (que antes vivía en
+ * municipioSelector.js, acoplado al import estático de municipios.js)
+ * ahora se resuelve aquí, contra data/municipios.json vía LocalJsonAdapter.
+ * Este resolver solo homogeniza el shape de retorno para que main.js
+ * llame siempre la misma función sin importar el ámbito del deployment.
  */
 async function _resolverAmbitoMunicipio(deployment) {
   const todos = await _adapterMunicipios.getData();
