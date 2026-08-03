@@ -21,9 +21,12 @@
  *       2. agregarCapasMunicipio(codigoIne) — al elegir un municipio.
  *          SUMA (no reemplaza) las capas de cobertura "municipal" que
  *          apliquen a ese municipio. La base territorial permanece intacta.
+ *          Además dibuja un resaltado visual (contorno) del municipio en
+ *          foco — ver mapManager.resaltarMunicipio(). La máscara territorial
+ *          NO se toca (ver nota en el cuerpo de la función).
  *       3. retirarCapasMunicipio() — al limpiar la selección.
- *          Inverso exacto de (2): retira solo lo añadido, vuelve a la
- *          máscara/zoom territorial.
+ *          Inverso exacto de (2): retira solo lo añadido, quita el
+ *          resaltado y vuelve a la máscara/zoom territorial.
  *
  * ── POR QUÉ DOS MODELOS Y NO UNO SOLO ─────────────────────────────────────
  * El modelo A siempre tuvo sentido: sin territorio superior, "elegir
@@ -394,7 +397,10 @@ export async function agregarCapasMunicipio(codigoIne) {
       // Aun sin capas nuevas, el zoom al municipio sigue teniendo sentido
       // para el usuario — se hace zoom pero no se emite capas-municipio-agregadas
       // vacío (evita que layerTree procese un array sin contenido).
+      // El resaltado SÍ se pinta aquí igualmente: es una señal visual de foco,
+      // independiente de si el municipio aporta capas propias al catálogo.
       await mapManager.irAlMunicipio(municipioData.bbox);
+      await mapManager.resaltarMunicipio(municipioData.polygon);
       return;
     }
 
@@ -428,7 +434,11 @@ export async function agregarCapasMunicipio(codigoIne) {
     // sigue siendo el territorio completo. Solo se hace zoom al municipio
     // para que el usuario vea el detalle, sin perder el contexto visual
     // territorial de fondo.
+    // El resaltado sustituye aquí a lo que en el Modelo A hace la máscara:
+    // señala el municipio en foco SIN sustituir la base territorial —
+    // capa independiente, ver mapManager.js (sección "Resaltado de municipio").
     await mapManager.irAlMunicipio(municipioData.bbox);
+    await mapManager.resaltarMunicipio(municipioData.polygon);
 
     _capasMunicipioActivas = cfgList.map(c => c.id);
 
@@ -476,6 +486,13 @@ export async function retirarCapasMunicipio({ mantenerZoomTerritorial = false } 
       .toArray();
     map.layers.removeMany(capasARemover);
   }
+
+  // El resaltado se retira siempre, incluso cuando mantenerZoomTerritorial
+  // es true (cambio de un municipio a otro dentro del mismo territorio):
+  // resaltarMunicipio() ya limpia el gráfico anterior antes de pintar el
+  // nuevo, pero quitarlo aquí evita un parpadeo del contorno viejo mientras
+  // agregarCapasMunicipio() del municipio siguiente resuelve sus capas.
+  mapManager.quitarResaltadoMunicipio();
 
   emit("capas-municipio-retiradas", { layerIds: idsARetirar });
 

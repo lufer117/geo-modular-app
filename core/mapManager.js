@@ -5,6 +5,7 @@
  *   - Inicialización de un único Map compartido por dos vistas
  *   - Toggle 2D (MapView) ↔ 3D (SceneView) con sincronización de viewpoint
  *   - Gestión de la máscara visual municipal para recorte de capas WMS
+ *   - Resaltado visual del municipio en foco dentro de un ámbito territorial
  *   - Zoom al municipio seleccionado
  *   - Cambio de basemap
  *
@@ -23,9 +24,24 @@
  * relleno de gris semitransparente. Preserva contexto geográfico exterior.
  * Técnica: geometryEngine.difference(mundo, municipio) → "donut polygon"
  *
+ * ── RESALTADO DE MUNICIPIO (ámbito territorial) ─────────────────────────
+ * GraphicsLayer independiente de la máscara. Responsabilidad distinta:
+ * la máscara OCULTA lo que está fuera del territorio (se calcula una vez
+ * al arrancar y no se toca — decisión 03.08.26, 3DECISIONS.md). El
+ * resaltado SEÑALA un municipio dentro de un territorio ya visible; su
+ * ciclo de vida es corto (aparece/desaparece con cada selección de
+ * municipio dentro de ?cliente=provincia/ccaa), por lo que mezclarlo con
+ * la máscara acoplaría dos conceptos con vidas útiles distintas (mismo
+ * criterio SRP ya aplicado al separar layerFactory de layerInitializer).
+ *
  * ── ORDEN DE CAPAS ───────────────────────────────────────────────────────
  * ArcGIS renderiza la primera capa del array abajo y la última arriba.
- * La máscara siempre se reposiciona al final para quedar sobre los datos.
+ * Orden objetivo, de fondo a frente:
+ *   [ resaltadoLayer, ...capas de datos (WMS/WFS/...), maskLayer ]
+ * El resaltado va justo sobre el basemap (por debajo de los datos) para
+ * no competir visualmente con la lectura de capas activas — es una
+ * referencia de fondo, no un elemento de primer plano. La máscara sigue
+ * reposicionándose siempre al final (por encima de todo).
  */
 
 import * as eventBus from "../utils/eventBus.js";
@@ -38,6 +54,7 @@ let _mapEl             = null; // guarda el web component <arcgis-map> (contened
 let _sceneEl           = null; // guarda el web component <arcgis-scene> (contenedor 3d)
 let _vistaActiva       = "2D"; // guarda el estado global, default 2D
 let _maskLayer         = null; // GraphicsLayer usada para la máscara municipal
+let _resaltadoLayer    = null; // GraphicsLayer usada para el contorno del municipio en foco (ámbito territorial)
 let _sceneReadyPromise = null;  // Guarda la Promesa de inicialización 3D en background
 let _municipioViewpoint = null; // Viewpoint del último municipio cargado
 
@@ -70,11 +87,22 @@ export async function initMap({ mapContainerId, sceneContainerId }) { // paramet
     listMode: "hide" //Indicates how the layer should display eg: in the Layer List component
   });
 
+  // Misma razón que _maskLayer: listMode:"hide" — es infraestructura
+  // visual (resaltado del municipio en foco), no una capa de datos que
+  // el usuario deba ver ni activar/desactivar desde el árbol de capas.
+  _resaltadoLayer = new GraphicsLayer({
+    id:       "municipio-resaltado",
+    title:    "Resaltado de municipio",
+    listMode: "hide"
+  });
+
   // Sin API Key activa → basemap "osm".
-  // La máscara se añade desde el inicio al Map; las capas de datos vendrán via addCapas().
+  // Orden inicial [resaltado, mask]: el resaltado queda por debajo (fondo,
+  // aún sin datos) y la máscara al final (arriba). Las capas de datos
+  // vendrán via addCapas(), que respeta y refuerza este orden.
   _map = new Map({
     basemap: "osm",
-    layers:  [_maskLayer] 
+    layers:  [_resaltadoLayer, _maskLayer] 
   });
 
   //buscar los web components (contenedores)
@@ -257,7 +285,8 @@ export function getMap() {
 
 /**
  * Añade capas al Map compartido eliminando las anteriores.
- * Mantiene siempre la máscara como última capa (renderiza encima de todo).
+ * Mantiene siempre la máscara y el resaltado como infraestructura visual
+ * persistente — no forman parte del ciclo de reemplazo de capas de datos.
  *  
  * @param {Layer[]} capas - Array de instancias Esri ya inicializadas
  */
@@ -269,9 +298,11 @@ export function addCapas(capas) {
     return;
   }
 
-  // Limpia todas las capas de datos — excepto la máscara
+  // Limpia todas las capas de datos — excepto máscara y resaltado, que
+  // son infraestructura visual persistente (ver comentario de cabecera
+  // "ORDEN DE CAPAS" y explicación en initMap()).
    const capasPrevias = _map.layers //(p) map
-    .filter(l => l.id !== "municipio-mask") //(m) map layers collection 
+    .filter(l => l.id !== "municipio-mask" && l.id !== "municipio-resaltado") //(m) map layers collection 
     .toArray(); //(m) map layers collection 
   _map.layers.removeMany(capasPrevias); // (p) (m) map
 
@@ -280,6 +311,14 @@ export function addCapas(capas) {
     _map.layers.addMany(capas); //(p) (m) map
   }
 
+  // Reposicionar resaltado al fondo (índice 0 → justo sobre el basemap,
+  // por debajo de todas las capas de datos recién añadidas). Se reafirma
+  // aquí en cada carga, no solo en initMap(), para que el orden quede
+  // garantizado sin depender de que nadie reordene _map.layers por error.
+  if (_resaltadoLayer) {
+    _map.layers.remove(_resaltadoLayer); //(p) (m) map
+    _map.layers.add(_resaltadoLayer, 0); //(p) (m) map
+  }
 
   // Reposicionar máscara al final → siempre por encima de los datos
   // Arcgis renderiza primera capa abajo, última capa arriba
@@ -293,7 +332,10 @@ export function addCapas(capas) {
 
 /**
  * Añade una sola capa al Map (lazy-load on-demand para WFS).
- * La máscara se reposiciona encima.
+ * La máscara se reposiciona encima. El resaltado no se toca aquí: al
+ * añadirse una capa individual (siempre al final/arriba por defecto),
+ * no puede terminar por debajo del resaltado, así que no hace falta
+ * reafirmar su posición en cada llamada.
  *
  * @param {Layer} capa
  */
@@ -373,6 +415,71 @@ export async function actualizarMascara(polygon) {
  */
 export function limpiarMascara() {
   _maskLayer?.removeAll(); //(m) GraphicsLayer
+}
+
+// ─── RESALTADO DE MUNICIPIO (ámbito territorial) ──────────────────────────
+
+/**
+ * Dibuja (o actualiza) el contorno del municipio en foco dentro de un
+ * ámbito territorial (provincia/ccaa). NO sustituye ni toca la máscara
+ * territorial ya existente — son dos capas independientes con
+ * responsabilidades distintas (ver comentario de cabecera del módulo).
+ *
+ * Reutiliza deliberadamente el mismo patrón de construcción de geometría
+ * que actualizarMascara() (Polygon + spatialReference con fallback a
+ * WGS84) para no introducir una segunda forma de interpretar el campo
+ * .polygon del municipio.
+ *
+ * Z-order: gestionado en addCapas() / initMap(), no aquí — esta función
+ * solo dibuja el gráfico; la posición del GraphicsLayer dentro de
+ * _map.layers ya está garantizada por debajo de las capas de datos.
+ *
+ * @param {Object} polygon - { rings, spatialReference } del municipio activo
+ * @returns {Promise<void>}
+ */
+
+// Ejecutada por municipioSelector.js (agregarCapasMunicipio) con
+// mapManager.resaltarMunicipio(municipioData.polygon)
+export async function resaltarMunicipio(polygon) {
+  if (!_resaltadoLayer || !polygon) return; //sin capa inicializada o sin geometría → no hay nada que dibujar
+
+  const [Graphic, Polygon] = await Promise.all([
+    $arcgis.import("esri/Graphic"),
+    $arcgis.import("esri/geometry/Polygon")
+  ]);
+
+  const municipioPoly = new Polygon({
+    rings:            polygon.rings,
+    spatialReference: polygon.spatialReference ?? { wkid: 4326 }
+  });
+
+  //limpiar cualquier resaltado anterior antes de dibujar el nuevo
+  _resaltadoLayer.removeAll(); //(m) GraphicsLayer
+
+  _resaltadoLayer.add(new Graphic({ //(m) GraphicsLayer.add()
+    geometry: municipioPoly,
+    symbol: {
+      type:  "simple-fill",
+      color: [0, 122, 194, 0.10],   // relleno muy ligero — foco sutil, no compite con los datos
+      outline: {
+        color: [0, 122, 194, 1],      // contorno de foco — ajustar al color de acento real de la app
+        width: 1.5
+      }
+    }
+  }));
+
+  console.info("[mapManager] Resaltado de municipio actualizado");
+}
+
+/**
+ * Retira el resaltado del municipio en foco. Se usa al volver de un
+ * municipio concreto a la vista territorial completa.
+ */
+
+// Ejecutada por municipioSelector.js (retirarCapasMunicipio) con
+// mapManager.quitarResaltadoMunicipio() — simétrica a resaltarMunicipio()
+export function quitarResaltadoMunicipio() {
+  _resaltadoLayer?.removeAll(); //(m) GraphicsLayer
 }
 
 // ─── NAVEGACIÓN ───────────────────────────────────────────────────────────
@@ -458,5 +565,3 @@ export function setBasemap(basemapId) {
 // differenceOperator https://developers.arcgis.com/javascript/latest/references/core/geometry/operators/differenceOperator/
 // Extent https://developers.arcgis.com/javascript/latest/references/core/geometry/Extent/
 // goTo https://developers.arcgis.com/javascript/latest/references/core/views/types/#GoToOptionsBase-duration
-
-
