@@ -5,8 +5,8 @@
  *
  * ── RESPONSABILIDAD ──────────────────────────────────────────────────────
  * Dado el campo "disponibilidad_municipal" del catálogo y los datos del
- * municipio activo, configura cada capa para mostrar solo los datos
- * del municipio seleccionado.
+ * territorio activo (municipio, provincia o ccaa), configura cada capa
+ * para mostrar solo los datos que corresponden a ese ámbito.
  *
  * ── ESTRATEGIAS DE FILTRADO ──────────────────────────────────────────────
  *
@@ -23,44 +23,55 @@
  *   Carga completa inevitable en cliente sin backend.
  *
  * FILTRABLE — WMS con soporte CQL_FILTER (GeoServer):
- *   customLayerParameters con CQL_FILTER → servidor devuelve solo municipio.
+ *   customLayerParameters con CQL_FILTER → servidor devuelve solo el
+ *   ámbito filtrado. El campo contra el que se filtra depende de
+ *   config.filtro_nivel ("municipal" | "provincial" | "autonomico") —
+ *   ver _CAMPO_POR_NIVEL más abajo.
  * FILTRABLE — FeatureLayer/WFS:
- *   definitionExpression con campo_filtro del catálogo.
- *   Requiere layer.load() para validar el esquema antes de aplicar filtro.
+ *   definitionExpression con campo_filtro del catálogo, mismo criterio
+ *   de nivel que WMS. Requiere layer.load() para validar el esquema
+ *   antes de aplicar el filtro.
  *
  * DIRECTA:
- *   La URL ya incorpora el ámbito municipal. Sin filtro extra.
+ *   La URL ya incorpora el ámbito. Sin filtro extra.
  *
  * CONSULTA:
  *   Solo GetFeatureInfo / identify. Sin filtro espacial.
+ *
+ * ── AJUSTE (soporte de ámbito territorial) ─────────────────────────────────
+ * Todo el módulo era ya agnóstico a la escala del bbox recibido — no sabía
+ * ni necesitaba saber si trabajaba con un municipio o un territorio
+ * completo. Este ajuste solo formaliza esa realidad en el naming
+ * (municipioData → territorioData en firmas y JSDoc) y corrige el único
+ * punto que SÍ asumía escala municipal: _estrategiaFiltrable(), que
+ * construía el filtro contra codigo_ine de forma fija. Ahora lee
+ * config.filtro_nivel para decidir contra qué campo filtrar.
  */
 
 // ─── API pública ──────────────────────────────────────────────────────────
 
 /**
- * Inicializa una capa aplicando los filtros correspondientes al municipio.
+ * Inicializa una capa aplicando los filtros correspondientes al territorio activo.
  *
-* @param {Layer}  layer         - Instancia Esri creada por layerFactory
- * @param {Object} config        - Configuración de la capa en el catálogo
- * @param {Object} municipioData - Municipio activo, ya resuelto
- *   (ver territorioResolver.js). Forma: { codigo_ine, nombre,
- *   provincia_code, ccaa_code, bbox, polygon }
+ * @param {Layer}  layer          - Instancia Esri creada por layerFactory
+ * @param {Object} config         - Configuración de la capa en el catálogo
+ * @param {Object} territorioData - Territorio activo (municipio, provincia o
+ *   ccaa), ya resuelto. Forma: { codigo_ine, nombre, provincia_code,
+ *   ccaa_code, bbox, polygon }. codigo_ine es null a nivel provincia/ccaa.
  * @returns {Promise<void>}
  */
-export async function inicializarCapa(layer, config, municipioData) {
-  if (!layer || !config || !municipioData) return;
+export async function inicializarCapa(layer, config, territorioData) {
+  if (!layer || !config || !territorioData) return;
 
   try {
-
-    
     switch (config.disponibilidad_municipal) {
 
       case "BBOX":
-        await _estrategiaBbox(layer, config, municipioData);
+        await _estrategiaBbox(layer, config, territorioData);
         break;
 
       case "FILTRABLE":
-        await _estrategiaFiltrable(layer, config, municipioData);
+        await _estrategiaFiltrable(layer, config, territorioData);
         break;
 
       case "DIRECTA":
@@ -92,15 +103,16 @@ export async function inicializarCapa(layer, config, municipioData) {
  * que el padre. Exportar esta función evita duplicar lógica (DRY) y mantiene
  * la responsabilidad del filtrado en layerInitializer (SRP).
  *
- * @param {WFSLayer} layer         - Instancia WFSLayer (padre o hija)
- * @param {Object}   municipioData - Datos del municipio activo
+ * @param {WFSLayer} layer          - Instancia WFSLayer (padre o hija)
+ * @param {Object}   territorioData - Datos del territorio activo (municipio o
+ *   territorio completo — solo se usa .bbox, agnóstico a la escala)
  * @param {string}   [srsname="EPSG:4326"] - CRS declarado en el catálogo
  * @returns {Promise<void>}
  */
-export async function aplicarBboxWfs(layer, municipioData, srsname = "EPSG:4326") {
-  if (!layer || !municipioData?.bbox) return;
+export async function aplicarBboxWfs(layer, territorioData, srsname = "EPSG:4326") {
+  if (!layer || !territorioData?.bbox) return;
 
-  const [xmin, ymin, xmax, ymax] = municipioData.bbox;
+  const [xmin, ymin, xmax, ymax] = territorioData.bbox;
   let bboxStr;
 
   try {
@@ -163,8 +175,8 @@ export function getTiposImplementados() {
 
 // ─── Estrategias privadas ─────────────────────────────────────────────────
 
-async function _estrategiaBbox(layer, config, municipioData) {
-  const [xmin, ymin, xmax, ymax] = municipioData.bbox;
+async function _estrategiaBbox(layer, config, territorioData) {
+  const [xmin, ymin, xmax, ymax] = territorioData.bbox;
   const tipo = config.tipo;
 
   if (tipo === "WMS") {
@@ -176,7 +188,7 @@ async function _estrategiaBbox(layer, config, municipioData) {
     // Delegar en la función pública para no duplicar lógica.
     // La misma función la usa layerTree para las capas hijas WFS discovery.
     const srsname = config.srsname ?? "EPSG:4326";
-    await aplicarBboxWfs(layer, municipioData, srsname);
+    await aplicarBboxWfs(layer, territorioData, srsname);
 
   } else if (tipo === "FEATURE") {
     try {
@@ -202,7 +214,18 @@ async function _estrategiaBbox(layer, config, municipioData) {
   }
 }
 
-async function _estrategiaFiltrable(layer, config, municipioData) {
+/**
+ * Mapa de nivel territorial → campo de territorioData contra el que se
+ * compara el valor del filtro. Editable si en el futuro se añaden más
+ * niveles (ej. "comarca" cuando se implemente).
+ */
+const _CAMPO_POR_NIVEL = {
+  municipal:  "codigo_ine",
+  provincial: "provincia_code",
+  autonomico: "ccaa_code",
+};
+
+async function _estrategiaFiltrable(layer, config, territorioData) {
   const campoFiltro = config.campo_filtro;
 
   if (!campoFiltro) {
@@ -212,22 +235,46 @@ async function _estrategiaFiltrable(layer, config, municipioData) {
     return;
   }
 
+  // filtro_nivel es nuevo en el catálogo — default "municipal" para
+  // retrocompatibilidad total con capas ya existentes que no lo declaren
+  // (ninguna hoy, pero no debe romper si aparece sin este campo).
+  const nivel = config.filtro_nivel ?? "municipal";
+  const campoTerritorio = _CAMPO_POR_NIVEL[nivel];
+
+  if (!campoTerritorio) {
+    console.warn(
+      `[layerInitializer] filtro_nivel desconocido "${nivel}" en "${config.id}" — se omite filtro`
+    );
+    return;
+  }
+
+  const valorFiltro = territorioData[campoTerritorio];
+
+  if (!valorFiltro) {
+    // Caso esperado, no error: ej. una capa FILTRABLE a nivel "provincial"
+    // evaluada con un territorioData de CCAA (provincia_code null).
+    console.warn(
+      `[layerInitializer] "${config.id}" requiere ${campoTerritorio} pero no está disponible en el territorio activo — se omite filtro`
+    );
+    return;
+  }
+
   const tipo = config.tipo;
 
   if (tipo === "WMS") {
     layer.customLayerParameters = {
-      CQL_FILTER: `${campoFiltro}='${municipioData.codigo_ine}'`
+      CQL_FILTER: `${campoFiltro}='${valorFiltro}'`
     };
     console.info(
-      `[layerInitializer] WMS CQL_FILTER "${campoFiltro}='${municipioData.codigo_ine}'" → "${config.id}"`
+      `[layerInitializer] WMS CQL_FILTER "${campoFiltro}='${valorFiltro}'" (nivel ${nivel}) → "${config.id}"`
     );
 
   } else if (tipo === "FEATURE" || tipo === "WFS") {
     try {
       await layer.load();
-      layer.definitionExpression = `${campoFiltro} = '${municipioData.codigo_ine}'`;
+      layer.definitionExpression = `${campoFiltro} = '${valorFiltro}'`;
       console.info(
-        `[layerInitializer] definitionExpression "${layer.definitionExpression}" → "${config.id}"`
+        `[layerInitializer] definitionExpression "${layer.definitionExpression}" (nivel ${nivel}) → "${config.id}"`
       );
     } catch (err) {
       console.warn(

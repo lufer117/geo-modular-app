@@ -55,8 +55,28 @@
  *   - Los grupos (nivel 1 y 2) no tienen data-layer-id → el listener los ignora
  *
  * ── REACTIVIDAD ───────────────────────────────────────────────────────────
- * El árbol se reconstruye completamente al recibir "municipio-cargado".
- * Árbol limpio por municipio → sin riesgo de estado inconsistente.
+ * El árbol se reconstruye completamente al recibir "municipio-cargado" o
+ * "territorio-cargado" (ambos entregan un conjunto completo desde cero).
+ *
+ * ── AJUSTE (soporte de ámbito territorial provincia/ccaa) ───────────────────
+ * Se añade un segundo modo de actualización, incremental, para el caso
+ * ambitoTerritorial "provincia"/"ccaa": al elegir un municipio dentro del
+ * territorio, sus capas ("capas-municipio-agregadas") se SUMAN como un
+ * grupo propio al final del árbol, sin reconstruir la base territorial ya
+ * renderizada. Al limpiar la selección ("capas-municipio-retiradas") ese
+ * grupo se retira como bloque único.
+ *
+ * Por qué un grupo fijo y no fusión dentro de bloque_tematico/subtema:
+ * patrón GIS estándar (IDENA/GeoBizkaia) — el árbol de un ámbito territorial
+ * no se reestructura al navegar dentro de él; las capas específicas de un
+ * municipio se presentan como sección propia y reconocible. Ver 3DECISIONS.md,
+ * hilo "ámbito territorial: soporte provincia/ccaa".
+ *
+ * El resto del árbol (_renderTree, discovery WFS, sublayers WMS, selección)
+ * no cambia — el grupo municipal reutiliza las mismas funciones de
+ * construcción de nodos (_crearItemCapa, _crearItemWmsConSublayers,
+ * _crearItemWfsDiscovery) y el mismo mecanismo de selección por índice
+ * global en _layersRef/_configsRef.
  */
 
 import { on, emit }        from "../utils/eventBus.js";
@@ -73,11 +93,15 @@ let _layersRef     = [];
 let _configsRef    = [];
 let _lazyLayerIds  = new Set();
 
-// ← CAMBIO: guardar municipioData para aplicar BBOX a las capas hijas WFS
-// creadas on-demand en _crearHijoWfs(). Las hijas no pasan por
-// inicializarCapa() porque no tienen entrada en el catálogo; necesitamos
-// el contexto del municipio activo para filtrarlas igual que al padre.
-let _municipioData = null;
+// ← CAMBIO: renombrado de _municipioData a _territorioData. Guarda el
+// territorio activo (municipio individual O territorio completo
+// provincia/ccaa) para aplicar BBOX a las capas hijas WFS creadas
+// on-demand en _crearHijoWfs(). Las hijas no pasan por inicializarCapa()
+// porque no tienen entrada en el catálogo; necesitamos el contexto del
+// ámbito activo para filtrarlas igual que al padre. El nombre ya no
+// asume escala municipal — sigue siendo el mismo mecanismo, agnóstico
+// a si el bbox es de un municipio o de un territorio completo.
+let _territorioData = null;
 
 /**
  * Conjunto de IDs de nodos WFS "discovery" que ya han sido expandidos.
@@ -86,6 +110,12 @@ let _municipioData = null;
  * Clave: config.id del padre. Valor: true (ya expandido).
  */
 const _wfsDiscoveryExpanded = new Map();
+
+// ── Grupo municipal incremental (Modelo B — ver AJUSTE en cabecera) ───────
+// Índice en _layersRef/_configsRef donde empieza el grupo municipal actual,
+// o null si no hay ninguno activo. Solo puede existir un grupo municipal
+// a la vez (un territorio tiene, como mucho, un municipio "en foco").
+let _inicioGrupoMunicipal = null;
 
 // ─── Inicialización ────────────────────────────────────────────────────────
 
@@ -111,8 +141,28 @@ export function initLayerTree(container) {
     // Limpiar el estado de discovery al cambiar de municipio.
     // Un municipio nuevo puede tener las mismas URLs WFS pero con distinto contexto.
     _wfsDiscoveryExpanded.clear();
-    _municipioData = municipioData ?? null; // ← CAMBIO: actualizar contexto municipal
+    _territorioData = municipioData ?? null; // ← CAMBIO: actualizar contexto (municipio)
     _renderTree(layers, configs, lazyLayerIds ?? new Set());
+  });
+
+  // ← NUEVO: carga inicial de la base territorial (Modelo B — ambitoTerritorial
+  // "provincia"/"ccaa"). Mismo tratamiento que municipio-cargado: es una
+  // carga completa desde cero, no hay nada previo en el árbol que preservar.
+  on("territorio-cargado", ({ layers, configs, lazyLayerIds, territorioData }) => {
+    _wfsDiscoveryExpanded.clear();
+    _territorioData = territorioData ?? null;
+    _renderTree(layers, configs, lazyLayerIds ?? new Set());
+  });
+
+  // ← NUEVO: capas municipales incrementales (Modelo B). A diferencia de
+  // los dos listeners anteriores, estos NO llaman a _renderTree — suman
+  // o retiran un grupo propio sin tocar la base territorial ya renderizada.
+  on("capas-municipio-agregadas", ({ layers, configs, municipioData }) => {
+    _agregarGrupoMunicipal(layers, configs, municipioData);
+  });
+
+  on("capas-municipio-retiradas", () => {
+    _retirarGrupoMunicipal();
   });
 }
 
@@ -125,6 +175,11 @@ function _renderTree(layers, configs, lazyLayerIds) {
   _lazyLayerIds = lazyLayerIds;
   _layersRef    = layers;
   _configsRef   = configs;
+
+  // Reconstrucción completa → cualquier grupo municipal previo queda
+  // huérfano en el DOM que acabamos de limpiar. Resetear el puntero para
+  // que _retirarGrupoMunicipal() no intente operar sobre estado obsoleto.
+  _inicioGrupoMunicipal = null;
 
   if (!configs || configs.length === 0) {
     const msg = document.createElement("p");
@@ -219,6 +274,115 @@ function _renderTree(layers, configs, lazyLayerIds) {
   console.info(`[layerTree] Árbol renderizado: ${configs.length} capas`);
 }
 
+// ─── Grupo municipal incremental (Modelo B) ────────────────────────────────
+
+/**
+ * Añade un grupo de nodos al final del árbol existente, SIN reconstruir
+ * nada de lo ya renderizado (base territorial intacta).
+ *
+ * ── POR QUÉ UN GRUPO FIJO Y NO FUSIÓN POR bloque_tematico ─────────────────
+ * Ver AJUSTE en la cabecera del archivo — patrón GIS estándar, evita que
+ * el usuario pierda la referencia de qué es del territorio y qué es
+ * específico del municipio elegido.
+ *
+ * ── POR QUÉ EXTIENDE _layersRef/_configsRef EN VEZ DE UN ARRAY PROPIO ────
+ * _handleLayerSelect (el listener ya existente de toggle) localiza capas
+ * por índice global en estos dos arrays. Las capas municipales deben vivir
+ * en el mismo espacio de índices para reutilizar ese listener sin duplicar
+ * lógica de selección — solo se les asigna el índice siguiente al último
+ * ocupado por la base territorial.
+ *
+ * @param {Layer[]} layers
+ * @param {Object[]} configs
+ * @param {Object} municipioData
+ */
+function _agregarGrupoMunicipal(layers, configs, municipioData) {
+  if (!configs || configs.length === 0) return;
+
+  // Defensivo: si quedó un grupo municipal anterior sin retirar, se retira
+  // primero. municipioSelector.agregarCapasMunicipio() ya llama a retirar
+  // antes de agregar, pero el árbol no debe asumir que ese orden siempre
+  // se respeta desde cualquier punto de llamada futuro.
+  _retirarGrupoMunicipal();
+
+  _inicioGrupoMunicipal = _layersRef.length;
+  _layersRef  = [..._layersRef, ...layers];
+  _configsRef = [..._configsRef, ...configs];
+
+  // Los ids WFS municipales también deben lazy-cargar igual que los
+  // territoriales — se suman al mismo Set, no uno nuevo, mismo mecanismo
+  // que ya usa _handleLayerSelect para decidir cuándo llamar a addCapa().
+  configs
+    .filter(c => c.tipo === "WFS")
+    .forEach(c => _lazyLayerIds.add(c.id));
+
+  const grupoItem = document.createElement("calcite-tree-item");
+  grupoItem.dataset.grupoMunicipal = "true"; // única marca necesaria para localizarlo al retirar
+  grupoItem.setAttribute("expanded", "");
+
+  const label = document.createElement("span");
+  label.className   = "layer-group-label layer-group-bloque";
+  label.textContent = `Capas específicas de ${municipioData.nombre}`;
+  grupoItem.appendChild(label);
+
+  const childrenTree = document.createElement("calcite-tree");
+  childrenTree.slot  = "children";
+
+  configs.forEach((config, i) => {
+    const layer       = layers[i];
+    const globalIndex = _inicioGrupoMunicipal + i;
+
+    // Mismas tres ramas de construcción de nodo que _renderTree — se
+    // reutilizan tal cual, sin ninguna modificación, porque construyen
+    // nodos idénticos sea cual sea el origen de la config.
+    if (config.tipo === "WMS" && config.sublayers?.length) {
+      childrenTree.appendChild(_crearItemWmsConSublayers(config, layer, globalIndex));
+    } else if (config.tipo === "WFS" && !config.name) {
+      childrenTree.appendChild(_crearItemWfsDiscovery(config, globalIndex));
+    } else {
+      childrenTree.appendChild(_crearItemCapa(config, layer, globalIndex));
+    }
+  });
+
+  grupoItem.appendChild(childrenTree);
+
+  // Se inserta como último hijo del <calcite-tree> raíz ya construido por
+  // _renderTree — no se recrea el <calcite-tree>, solo se le añade un hijo.
+  const treeRaiz = _containerEl.querySelector("calcite-tree");
+  if (treeRaiz) {
+    treeRaiz.appendChild(grupoItem);
+  } else {
+    // Caso límite: no debería ocurrir si territorio-cargado ya renderizó
+    // la base antes de que el usuario pueda elegir un municipio, pero se
+    // deja el aviso explícito para no fallar en silencio.
+    console.warn("[layerTree] No hay <calcite-tree> raíz — ¿se cargó la base territorial?");
+  }
+
+  console.info(`[layerTree] + Grupo municipal añadido: ${configs.length} capas`);
+}
+
+/**
+ * Retira el grupo municipal completo (DOM + estado), sin tocar el resto
+ * del árbol. Inverso exacto de _agregarGrupoMunicipal().
+ */
+function _retirarGrupoMunicipal() {
+  if (_inicioGrupoMunicipal === null) return;
+
+  const grupoItem = _containerEl.querySelector('[data-grupo-municipal="true"]');
+  grupoItem?.remove();
+
+  // Recortar los arrays globales de vuelta al tamaño previo. Es seguro
+  // porque el grupo municipal siempre es lo último que se añadió — nunca
+  // hay un segundo grupo incremental después de él (agregarCapasMunicipio
+  // siempre retira el anterior antes de sumar el nuevo).
+  _layersRef  = _layersRef.slice(0, _inicioGrupoMunicipal);
+  _configsRef = _configsRef.slice(0, _inicioGrupoMunicipal);
+
+  _inicioGrupoMunicipal = null;
+
+  console.info("[layerTree] − Grupo municipal retirado");
+}
+
 // ─── Handlers de eventos ──────────────────────────────────────────────────
 
 /**
@@ -266,7 +430,7 @@ function _handleLayerSelect(e) {
 
   layer.visible = visible;
 
- 
+
 
   emit(visible ? "capa-activada" : "capa-desactivada", { layerId, layer, config });
   console.info(`[layerTree] "${layerId}" → visible: ${visible}`);
@@ -300,7 +464,7 @@ function _handleWfsHijoSelect(item, hijoId) {
   // Lazy: añadir al mapa solo la primera vez que se activa
   if (visible && !layer.map) {
     mapManager.addCapa(layer);
-    
+
     layer.load()
       .then(() => {
         // POPUP POST-LOAD — timing crítico.
@@ -419,14 +583,14 @@ async function _handleWfsDiscovery(item) {
     //
     // checkFeaturesInBbox nunca rechaza (captura internamente todos los errores),
     // por lo que Promise.all es seguro sin .catch adicional.
-    const bbox = _municipioData?.bbox ?? null;
+    const bbox = _territorioData?.bbox ?? null; // ← CAMBIO: _municipioData → _territorioData
 
     let availabilityMap; // Map<nombre_featureType, boolean>
 
     if (bbox) {
       // const checks  = featureTypes.map(ft => checkFeaturesInBbox(config.url, ft.name, bbox));
       // const results = await Promise.all(checks);
-      
+
         const results = await _checkConPool(featureTypes, config.url, bbox, {
           concurrencia: 4   // mismo valor conservador, sin pausa artificial
         });
@@ -436,9 +600,9 @@ async function _handleWfsDiscovery(item) {
       // asumir todos los FeatureTypes disponibles y dejar que el usuario decida.
       // Si el servidor no tiene datos en esta zona, la capa quedará vacía pero
       // no bloqueará el discovery.
-      console.warn("[layerTree] _municipioData.bbox no disponible; omitiendo check BBOX");
+      console.warn("[layerTree] _territorioData.bbox no disponible; omitiendo check BBOX");
       availabilityMap = new Map(featureTypes.map(ft => [ft.name, true]));
-      
+
       // BUG MARCADO: aquí se usa `results[i]` aunque `results` no existe en esta rama.
       // Si se corrige, esta rama debería mapear a `true` por defecto.q
       // availabilityMap = new Map(featureTypes.map((ft, i) => [ft.name, results[i]]));
@@ -663,7 +827,7 @@ function _crearItemWfsDiscovery(config, globalIndex) {
 /**
  * Crea el nodo Calcite para un FeatureType hijo de un nodo WFS discovery,
  * crea la instancia WFSLayer correspondiente, y le aplica el filtro BBOX
- * del municipio activo antes de que entre al mapa.
+ * del territorio activo antes de que entre al mapa.
  *
  * ── POR QUÉ SE APLICA BBOX AQUÍ ──────────────────────────────────────────
  * La hija no tiene entrada en el catálogo → no pasa por inicializarCapa().
@@ -692,7 +856,7 @@ async function _crearHijoWfs(featureType, configPadre, disponible = true) {
   item.dataset.layerId = hijoId;
   item.dataset.wfsHijo = "true";
   item.setAttribute("disabled", "");
-  
+
   // Tooltip nativo (visible al hacer hover)
   item.title = `${featureType.name} — sin datos en este municipio`;
 
@@ -702,14 +866,14 @@ async function _crearHijoWfs(featureType, configPadre, disponible = true) {
   item.appendChild(label);
 
   return { item, layer: null };
-    
+
   }
 
   // Crear la instancia de capa antes de crear el nodo DOM.
   // Si falla, el nodo mostrará un estado de error en lugar de quedar huérfano.
   const layer = await crearCapaWfsHija(featureType, configPadre);
 
-  
+
   const item = document.createElement("calcite-tree-item");
   item.dataset.layerId = hijoId;
   item.dataset.wfsHijo = "true"; // Identificador para _handleLayerSelect
@@ -735,8 +899,8 @@ async function _crearHijoWfs(featureType, configPadre, disponible = true) {
   // La hija hereda el srsname del configPadre (que sí está en el catálogo).
   // El filtro debe aplicarse ANTES de map.add() para que el primer
   // GetFeature request ya lleve el parámetro BBOX al servidor.
-  if (_municipioData) {
-    await aplicarBboxWfs(layer, _municipioData, configPadre.srsname ?? "EPSG:4326");
+  if (_territorioData) { // ← CAMBIO: _municipioData → _territorioData
+    await aplicarBboxWfs(layer, _territorioData, configPadre.srsname ?? "EPSG:4326");
   }
 
   // Almacenar referencia directa en el nodo DOM para acceso O(1) desde el listener
@@ -844,7 +1008,7 @@ function _agrupar(configs, layers) {
 
 /**
  * Pool de concurrencia fija para checkFeaturesInBbox.
- * 
+ *
  * Por qué pool en vez de lotes con pausa:
  * - Los lotes con pausa fija desperdician tiempo cuando el servidor responde rápido
  *   (INE responde en ~80ms pero el lote espera 500ms igualmente).
@@ -852,7 +1016,7 @@ function _agrupar(configs, layers) {
  *   en cuanto una termina, la siguiente arranca sin esperar al resto del lote.
  * - Mismo control de carga para servidores lentos (Fomento/ArcGIS gubernamental),
  *   sin penalizar a los servidores rápidos (INE/GeoServer).
- * 
+ *
  * @param {FeatureTypeInfo[]} featureTypes
  * @param {string} serviceUrl
  * @param {number[]} bbox

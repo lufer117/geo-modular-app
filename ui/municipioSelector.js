@@ -4,66 +4,71 @@
  * Selector de municipio. Punto de entrada del flujo de carga de datos.
  *
  * ── RESPONSABILIDAD ──────────────────────────────────────────────────────
- * Renderizar un selector Calcite y, al elegir un municipio, orquestar
- * el pipeline completo de carga:
+ * Renderizar un selector Calcite y orquestar el pipeline de carga de datos,
+ * ahora en DOS MODELOS distintos según el ámbito del deployment:
  *
- *  El módulo ya NO decide qué municipios mostrar — eso lo resuelve
- *  config/territorioResolver.js (soporta ámbito municipio/provincia/ccaa).
- *  main.js llama a resolverAmbitoTerritorial() y pasa el array ya filtrado
- *  a renderMunicipioSelector(). Este módulo solo pinta lo que recibe.
+ *   Modelo A — ambitoTerritorial: "municipio" (sin cambios de comportamiento)
+ *     Un único pipeline: elegir municipio → RECONSTRUYE todo el conjunto
+ *     de capas desde cero. Usado por ayuntamiento único y comarca curada.
+ *     Función: _cargarMunicipio() (privada, sin cambios).
  *
- *  Antes: importaba MUNICIPIOS estático y filtraba por deployment.municipios
- *  — lógica que hoy vive duplicada en territorioResolver para los otros
- *  ámbitos (provincia/ccaa). Eliminar la duplicación deja un único punto
- *  de verdad sobre "qué municipios se muestran", sin importar el ámbito.
+ *   Modelo B — ambitoTerritorial: "provincia" | "ccaa" (NUEVO)
+ *     Carga incremental en dos capas:
+ *       1. cargarAmbitoTerritorial(territorioData) — UNA VEZ al arrancar.
+ *          Resuelve y añade las capas de cobertura territorial (nacional/
+ *          europea/global/autonómica/provincial). Aplica máscara y zoom
+ *          sobre el territorio completo.
+ *       2. agregarCapasMunicipio(codigoIne) — al elegir un municipio.
+ *          SUMA (no reemplaza) las capas de cobertura "municipal" que
+ *          apliquen a ese municipio. La base territorial permanece intacta.
+ *       3. retirarCapasMunicipio() — al limpiar la selección.
+ *          Inverso exacto de (2): retira solo lo añadido, vuelve a la
+ *          máscara/zoom territorial.
  *
- *   configEngine.fetchCapas(municipioData)
- *       ↓  array de configs filtradas por cobertura
- *   layerFactory.crearCapa(config) × N   [en paralelo]
- *       ↓  instancias Esri
- *   layerInitializer.inicializarCapa(layer, config, municipioData) × N
- *       ↓  filtros runtime aplicados (BBOX / FILTRABLE / DIRECTA)
- *   mapManager.addCapas(layers)
- *       ↓  capas en el Map
- *   mapManager.actualizarMascara(polygon)
- *       ↓  recorte visual WMS actualizado
- *   mapManager.irAlMunicipio(bbox)
- *       ↓  zoom al municipio
- *   eventBus.emit("municipio-cargado")
- *       ↓  layerTree y legendPanel se actualizan
+ * ── POR QUÉ DOS MODELOS Y NO UNO SOLO ─────────────────────────────────────
+ * El modelo A siempre tuvo sentido: sin territorio superior, "elegir
+ * municipio" ES la única fuente de verdad de qué mostrar — no hay nada
+ * que preservar entre selecciones. El modelo B nace porque a nivel
+ * provincia/ccaa SÍ existe una base que no debe destruirse cada vez que
+ * el usuario prueba un municipio distinto (ver 3DECISIONS.md — hilo de
+ * ámbito territorial). Forzar el modelo A en ambos casos convertiría cada
+ * cambio de municipio en un cliente Diputación/Gobierno regional en una
+ * recarga completa de capas ya cargadas — desperdicio de red y de estado
+ * (WMS ya cargado, WFS con features en memoria) sin ninguna necesidad.
  *
  * ── LO QUE NO HACE ───────────────────────────────────────────────────────
  * No instancia capas directamente (delegado a layerFactory).
  * No construye el árbol DOM de capas (delegado a layerTree).
  * No conoce el formato de las capas Esri.
- * Ya NO decide qué municipios son visibles (delegado a territorioResolver).
+ * No decide qué municipios son visibles (delegado a territorioResolver).
  */
 
+import * as configEngine          from "../config/configEngine.js";
+import * as mapManager            from "../core/mapManager.js";
+import { crearCapa }              from "../core/layerFactory.js";
+import { inicializarCapa }        from "../core/layerInitializer.js";
+import { emit, on }               from "../utils/eventBus.js";
+import { clearContainer }         from "../utils/domUtils.js";
+import { t }                      from "../config/i18n/i18nManager.js";
 
-//  usuario interactúa con el select        1 solo municipio en la lista recibida
-//         ↓                                           ↓
-//   _onMunicipioChange(event)           carga automática al arrancar
-//         ↓                                           ↓
-//         └───────────── _cargarMunicipio(codigoIne) ──────────────┘
-//                                     ↓
-//                           [pipeline completo — sin cambios]
+// ─── Estado interno del módulo ─────────────────────────────────────────────
 
-import * as configEngine         from "../config/configEngine.js";
-import * as mapManager           from "../core/mapManager.js";
-import { crearCapa }             from "../core/layerFactory.js";
-import { inicializarCapa }       from "../core/layerInitializer.js";
-import { emit }                  from "../utils/eventBus.js";
-import { on }                    from "../utils/eventBus.js";
-import { clearContainer }        from "../utils/domUtils.js";
-import { t }                     from "../config/i18n/i18nManager.js";
-
-// Semáforo: evitar doble carga si el usuario cambia de municipio rápidamente
-let _cargando = false;
-let _municipioActivo = null;
-let _containerEl = null;
-let _deploymentRef = { municipios: [] };
-let _municipiosDisponibles = [];   // ← ya resuelto por territorioResolver, no se filtra aquí
+let _cargando               = false;
+let _municipioActivo        = null;   // codigo_ine del municipio elegido, o null
+let _containerEl            = null;
+let _deploymentRef          = { municipios: [] };
+let _municipiosDisponibles  = [];     // resuelto por territorioResolver
 let _idiomaListenerRegistrado = false;
+
+// Estado nuevo — solo relevante en Modelo B (ambitoTerritorial provincia/ccaa).
+// Se guarda aquí porque main.js lo descarta tras la carga inicial, y
+// retirarCapasMunicipio() lo necesita para volver a la máscara/zoom
+// territorial sin tener que llamar de nuevo a territorioResolver.
+let _territorioData         = null;
+// IDs de las capas municipales actualmente añadidas — necesario para que
+// retirarCapasMunicipio() sepa exactamente qué quitar del mapa y del árbol
+// sin afectar la base territorial.
+let _capasMunicipioActivas  = [];
 
 export function getMunicipioActivo() {
   return _municipioActivo;
@@ -73,6 +78,7 @@ export function getMunicipioActivo() {
  * API pública para cargar un municipio por código INE desde fuera del módulo.
  * Usada por main.js para restaurar el estado tras un cambio de idioma.
  * Delega en _cargarMunicipio para mantener DRY — un único pipeline.
+ * Solo aplica al Modelo A (ambitoTerritorial "municipio").
  *
  * @param {string} codigoIne
  */
@@ -111,6 +117,7 @@ export function renderMunicipioSelector(container, municipiosDisponibles = [], d
   _registrarListenerIdioma();
 
   const municipiosVisibles = _municipiosDisponibles;
+  const esAmbitoTerritorial = (deployment.ambitoTerritorial ?? "municipio") !== "municipio";
 
   if (municipiosVisibles.length === 0) {
     console.warn(
@@ -121,13 +128,11 @@ export function renderMunicipioSelector(container, municipiosDisponibles = [], d
   }
 
   // ── Municipio único: carga automática, sin selector en el DOM ────────────
-  // Con un solo municipio configurado el selector no aporta valor al usuario
-  // final: no hay nada que elegir. El contenedor queda vacío intencionalmente
-  // para no romper el layout del slot content-center de calcite-navigation.
-  // La carga se dispara aquí directamente, sin esperar interacción.
-  // _municipioActivo como guardia evita doble carga si idioma-cambiado
-  // vuelve a invocar renderMunicipioSelector con el mismo municipio.
-  if (municipiosVisibles.length === 1) {
+  // Solo aplica al Modelo A. En Modelo B (provincia/ccaa) SIEMPRE se muestra
+  // el selector, incluso si el territorio de prueba solo tiene 1 municipio
+  // en el dataset actual — el usuario elige explícitamente, no hay carga
+  // automática de un municipio dentro de un territorio.
+  if (municipiosVisibles.length === 1 && !esAmbitoTerritorial) {
     const unicoCodigo = municipiosVisibles[0].codigo_ine;
     if (_municipioActivo !== unicoCodigo) {
       _cargarMunicipio(unicoCodigo);
@@ -135,32 +140,24 @@ export function renderMunicipioSelector(container, municipiosDisponibles = [], d
     return; // ← sale sin construir ningún elemento DOM
   }
 
-  // ── Varios municipios: construir el selector Calcite ─────────────────────
-  // A partir de aquí el código es idéntico al actual, sin cambios.
+  // ── Selector Calcite ───────────────────────────────────────────────────
 
   const label = document.createElement("calcite-label");
   label.setAttribute("layout", "inline");
-  label.textContent = t("nav.municipio.label"); // no hardcoded
+  label.textContent = t("nav.municipio.label");
 
   const select = document.createElement("calcite-select");
   select.id = "municipio-select";
-  select.setAttribute("label", t("nav.municipio.placeholder")); // no hardcoded
+  select.setAttribute("label", t("nav.municipio.placeholder"));
 
-  // La opción vacía solo tiene sentido cuando hay más de un municipio.
-  // Con un único municipio se carga automáticamente y el placeholder no aporta.
-  if (municipiosVisibles.length > 1) {
-    const defaultOpt = document.createElement("calcite-option");
-    defaultOpt.value       = "";
-    defaultOpt.textContent = t("nav.municipio.placeholder"); // no hardcoded
-    select.appendChild(defaultOpt);
-  }
+  const defaultOpt = document.createElement("calcite-option");
+  defaultOpt.value       = "";
+  defaultOpt.textContent = t("nav.municipio.placeholder");
+  select.appendChild(defaultOpt);
 
   municipiosVisibles.forEach(m => {
     const opt = document.createElement("calcite-option");
     opt.value       = m.codigo_ine;
-    // Nota: se corrige aquí un bug preexistente — el campo usado era
-    // "provincia_nombre", que no existe en el schema de municipios.json
-    // (solo provincia_code). Mostraba literalmente "(undefined)".
     opt.textContent = `${m.nombre} (${m.provincia_code})`;
     select.appendChild(opt);
   });
@@ -169,34 +166,53 @@ export function renderMunicipioSelector(container, municipiosDisponibles = [], d
     select.value = _municipioActivo;
   }
 
+  // El handler de cambio se bifurca según el modelo — ver _onMunicipioChange.
   select.addEventListener("calciteSelectChange", _onMunicipioChange);
 
   label.appendChild(select);
   el.appendChild(label);
-
-
 }
 
-// ─── Handlers privados ────────────────────────────────────────────────────────
+// ─── Handlers privados ─────────────────────────────────────────────────────
 
 /**
  * Handler del evento calciteSelectChange.
- * Delega en _cargarMunicipio para mantener DRY con la carga automática.
+ * Se bifurca según el ámbito del deployment activo:
+ *   - "municipio" → _cargarMunicipio() (Modelo A, comportamiento existente)
+ *   - "provincia"/"ccaa" → agregarCapasMunicipio() / retirarCapasMunicipio()
+ *     (Modelo B, incremental). Valor vacío ("") = el usuario limpió la
+ *     selección → retirar.
+ *
+ * Nota: con <calcite-select> la única forma de "limpiar" es elegir la
+ * opción vacía inicial. El comportamiento de "X" pensado para
+ * calcite-combobox (pendiente en 4STATUS.md) llamará a la misma
+ * retirarCapasMunicipio() cuando se migre el componente — este handler
+ * ya queda preparado para ese reemplazo sin cambios adicionales aquí.
  */
 async function _onMunicipioChange(event) {
-  await _cargarMunicipio(event.target.value);
+  const codigoIne = event.target.value;
+  const esAmbitoTerritorial = (_deploymentRef.ambitoTerritorial ?? "municipio") !== "municipio";
+
+  if (!esAmbitoTerritorial) {
+    await _cargarMunicipio(codigoIne);
+    return;
+  }
+
+  if (!codigoIne) {
+    await retirarCapasMunicipio();
+  } else {
+    await agregarCapasMunicipio(codigoIne);
+  }
 }
 
 /**
- * Pipeline de carga de un municipio.
- *
- * Extraído del handler para ser reutilizable desde la carga automática
- * sin duplicar lógica (DRY). Ambas rutas (evento + automática) convergen aquí.
+ * Pipeline de carga de un municipio — MODELO A (ambitoTerritorial "municipio").
+ * Reconstruye por completo el conjunto de capas. Sin cambios de
+ * comportamiento respecto a la versión anterior.
  *
  * @param {string} codigoIne - Código INE del municipio a cargar
  */
 async function _cargarMunicipio(codigoIne) {
-  // Sin selección real o pipeline ya en curso → ignorar
   if (!codigoIne || _cargando) return;
 
   const municipioData = _municipiosDisponibles.find(m => m.codigo_ine === codigoIne);
@@ -212,7 +228,6 @@ async function _cargarMunicipio(codigoIne) {
 
     emit("municipio-seleccionado", { municipioData });
 
-    // ── 1. Resolver capas del catálogo para este municipio ──
     const configs = await configEngine.fetchCapas(municipioData);
 
     if (configs.length === 0) {
@@ -220,12 +235,10 @@ async function _cargarMunicipio(codigoIne) {
       return;
     }
 
-    // ── 2. Crear instancias Esri en paralelo ──
     const layersConNull = await Promise.all(
       configs.map(config => crearCapa(config))
     );
 
-    // Emparejar config + layer y filtrar las que fallaron (null)
     const pares = configs
       .map((config, i) => ({ config, layer: layersConNull[i] }))
       .filter(({ layer }) => layer !== null);
@@ -235,7 +248,6 @@ async function _cargarMunicipio(codigoIne) {
       return;
     }
 
-    // ── 3. Aplicar filtros runtime (BBOX, FILTRABLE, DIRECTA...) ──
     await Promise.all(
       pares.map(({ layer, config }) => inicializarCapa(layer, config, municipioData))
     );
@@ -243,20 +255,12 @@ async function _cargarMunicipio(codigoIne) {
     const layers  = pares.map(p => p.layer);
     const cfgList = pares.map(p => p.config);
 
-    // ── 4. Añadir capas al mapa ──
-    // WFSLayer descarga features en map.add() aunque visible=false.
-    // Las WFS no entran al mapa hasta que el usuario las active desde
-    // el árbol de capas (lazy-load implementado en layerTree.js).
     const capasInmediatas = layers.filter((_, i) => cfgList[i].tipo !== "WFS");
     mapManager.addCapas(capasInmediatas);
 
-    // ── 5. Actualizar máscara visual (recorte WMS por polígono municipal) ──
     await mapManager.actualizarMascara(municipioData.polygon);
-
-    // ── 6. Zoom al municipio ──
     await mapManager.irAlMunicipio(municipioData.bbox);
 
-    // ── 7. Notificar: layerTree y legendPanel reaccionarán ──
     emit("municipio-cargado", {
       municipioData,
       layers,
@@ -278,7 +282,221 @@ async function _cargarMunicipio(codigoIne) {
   }
 }
 
-// ─── Helpers privados ─────────────────────────────────────────────────────────
+// ─── Pipeline MODELO B — ámbito territorial (provincia/ccaa) ──────────────
+
+/**
+ * Carga la BASE territorial — capas de cobertura nacional/europea/global/
+ * autonómica/provincial. Se ejecuta UNA VEZ al arrancar, cuando
+ * deployment.ambitoTerritorial !== "municipio".
+ *
+ * Usa mapManager.addCapas() (reemplaza) porque en este punto el mapa
+ * todavía no tiene ninguna capa de datos — es la primera carga, no hay
+ * nada que preservar. addCapa() incremental entra en juego después,
+ * en agregarCapasMunicipio().
+ *
+ * @param {Object} territorioData - { bbox, polygon, provincia_code,
+ *   ccaa_code, codigo_ine: null }, viene de territorioResolver.mascaraInicial
+ */
+export async function cargarAmbitoTerritorial(territorioData) {
+  if (_cargando) return;
+  _cargando = true;
+  _setLoading(true);
+
+  try {
+    _territorioData = territorioData; // guardado para retirarCapasMunicipio()
+
+    console.info("[municipioSelector] → Cargando ámbito territorial base");
+
+    const configs = await configEngine.fetchCapasTerritoriales(territorioData);
+
+    if (configs.length === 0) {
+      console.warn("[municipioSelector] Sin capas territoriales para este ámbito");
+      return;
+    }
+
+    const layersConNull = await Promise.all(
+      configs.map(config => crearCapa(config))
+    );
+
+    const pares = configs
+      .map((config, i) => ({ config, layer: layersConNull[i] }))
+      .filter(({ layer }) => layer !== null);
+
+    await Promise.all(
+      pares.map(({ layer, config }) => inicializarCapa(layer, config, territorioData))
+    );
+
+    const layers  = pares.map(p => p.layer);
+    const cfgList = pares.map(p => p.config);
+
+    const capasInmediatas = layers.filter((_, i) => cfgList[i].tipo !== "WFS");
+    mapManager.addCapas(capasInmediatas); // primera carga → reemplazo seguro, no hay nada que preservar aún
+
+    await mapManager.actualizarMascara(territorioData.polygon);
+    await mapManager.irAlMunicipio(territorioData.bbox);
+
+    emit("territorio-cargado", {
+      territorioData,
+      layers,
+      configs: cfgList,
+      lazyLayerIds: new Set(
+        cfgList.filter(c => c.tipo === "WFS").map(c => c.id)
+      )
+    });
+
+    console.info(`[municipioSelector] ✓ ${layers.length} capas territoriales base cargadas`);
+
+  } catch (err) {
+    console.error("[municipioSelector] Error al cargar ámbito territorial:", err);
+  } finally {
+    _cargando = false;
+    _setLoading(false);
+  }
+}
+
+/**
+ * SUMA las capas de cobertura "municipal" de un municipio concreto a la
+ * base territorial ya cargada. No reconstruye nada — usa mapManager.addCapa()
+ * (singular) capa por capa para no pisar lo que ya está en el mapa.
+ *
+ * Si había un municipio distinto ya agregado, primero se retira (un
+ * territorio solo tiene un municipio "en foco" a la vez, aunque la base
+ * territorial sea compartida).
+ *
+ * @param {string} codigoIne
+ */
+export async function agregarCapasMunicipio(codigoIne) {
+  if (!codigoIne || _cargando) return;
+
+  const municipioData = _municipiosDisponibles.find(m => m.codigo_ine === codigoIne);
+  if (!municipioData) return;
+
+  // Cambiar de municipio dentro del mismo territorio: retirar el anterior
+  // antes de añadir el nuevo, para no acumular capas municipales de dos
+  // municipios distintos a la vez.
+  if (_municipioActivo && _municipioActivo !== codigoIne) {
+    await retirarCapasMunicipio({ mantenerZoomTerritorial: true });
+  }
+
+  _municipioActivo = codigoIne;
+  _cargando = true;
+  _setLoading(true);
+
+  try {
+    console.info(`[municipioSelector] + Agregando capas municipales: ${municipioData.nombre}`);
+
+    emit("municipio-seleccionado", { municipioData });
+
+    const configs = await configEngine.fetchCapasMunicipales(municipioData);
+
+    if (configs.length === 0) {
+      console.info(`[municipioSelector] "${municipioData.nombre}" no tiene capas municipales propias`);
+      // Aun sin capas nuevas, el zoom al municipio sigue teniendo sentido
+      // para el usuario — se hace zoom pero no se emite capas-municipio-agregadas
+      // vacío (evita que layerTree procese un array sin contenido).
+      await mapManager.irAlMunicipio(municipioData.bbox);
+      return;
+    }
+
+    const layersConNull = await Promise.all(
+      configs.map(config => crearCapa(config))
+    );
+
+    const pares = configs
+      .map((config, i) => ({ config, layer: layersConNull[i] }))
+      .filter(({ layer }) => layer !== null);
+
+    await Promise.all(
+      pares.map(({ layer, config }) => inicializarCapa(layer, config, municipioData))
+    );
+
+    const layers  = pares.map(p => p.layer);
+    const cfgList = pares.map(p => p.config);
+
+    // ── Diferencia clave con _cargarMunicipio: addCapa() singular, en bucle ──
+    // addCapas() (plural) reemplazaría toda la base territorial. addCapa()
+    // (singular) solo añade — mismo mecanismo ya usado por layerTree para
+    // el lazy-load de WFS, aquí aplicado a la carga inicial de capas
+    // municipales no-WFS.
+    layers.forEach((layer, i) => {
+      if (cfgList[i].tipo !== "WFS") {
+        mapManager.addCapa(layer);
+      }
+    });
+
+    // No se toca la máscara territorial (actualizarMascara) — la base
+    // sigue siendo el territorio completo. Solo se hace zoom al municipio
+    // para que el usuario vea el detalle, sin perder el contexto visual
+    // territorial de fondo.
+    await mapManager.irAlMunicipio(municipioData.bbox);
+
+    _capasMunicipioActivas = cfgList.map(c => c.id);
+
+    emit("capas-municipio-agregadas", {
+      municipioData,
+      layers,
+      configs: cfgList,
+      lazyLayerIds: new Set(
+        cfgList.filter(c => c.tipo === "WFS").map(c => c.id)
+      )
+    });
+
+    console.info(
+      `[municipioSelector] ✓ ${layers.length} capas municipales agregadas para "${municipioData.nombre}"`
+    );
+
+  } catch (err) {
+    console.error("[municipioSelector] Error al agregar capas municipales:", err);
+  } finally {
+    _cargando = false;
+    _setLoading(false);
+  }
+}
+
+/**
+ * Retira las capas municipales agregadas por agregarCapasMunicipio() y
+ * devuelve la vista al estado de base territorial (máscara + zoom).
+ * Inverso exacto de agregarCapasMunicipio() — no toca la base territorial.
+ *
+ * @param {Object} [opciones]
+ * @param {boolean} [opciones.mantenerZoomTerritorial=false] - Si true, no
+ *   hace zoom de vuelta al territorio (usado internamente por
+ *   agregarCapasMunicipio() al cambiar de un municipio a otro, donde el
+ *   siguiente zoom lo hará la propia función que llama).
+ */
+export async function retirarCapasMunicipio({ mantenerZoomTerritorial = false } = {}) {
+  if (_capasMunicipioActivas.length === 0 && !_municipioActivo) return;
+
+  const map = mapManager.getMap();
+  const idsARetirar = [..._capasMunicipioActivas];
+
+  if (map) {
+    const capasARemover = map.layers
+      .filter(l => idsARetirar.includes(l.id))
+      .toArray();
+    map.layers.removeMany(capasARemover);
+  }
+
+  emit("capas-municipio-retiradas", { layerIds: idsARetirar });
+
+  _capasMunicipioActivas = [];
+  _municipioActivo = null;
+
+  if (!mantenerZoomTerritorial && _territorioData) {
+    await mapManager.actualizarMascara(_territorioData.polygon);
+    await mapManager.irAlMunicipio(_territorioData.bbox);
+  }
+
+  // Sincronizar el <calcite-select> de vuelta a la opción vacía, por si
+  // la llamada vino de un origen distinto al propio change del selector
+  // (ej. futuro botón "X" del combobox).
+  const select = document.getElementById("municipio-select");
+  if (select) select.value = "";
+
+  console.info(`[municipioSelector] − ${idsARetirar.length} capas municipales retiradas`);
+}
+
+// ─── Helpers privados ─────────────────────────────────────────────────────
 
 /** Muestra u oculta el spinner de carga del select Calcite */
 function _setLoading(isLoading) {

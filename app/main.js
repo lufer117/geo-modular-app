@@ -20,12 +20,17 @@
  * Ningún otro archivo cambia.
  *
  * ── AJUSTE (soporte de ámbito territorial) ────────────────────────────────
- * Se añade el paso 3.5: resolverAmbitoTerritorial(DEPLOYMENT) — ver
- * config/territorioResolver.js. Antes, municipioSelector.js decidía por sí
- * mismo qué municipios mostrar filtrando deployment.municipios contra el
- * import estático de municipios.js. Ahora esa decisión se centraliza aquí
- * y se le pasa ya resuelta, soportando también deployments a nivel
- * provincia/ccaa (máscara territorial inicial antes de elegir municipio).
+ * El paso 4.5 antes solo aplicaba la máscara visual del territorio
+ * (actualizarMascara + irAlMunicipio), sin cargar ninguna capa — el árbol
+ * quedaba vacío hasta que el usuario elegía un municipio. Ahora, cuando
+ * ambitoTerritorial !== "municipio", el paso 4.5 llama a
+ * municipioSelector.cargarAmbitoTerritorial(territorioData), que resuelve
+ * y añade las capas de cobertura territorial (nacional/europea/global/
+ * autonómica/provincial) además de aplicar máscara y zoom — mismo pipeline
+ * completo que ya existía para un municipio individual, pero a escala
+ * territorial. Ver 3DECISIONS.md, hilo "ámbito territorial: soporte
+ * provincia/ccaa" y ui/municipioSelector.js para el detalle del modelo
+ * incremental (base territorial + capas municipales sumadas después).
  */
 
 // ── Config ──────────────────────────────────────────────────────────────
@@ -46,7 +51,7 @@ import { init as initI18n } from "../config/i18n/i18nManager.js";
 // ── UI ────────────────────────────────────────────────────────────────────
 // Cada función importada monta una parte visual
 import { initActionBar } from "../ui/actionBar.js";
-import { renderMunicipioSelector } from "../ui/municipioSelector.js";
+import { renderMunicipioSelector, cargarAmbitoTerritorial } from "../ui/municipioSelector.js";
 import { renderBasemapSelector }   from "../ui/basemapSelector.js";
 import { initLayerTree }           from "../ui/layerTree.js";
 import { initLegendPanel }         from "../ui/legendPanel.js";
@@ -214,38 +219,40 @@ async function main() {
     setAdaptador(new LocalJsonAdapter("../data/catalogo-capas.json"));
 
     // 4. Inicializar el Map único con sus dos vistas (2D y 3D)
-    // await porque crear el mapa es asíncono
-    // espera que las acciones de initMap esten ok antes de renderizar otro componente de la interfaz
     await mapManager.initMap({
-      mapContainerId:   "map-view", //conecta con index <div id="map-view"> y usado como parametro en initMap en mapManager.js
-      sceneContainerId: "scene-view" // contacta con index <div id="scene-view"> y usado como parametro en initMap en mapManager.js
+      mapContainerId:   "map-view",
+      sceneContainerId: "scene-view"
     });
 
-    // 4.5. Resolver ámbito territorial del deployment activo.
-    //      "municipio" (caso actual, sin cambios de comportamiento) → sin máscara,
-    //      el usuario elige municipio y el pipeline existente se encarga.
-    //      "provincia" / "ccaa" → máscara territorial se aplica ya, antes de
-    //      que el usuario elija un municipio dentro de ese territorio.
+    // 4.5. Resolver ámbito territorial del deployment activo (solo resuelve
+    // datos, NO carga capas todavía — cargarAmbitoTerritorial() se llama
+    // después de montar la UI, ver nota más abajo).
     const { municipiosDisponibles, mascaraInicial } = await resolverAmbitoTerritorial(DEPLOYMENT);
 
-    if (mascaraInicial) {
-      await mapManager.actualizarMascara(mascaraInicial.polygon);
-      await mapManager.irAlMunicipio(mascaraInicial.bbox);
-    }
-
-
     // 5. Montar UI
-    // El orden importa: la headerControls y el selector están en la cabecera (visibles de entrada).
-    // El árbol y la leyenda se construyen cuando "municipio-cargado" se emite con EVENTBUS
-    initActionBar(); // inicializa actionbar
-    initMapControls(); // inicializa controles del mapa
-    renderMunicipioSelector("#municipio-selector-container", municipiosDisponibles, DEPLOYMENT); // styles & eventBus.emit("municipio-cargado")
-    renderBasemapSelector("#basemap-selector-container"); // conecta con styles
-    initLayerTree("#layer-tree-container"); // conecta con styles 
-    initLegendPanel("map-view");  // conecta con styles, index (mapa inicia en 2d)
-    await initToolPanel(DEPLOYMENT.herramientas); // Async: crea GraphicsLayer de sketch via $arcgis.import, recibe el catálogo del cliente activo
-    initHeaderControls(document.getElementById("lang-selector-container")); // headerControls se especializa en el cambio de idioma
+    // ── AJUSTE CRÍTICO DE ORDEN ────────────────────────────────────────────
+    // initLayerTree() debe montarse ANTES de cargarAmbitoTerritorial(), porque
+    // esa función emite "territorio-cargado" de forma síncrona al terminar.
+    // eventBus no tiene buffer de eventos (pub/sub puro, ver utils/eventBus.js):
+    // un evento emitido sin listeners suscritos se pierde sin aviso. Con
+    // "municipio-cargado" nunca fue un problema porque solo se dispara tras
+    // interacción del usuario, cuando la UI ya lleva rato montada. Con
+    // "territorio-cargado" el disparo ocurre durante el arranque — antes de
+    // este ajuste, el árbol de capas se quedaba vacío en silencio (sin error
+    // en consola) porque el evento llegaba a un módulo que aún no existía.
+    initActionBar();
+    initMapControls();
+    renderMunicipioSelector("#municipio-selector-container", municipiosDisponibles, DEPLOYMENT);
+    renderBasemapSelector("#basemap-selector-container");
+    initLayerTree("#layer-tree-container");   // ← debe ir antes de cargarAmbitoTerritorial()
+    initLegendPanel("map-view");
+    await initToolPanel(DEPLOYMENT.herramientas);
+    initHeaderControls(document.getElementById("lang-selector-container"));
 
+    // 5.5. Ahora sí: cargar la base territorial, con layerTree ya escuchando.
+    if (mascaraInicial) {
+      await cargarAmbitoTerritorial(mascaraInicial);
+    }
     // ── Logo por-municipio en el header (runtime, 30.07.26) ──────────────────
     // Reemplaza el listener anterior que leía municipioData.logo — ese campo
     // ya no existe en municipios.json desde que se desacopló geometría de
@@ -260,6 +267,14 @@ async function main() {
     // entidad territorial (Diputación, Gobierno regional) y debe permanecer
     // fijo — buscar un municipio dentro del territorio no debe pisar ese
     // branding con el logo (si existiera) del municipio elegido.
+    //
+    // Nota (ajuste ámbito territorial): este listener sigue enganchado a
+    // "municipio-cargado" únicamente — no a "capas-municipio-agregadas".
+    // Es intencional: _permiteLogoPorMunicipio ya es false para cualquier
+    // deployment con ambitoTerritorial, así que el guard hace que este
+    // bloque nunca actúe en el Modelo B de todas formas. Si en el futuro
+    // se decide sí actualizar el logo al elegir municipio dentro de un
+    // territorio, este es el punto a extender — no antes.
     const _permiteLogoPorMunicipio = !DEPLOYMENT.ambitoTerritorial;
 
     eventBus.on("municipio-cargado", async ({ municipioData }) => {
@@ -320,17 +335,20 @@ document.addEventListener("DOMContentLoaded", main);
 // ↓
 // resolverAmbitoTerritorial() → municipiosDisponibles + mascaraInicial
 // ↓
-// (si hay mascaraInicial) aplicar máscara territorial + zoom
+// (si hay mascaraInicial) cargarAmbitoTerritorial() → capas territoriales +
+//                          máscara + zoom (antes: solo máscara + zoom)
 // ↓
 // montar UI (selector recibe municipiosDisponibles ya resuelto)
 // ↓
 // usuario selecciona municipio
-// ↓
-// configEngine resuelve capas
+// ↓ (bifurca según ambitoTerritorial, ver municipioSelector._onMunicipioChange)
+// ├─ "municipio" → configEngine.fetchCapas() → reconstruye todo (Modelo A)
+// └─ "provincia"/"ccaa" → configEngine.fetchCapasMunicipales() → SUMA
+//                          capas municipales sin tocar la base territorial
 // ↓
 // layerFactory crea capas
 // ↓
-// mapManager las añade
+// mapManager las añade (addCapas reemplaza | addCapa suma, según el caso)
 // ↓
 // eventBus notifica
 // ↓

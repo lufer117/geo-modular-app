@@ -174,7 +174,18 @@ async function _resolverAmbitoProvincia(deployment) {
 
   return {
     municipiosDisponibles,
-    mascaraInicial: { bbox: provincia.bbox, polygon: provincia.polygon },
+    // provincia_code/ccaa_code se exponen sueltos, no solo dentro de
+    // mascaraInicial — main.js los necesita para armar territorioData
+    // completo (bbox + polygon + códigos), sin tener que desempaquetar
+    // dos niveles de objeto. ccaa_code viene del propio registro de
+    // provincia.json (heredado del NATCODE al generar el dataset).
+    mascaraInicial: {
+      bbox:           provincia.bbox,
+      polygon:        provincia.polygon,
+      provincia_code: provincia.provincia_code,
+      ccaa_code:      provincia.ccaa_code,
+      codigo_ine:     null, // explícito: a nivel territorio no hay municipio
+    },
   };
 }
 
@@ -217,6 +228,15 @@ async function _resolverAmbitoCcaa(deployment) {
 
   return {
     municipiosDisponibles,
-    mascaraInicial: { bbox: ccaa.bbox, polygon: ccaa.polygon },
+    // provincia_code = null: una CCAA no pertenece a una única provincia.
+    // Las capas cobertura.tipo === "provincial" simplemente no aplicarán
+    // aquí (configEngine ya maneja undefined/null de forma segura).
+    mascaraInicial: {
+      bbox:           ccaa.bbox,
+      polygon:        ccaa.polygon,
+      provincia_code: null,
+      ccaa_code:      ccaa.ccaa_code,
+      codigo_ine:     null,
+    },
   };
 }

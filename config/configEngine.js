@@ -1,8 +1,9 @@
 /**
  * config/configEngine.js
  *
- * Motor de resolución: dado un municipio, devuelve las capas del catálogo
- * que le corresponden según sus reglas de cobertura geográfica.
+ * Motor de resolución: dado un municipio (o un territorio completo),
+ * devuelve las capas del catálogo que le corresponden según sus reglas
+ * de cobertura geográfica.
  *
  * ── PATRÓN REPOSITORY ────────────────────────────────────────────────────
  * Este módulo define QUÉ necesita (fetchCapas → array filtrado) pero
@@ -27,10 +28,26 @@
  *   "nacional"   → siempre incluir (aplica a toda España)
  *   "europeo"    → siempre incluir (cobertura supranacional)
  *   "global"     → siempre incluir (cobertura mundial)
- *   "autonomica" → incluir si capa.cobertura.ccaa_code === municipio.ccaa_code
- *   "provincial" → incluir si capa.cobertura.provincia_code === municipio.provincia_code
- *   "municipal"  → incluir si municipio.codigo_ine ∈ capa.cobertura.codigos_ine[]
+ *   "autonomica" → incluir si capa.cobertura.ccaa_code === territorio.ccaa_code
+ *   "provincial" → incluir si capa.cobertura.provincia_code === territorio.provincia_code
+ *   "municipal"  → incluir si territorio.codigo_ine ∈ capa.cobertura.codigos_ine[]
  *   "espacial"   → reservado para PostGISAdapter (futuro). Excluido con aviso.
+ *
+ * ── AJUSTE (soporte de ámbito territorial provincia/ccaa) ──────────────────
+ * fetchCapas() resuelve el paquete completo para un municipio concreto —
+ * sigue siendo el camino usado por el caso "municipio" (ayuntamiento único
+ * o comarca curada), sin cambios de comportamiento.
+ * Se añaden dos funciones que reutilizan _aplicaAlMunicipio sin duplicar
+ * sus reglas, particionando el mismo universo de capas:
+ *   fetchCapasTerritoriales() → todo excepto cobertura "municipal".
+ *     Usada al arrancar en ámbito provincia/ccaa, antes de elegir municipio.
+ *   fetchCapasMunicipales()   → únicamente cobertura "municipal".
+ *     Usada para SUMAR capas al elegir un municipio dentro del territorio,
+ *     sin reconstruir la base territorial ya cargada (ver
+ *     municipioSelector.agregarCapasMunicipio()).
+ * fetchCapasTerritoriales(territorio) ∪ fetchCapasMunicipales(municipio)
+ * es exactamente el mismo conjunto que fetchCapas(municipio) devolvería
+ * hoy — se particiona el mismo resultado, no se inventan reglas nuevas.
  */
 
 let _adaptador = null;
@@ -90,18 +107,95 @@ export async function fetchCapas(municipioData) {
   return capas;
 }
 
+/**
+ * Devuelve las capas del catálogo con cobertura territorial (nacional,
+ * europea, global, autonómica, provincial) — EXCLUYE cobertura "municipal".
+ *
+ * ── POR QUÉ EXISTE (aparte de fetchCapas) ─────────────────────────────────
+ * A nivel territorio (provincia/ccaa) no hay codigo_ine todavía — el usuario
+ * aún no eligió municipio — pero sí queremos pintar ya las capas que
+ * corresponden a ese territorio. Esta función resuelve exactamente eso:
+ * el subconjunto de _aplicaAlMunicipio que NO depende de codigo_ine.
+ *
+ * @param {Object} territorioData - { provincia_code, ccaa_code, codigo_ine: null, bbox, polygon }
+ * @returns {Promise<Capa[]>} Array filtrado y ordenado
+ */
+export async function fetchCapasTerritoriales(territorioData) {
+  if (!_adaptador) {
+    throw new Error(
+      "[configEngine] No hay adaptador registrado. Llama a setAdaptador() en main.js primero."
+    );
+  }
+
+  const catalogo = await _adaptador.getData();
+
+  const capas = catalogo.filter(capa =>
+    capa.cobertura?.tipo !== "municipal" &&
+    _aplicaAlMunicipio(capa, territorioData)
+  );
+
+  const ORDEN_PRIORIDAD = { P0: 0, P1: 1, P2: 2, P3: 3, DESC: 99 };
+  capas.sort(
+    (a, b) => (ORDEN_PRIORIDAD[a.prioridad] ?? 99) - (ORDEN_PRIORIDAD[b.prioridad] ?? 99)
+  );
+
+  console.info(
+    `[configEngine] Ámbito territorial: ${capas.length} de ${catalogo.length} capas resueltas`
+  );
+
+  return capas;
+}
+
+/**
+ * Devuelve ÚNICAMENTE las capas de cobertura "municipal" que aplican a un
+ * municipio concreto. Complemento de fetchCapasTerritoriales(): juntas
+ * cubren exactamente el mismo universo que fetchCapas(), pero por separado
+ * permiten el modelo de carga incremental (base territorial + añadido
+ * municipal) sin reconstruir ni duplicar peticiones al catálogo.
+ *
+ * @param {Object} municipioData - Municipio concreto, con codigo_ine
+ * @returns {Promise<Capa[]>} Array filtrado y ordenado
+ */
+export async function fetchCapasMunicipales(municipioData) {
+  if (!_adaptador) {
+    throw new Error(
+      "[configEngine] No hay adaptador registrado. Llama a setAdaptador() en main.js primero."
+    );
+  }
+
+  const catalogo = await _adaptador.getData();
+
+  const capas = catalogo.filter(capa =>
+    capa.cobertura?.tipo === "municipal" &&
+    _aplicaAlMunicipio(capa, municipioData)
+  );
+
+  const ORDEN_PRIORIDAD = { P0: 0, P1: 1, P2: 2, P3: 3, DESC: 99 };
+  capas.sort(
+    (a, b) => (ORDEN_PRIORIDAD[a.prioridad] ?? 99) - (ORDEN_PRIORIDAD[b.prioridad] ?? 99)
+  );
+
+  console.info(
+    `[configEngine] "${municipioData.nombre}": ${capas.length} capas municipales adicionales`
+  );
+
+  return capas;
+}
+
 // ─── Lógica privada de resolución ─────────────────────────────────────────
 
 /**
- * Determina si una capa del catálogo aplica a un municipio concreto.
- * Función pura, sin estado, testeable de forma aislada.
+ * Determina si una capa del catálogo aplica a un municipio o territorio
+ * concreto. Función pura, sin estado, testeable de forma aislada.
+ * Compartida por fetchCapas, fetchCapasTerritoriales y fetchCapasMunicipales
+ * — las tres reutilizan exactamente las mismas reglas de cobertura, solo
+ * cambia qué subconjunto de capas se les pasa antes de evaluar.
  *
  * @param {Object} capa       - Entrada del catalogo-capas.json
- * @param {Object} municipio  - Municipio individual, misma forma que
- *   municipioData en fetchCapas()
+ * @param {Object} municipio  - Municipio o territorio individual, misma
+ *   forma que municipioData/territorioData en las funciones públicas
  * @returns {boolean}
  */
-
 function _aplicaAlMunicipio(capa, municipio) { //solo recibe si es true o false
   const cobertura = capa.cobertura; //obtiene cobertura de la capa según el catalogo
 
