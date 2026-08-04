@@ -34,14 +34,44 @@
  * la máscara acoplaría dos conceptos con vidas útiles distintas (mismo
  * criterio SRP ya aplicado al separar layerFactory de layerInitializer).
  *
+ * ── CAPAS DE INFRAESTRUCTURA PERSISTENTE ─────────────────────────────────
+ * Además de máscara y resaltado, cualquier GraphicsLayer que otro módulo
+ * cree y añada directamente a este Map (ej. sketch-layer en toolPanel.js,
+ * backing de arcgis-sketch) debe sobrevivir al ciclo de reemplazo de
+ * addCapas(). Sin esto, la PRIMERA carga de municipio/territorio después
+ * de initToolPanel() elimina silenciosamente esa capa del mapa: el widget
+ * SDK sigue apuntando a la misma instancia de GraphicsLayer en JS (nunca
+ * se le reasigna), pero esa instancia ya no cuelga de _map.layers, así
+ * que cualquier gráfico que el widget confirme en ella (ej. un polígono
+ * de sketch al completar el dibujo) deja de renderizarse sin error visible
+ * en consola — bug diagnosticado 04.08.26, ver 3DECISIONS.md.
+ * IDS_CAPAS_INFRAESTRUCTURA centraliza esta lista para que addCapas() no
+ * vuelva a quedar desactualizada la próxima vez que se añada una nueva
+ * capa de infraestructura (ej. un futuro highlight de resultados de
+ * búsqueda): se añade el id aquí una sola vez, no en cada función que
+ * toque _map.layers.
+ *
+ * IMPORTANTE — no basta con EXCLUIR estas capas del borrado: addMany()
+ * inserta las capas de datos nuevas al FINAL del array, así que cualquier
+ * capa de infraestructura que ya estuviera en el mapa (ej. sketch, añadida
+ * por toolPanel.js antes de la primera carga de municipio) queda por
+ * DEBAJO de los datos recién llegados. Un WMS con relleno opaco (catastro,
+ * SIGPAC) tapa visualmente cualquier gráfico de sketch en esa posición —
+ * mismo síntoma que la eliminación (el dibujo "desaparece"), pero con
+ * causa distinta. Por eso, además de excluir del borrado, hay que
+ * reafirmar su posición por ENCIMA de los datos en cada carga — ver
+ * IDS_INFRAESTRUCTURA_SUPERIOR más abajo.
+ *
  * ── ORDEN DE CAPAS ───────────────────────────────────────────────────────
  * ArcGIS renderiza la primera capa del array abajo y la última arriba.
  * Orden objetivo, de fondo a frente:
- *   [ resaltadoLayer, ...capas de datos (WMS/WFS/...), maskLayer ]
+ *   [ resaltadoLayer, ...capas de datos (WMS/WFS/...), sketchLayer, maskLayer ]
  * El resaltado va justo sobre el basemap (por debajo de los datos) para
  * no competir visualmente con la lectura de capas activas — es una
- * referencia de fondo, no un elemento de primer plano. La máscara sigue
- * reposicionándose siempre al final (por encima de todo).
+ * referencia de fondo, no un elemento de primer plano. Sketch va por
+ * encima de TODOS los datos (para que lo dibujado siempre sea visible,
+ * sin importar qué WMS/WFS esté activo) pero por debajo de la máscara.
+ * La máscara sigue reposicionándose siempre al final (por encima de todo).
  */
 
 import * as eventBus from "../utils/eventBus.js";
@@ -57,6 +87,27 @@ let _maskLayer         = null; // GraphicsLayer usada para la máscara municipal
 let _resaltadoLayer    = null; // GraphicsLayer usada para el contorno del municipio en foco (ámbito territorial)
 let _sceneReadyPromise = null;  // Guarda la Promesa de inicialización 3D en background
 let _municipioViewpoint = null; // Viewpoint del último municipio cargado
+
+// Ids de capas que NUNCA deben eliminarse en el ciclo de reemplazo de
+// addCapas() — infraestructura visual de la app, no datos de municipio.
+// Ver comentario de cabecera "CAPAS DE INFRAESTRUCTURA PERSISTENTE".
+// "sketch-layer" es el id fijo que toolPanel.js asigna a la GraphicsLayer
+// backing de arcgis-sketch (_crearSketchLayerSiHaceFalta) — se referencia
+// aquí por valor literal, no por import, para no crear un acoplamiento
+// de módulo core → ui (mapManager no debe conocer toolPanel.js).
+const IDS_CAPAS_INFRAESTRUCTURA = new Set([
+  "municipio-mask",
+  "municipio-resaltado",
+  "sketch-layer"
+]);
+
+// Subconjunto de IDS_CAPAS_INFRAESTRUCTURA que además debe reposicionarse
+// SIEMPRE por encima de las capas de datos tras cada addCapas()/addCapa()
+// — no solo sobrevivir al borrado, sino no quedar tapado por un WMS/WFS
+// recién añadido. Orden del array = orden de apilado (el último id queda
+// más arriba). "municipio-resaltado" NO está aquí porque su regla es la
+// opuesta (va al fondo, ver el bloque dedicado en addCapas()).
+const IDS_INFRAESTRUCTURA_SUPERIOR = ["sketch-layer", "municipio-mask"];
 
 // ─── INICIALIZACIÓN ───────────────────────────────────────────────────────
 
@@ -284,9 +335,40 @@ export function getMap() {
 // ─── GESTION DE CAPAS ─────────────────────────────────────────────────────
 
 /**
+ * Reposiciona en orden las capas de IDS_INFRAESTRUCTURA_SUPERIOR por
+ * encima de cualquier capa de datos ya presente en _map.layers. Se llama
+ * al final de addCapas() y addCapa() — cualquier punto donde se añadan
+ * datos nuevos puede empujar estas capas hacia abajo del stack.
+ *
+ * Por qué una función separada y no repetir el patrón remove+add inline
+ * dos veces (como ya pasaba con la máscara antes de este fix): centraliza
+ * el ÚNICO lugar donde se decide "qué infraestructura va arriba", así
+ * agregar una futura capa (ej. un highlight de resultados de búsqueda)
+ * es una línea en el array, no una nueva función.
+ *
+ * Usa _map.layers.find() por id en vez de guardar una referencia directa
+ * a cada capa (como si hiciera _sketchLayer aquí) porque mapManager no
+ * posee esa instancia — la crea y gestiona toolPanel.js. Consultar por id
+ * evita el acoplamiento inverso (core → ui) que rompería la capa de
+ * abstracción del proyecto.
+ */
+function _reposicionarInfraestructuraSuperior() {
+  IDS_INFRAESTRUCTURA_SUPERIOR.forEach(id => {
+    const layer = _map.layers.find(l => l.id === id);
+    if (!layer) return; // ej. sketch-layer no existe si "dibujo" no está habilitado en este deployment
+    _map.layers.remove(layer);
+    _map.layers.add(layer);
+  });
+}
+
+/**
  * Añade capas al Map compartido eliminando las anteriores.
- * Mantiene siempre la máscara y el resaltado como infraestructura visual
- * persistente — no forman parte del ciclo de reemplazo de capas de datos.
+ * Mantiene siempre la máscara, el resaltado y cualquier otra capa de
+ * infraestructura (ver IDS_CAPAS_INFRAESTRUCTURA) como persistente — no
+ * forman parte del ciclo de reemplazo de capas de datos. Además,
+ * reafirma que la infraestructura "superior" (sketch, máscara) quede por
+ * encima de los datos recién añadidos — ver IDS_INFRAESTRUCTURA_SUPERIOR
+ * y el comentario de cabecera "CAPAS DE INFRAESTRUCTURA PERSISTENTE".
  *  
  * @param {Layer[]} capas - Array de instancias Esri ya inicializadas
  */
@@ -298,11 +380,12 @@ export function addCapas(capas) {
     return;
   }
 
-  // Limpia todas las capas de datos — excepto máscara y resaltado, que
-  // son infraestructura visual persistente (ver comentario de cabecera
-  // "ORDEN DE CAPAS" y explicación en initMap()).
+  // Limpia todas las capas de datos — excepto la infraestructura visual
+  // persistente (máscara, resaltado, sketch, y cualquier futura capa que
+  // se añada a IDS_CAPAS_INFRAESTRUCTURA). Ver comentario de cabecera
+  // "CAPAS DE INFRAESTRUCTURA PERSISTENTE" y "ORDEN DE CAPAS".
    const capasPrevias = _map.layers //(p) map
-    .filter(l => l.id !== "municipio-mask" && l.id !== "municipio-resaltado") //(m) map layers collection 
+    .filter(l => !IDS_CAPAS_INFRAESTRUCTURA.has(l.id)) //(m) map layers collection 
     .toArray(); //(m) map layers collection 
   _map.layers.removeMany(capasPrevias); // (p) (m) map
 
@@ -320,10 +403,16 @@ export function addCapas(capas) {
     _map.layers.add(_resaltadoLayer, 0); //(p) (m) map
   }
 
-  // Reposicionar máscara al final → siempre por encima de los datos
-  // Arcgis renderiza primera capa abajo, última capa arriba
-  _map.layers.remove(_maskLayer); //(p) (m) map
-  _map.layers.add(_maskLayer); //(p) (m) map , así la mask siempre queda encima
+  // Reposicionar infraestructura "superior" (sketch, máscara) por encima
+  // de las capas de datos que acaban de entrar con addMany() — sin esto,
+  // addMany() las deja intercaladas por debajo de los datos nuevos aunque
+  // ya existieran antes en el mapa (bug diagnosticado 04.08.26: el
+  // polígono de sketch dejaba de eliminarse pero quedaba tapado por un
+  // WMS opaco). El orden interno del array ya garantiza mask siempre
+  // encima de sketch.
+  _reposicionarInfraestructuraSuperior();
+
+  console.log("[DEBUG] Orden final:", _map.layers.map(l => l.id).toArray());
 
   console.info(`[mapManager] ${capas.length} capas añadidas al Map`);
 }
@@ -332,8 +421,10 @@ export function addCapas(capas) {
 
 /**
  * Añade una sola capa al Map (lazy-load on-demand para WFS).
- * La máscara se reposiciona encima. El resaltado no se toca aquí: al
- * añadirse una capa individual (siempre al final/arriba por defecto),
+ * Reposiciona la infraestructura "superior" (sketch, máscara) encima de
+ * la capa recién añadida — mismo mecanismo que addCapas(), ver
+ * _reposicionarInfraestructuraSuperior(). El resaltado no se toca aquí:
+ * al añadirse una capa individual (siempre al final/arriba por defecto),
  * no puede terminar por debajo del resaltado, así que no hace falta
  * reafirmar su posición en cada llamada.
  *
@@ -344,8 +435,7 @@ export function addCapas(capas) {
 export function addCapa(capa) {
   if (!_map) return; //verifica si el objeto _map se ha inicializado
   _map.layers.add(capa); //añade capa por defecto en la parte superior de la pila visual 
-  _map.layers.remove(_maskLayer); // elimina mask
-  _map.layers.add(_maskLayer); // añade mask para que quede encima
+  _reposicionarInfraestructuraSuperior(); // sketch y mask vuelven a quedar por encima
 }
 
 // ─── MÁSCARA MUNICIPAL ────────────────────────────────────────────────────

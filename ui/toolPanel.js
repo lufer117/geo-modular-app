@@ -55,6 +55,26 @@
  * porque esa columna vive en shadow DOM del SDK (decisión 24.07.26, mismo
  * guard de rect 0x0), con clamp contra el borde izquierdo del viewport.
  * Aperturas posteriores respetan el drag del usuario.
+ *
+ * ── FIX (04.08.26): timing de asignación de `layer` en arcgis-sketch ────
+ * Diagnóstico completo documentado en 3DECISIONS.md. Resumen: asignar
+ * `el.layer = _sketchLayer` inmediatamente tras `createElement()` (antes
+ * de que el Custom Element complete su upgrade/conexión al DOM) hacía que
+ * arcgis-sketch ignorara silenciosamente la referencia y auto-creara su
+ * propia GraphicsLayer interna — comportamiento documentado por Esri
+ * ("sketch will auto-create a new graphics layer if none was provided").
+ * Confirmado empíricamente: `el.layer === _sketchLayer` daba `true` justo
+ * tras la asignación, pero `false` en cualquier inspección posterior;
+ * `view.map.layers` mostraba una segunda capa fantasma con título literal
+ * "Sketch Layer" (id autogenerado) conteniendo los gráficos reales,
+ * mientras `_sketchLayer` (título "Dibujo") quedaba siempre vacía — de ahí
+ * que "limpiar" nunca borrara nada visible.
+ * Fix: la asignación de `layer` se hace ahora dentro de
+ * `el.componentOnReady().then(...)`, garantizando que el componente ya
+ * completó su ciclo de upgrade antes de fijar la propiedad. Se mantienen
+ * los logs de `arcgisCreate` (bloque DEBUG abajo) para la verificación
+ * final; quitar tras confirmar que el contador de graphics refleja la
+ * realidad y que "limpiar" borra los polígonos del mapa.
  */
 
 import { on } from "../utils/eventBus.js";
@@ -200,10 +220,12 @@ function _crearPanelHerramienta(h) {
     el.setAttribute("reference-element", _vistaActual === "3D" ? "scene-view" : "map-view");
 
     if (esSketch) {
-      el.layer = _sketchLayer;
       el.toolbarKind = "docked"; // evita doble chrome flotante — ver JSDoc arriba
 
       // Configuración editorial opcional por cliente — ver JSDoc arriba.
+      // NOTA: `layer` NO se asigna aquí. Ver bloque FIX más abajo, tras
+      // el appendChild — asignarlo antes del montaje en el DOM es
+      // exactamente la causa raíz documentada en el JSDoc del módulo.
       if (h.sketchOpciones) Object.assign(el, h.sketchOpciones);
 
       // Marca el wrapper para que el CSS aplique min/max de seguridad
@@ -216,9 +238,47 @@ function _crearPanelHerramienta(h) {
       // cliente — así el overflow "..." (que Sketch dispara automáticamente
       // cuando falta espacio) nunca se activa por un valor adivinado.
       _dimensionarPanelSketch(wrapper, h.sketchOpciones);
+
+      // ── DEBUG: instrumentar cada evento de dibujo ────────────────────
+      // Se conserva para la prueba final de verificación del fix.
+      // Un solo listener por instancia de sketch (se registra una vez,
+      // aquí, al crear el widget — no se re-registra en cada apertura
+      // del panel). Reporta el estado de _sketchLayer en cada paso.
+      // Quitar este bloque una vez confirmado en producción que:
+      //   1. el contador de graphics sube correctamente al completar
+      //      un polígono, y
+      //   2. "limpiar" borra los polígonos del mapa.
+      el.addEventListener("arcgisCreate", (e) => {
+        console.log("[DEBUG sketch] evento create, state:", e.detail.state);
+        console.log("[DEBUG sketch] graphics en _sketchLayer:", _sketchLayer.graphics.length);
+        console.log("[DEBUG sketch] el.layer actual === _sketchLayer?", el.layer === _sketchLayer);
+
+        if (e.detail.state === "complete") {
+          setTimeout(() => {
+            console.log("[DEBUG sketch] graphics tras microtask:", _sketchLayer.graphics.length);
+          }, 0);
+        }
+      });
+      // ───────────────────────────────────────────────────────────────
     }
 
-    body.appendChild(el);
+    body.appendChild(el); // ← conectar al DOM ANTES de asignar `layer`
+
+    if (esSketch) {
+      // ── FIX: asignación de `layer` diferida a componentOnReady() ────
+      // Ver JSDoc del módulo para el diagnóstico completo. `layer` solo
+      // se fija una vez que el Custom Element terminó su upgrade —
+      // asignarlo antes (aunque sea inmediatamente después del
+      // appendChild síncrono) permite que el propio ciclo de init
+      // interno del componente detecte "sin layer" y auto-cree el suyo.
+      el.componentOnReady().then(() => {
+        el.layer = _sketchLayer;
+        // DEBUG: confirma que la asignación diferida se mantiene — quitar
+        // junto con el resto de logs de este bloque tras la prueba final.
+        console.log("[DEBUG sketch] layer asignado tras componentOnReady:", el.layer?.id);
+      });
+    }
+
     elementos["2D"] = el;
     elementos["3D"] = el;
   } else {
@@ -399,7 +459,11 @@ function _toggleHerramienta(id) {
 function _desactivarTodasLasHerramientas() {
   _tools.forEach((tool, id) => {
     Object.values(tool.elementos).forEach(el => {
-      if (typeof el.clear === "function") el.clear();
+      // arcgis-sketch: cancel() aborta la creación en curso.
+      // Widgets de medición (distancia/área): clear() resetea su estado.
+      // APIs distintas — no son intercambiables entre tipos de widget.
+      if (typeof el.cancel === "function") el.cancel();
+      if (typeof el.clear === "function")  el.clear();
     });
     tool.wrapper.hidden = true;
     const btn = _botones.get(id);
