@@ -39,6 +39,16 @@
  * recarga completa de capas ya cargadas — desperdicio de red y de estado
  * (WMS ya cargado, WFS con features en memoria) sin ninguna necesidad.
  *
+ * ── SELECTOR UI: calcite-combobox (migrado desde calcite-select) ─────────
+ * Ver 3DECISIONS.md 04.08.26. Mismo dataset (municipiosDisponibles[]),
+ * mismo flujo de carga de capas — cambia solo el componente de presentación
+ * y cómo se lee/limpia la selección. selection-mode="single" (no
+ * "single-persist"): el usuario puede deseleccionar, y eso dispara
+ * retirarCapasMunicipio() en Modelo B (comportamiento estándar en geoapps
+ * territoriales de referencia — IDENA, GeoBizkaia — donde limpiar la
+ * búsqueda de municipio vuelve a la vista territorial base, nunca deja
+ * capas municipales "huérfanas" en el mapa).
+ *
  * ── LO QUE NO HACE ───────────────────────────────────────────────────────
  * No instancia capas directamente (delegado a layerFactory).
  * No construye el árbol DOM de capas (delegado a layerTree).
@@ -143,57 +153,58 @@ export function renderMunicipioSelector(container, municipiosDisponibles = [], d
     return; // ← sale sin construir ningún elemento DOM
   }
 
-  // ── Selector Calcite ───────────────────────────────────────────────────
+  // ── Selector Calcite — calcite-combobox con autocompletado ───────────────
+  // Sustituye a <calcite-select>: mismo dataset (municipiosVisibles), mismo
+  // flujo posterior (_onMunicipioChange sigue bifurcando Modelo A/B) —
+  // cambia únicamente el componente de presentación y cómo se lee el valor
+  // seleccionado (selectedItems en vez de .value plano).
 
   const label = document.createElement("calcite-label");
   label.setAttribute("layout", "inline");
   label.textContent = t("nav.municipio.label");
 
-  const select = document.createElement("calcite-select");
-  select.id = "municipio-select";
-  select.setAttribute("label", t("nav.municipio.placeholder"));
-
-  const defaultOpt = document.createElement("calcite-option");
-  defaultOpt.value       = "";
-  defaultOpt.textContent = t("nav.municipio.placeholder");
-  select.appendChild(defaultOpt);
+  const combobox = document.createElement("calcite-combobox");
+  combobox.id = "municipio-select"; // mismo id histórico — _setLoading() y
+                                     // el reset en retirarCapasMunicipio()
+                                     // lo referencian por id, no por tipo
+                                     // de componente.
+  combobox.setAttribute("selection-mode", "single");
+  combobox.setAttribute("placeholder", t("nav.municipio.placeholder"));
+  combobox.setAttribute("label", t("nav.municipio.placeholder"));
 
   municipiosVisibles.forEach(m => {
-    const opt = document.createElement("calcite-option");
-    opt.value       = m.codigo_ine;
-    opt.textContent = `${m.nombre} (${m.provincia_code})`;
-    select.appendChild(opt);
+    const item = document.createElement("calcite-combobox-item");
+    item.value   = m.codigo_ine;
+    item.heading = `${m.nombre}`;
+    if (_municipioActivo === m.codigo_ine) {
+      item.selected = true;
+    }
+    combobox.appendChild(item);
   });
 
-  if (_municipioActivo) {
-    select.value = _municipioActivo;
-  }
-
   // El handler de cambio se bifurca según el modelo — ver _onMunicipioChange.
-  select.addEventListener("calciteSelectChange", _onMunicipioChange);
+  combobox.addEventListener("calciteComboboxChange", _onMunicipioChange);
 
-  label.appendChild(select);
+  label.appendChild(combobox);
   el.appendChild(label);
 }
 
 // ─── Handlers privados ─────────────────────────────────────────────────────
 
 /**
- * Handler del evento calciteSelectChange.
+ * Handler del evento calciteComboboxChange.
  * Se bifurca según el ámbito del deployment activo:
  *   - "municipio" → _cargarMunicipio() (Modelo A, comportamiento existente)
  *   - "provincia"/"ccaa" → agregarCapasMunicipio() / retirarCapasMunicipio()
- *     (Modelo B, incremental). Valor vacío ("") = el usuario limpió la
- *     selección → retirar.
+ *     (Modelo B, incremental).
  *
- * Nota: con <calcite-select> la única forma de "limpiar" es elegir la
- * opción vacía inicial. El comportamiento de "X" pensado para
- * calcite-combobox (pendiente en 4STATUS.md) llamará a la misma
- * retirarCapasMunicipio() cuando se migre el componente — este handler
- * ya queda preparado para ese reemplazo sin cambios adicionales aquí.
+ * Con selection-mode="single", event.target.selectedItems es un array de
+ * 0 o 1 elementos — nunca un .value plano como en calcite-select — de ahí
+ * la lectura vía selectedItems[0]?.value. selectedItems vacío = el usuario
+ * limpió la búsqueda → retirar (ver 3DECISIONS.md 04.08.26).
  */
 async function _onMunicipioChange(event) {
-  const codigoIne = event.target.value;
+  const codigoIne = event.target.selectedItems?.[0]?.value ?? "";
   const esAmbitoTerritorial = (_deploymentRef.ambitoTerritorial ?? "municipio") !== "municipio";
 
   if (!esAmbitoTerritorial) {
@@ -504,18 +515,25 @@ export async function retirarCapasMunicipio({ mantenerZoomTerritorial = false } 
     await mapManager.irAlMunicipio(_territorioData.bbox);
   }
 
-  // Sincronizar el <calcite-select> de vuelta a la opción vacía, por si
-  // la llamada vino de un origen distinto al propio change del selector
-  // (ej. futuro botón "X" del combobox).
-  const select = document.getElementById("municipio-select");
-  if (select) select.value = "";
+  // Sincronizar el <calcite-combobox> de vuelta a "sin selección", por si
+  // esta función se llamó desde un origen distinto al propio change del
+  // combobox (ej. Modelo B cambiando de un municipio a otro internamente,
+  // o un futuro botón externo de "limpiar filtros").
+  // A diferencia de <calcite-select>, calcite-combobox no limpia su estado
+  // visual con .value = "" — el estado vive en cada calcite-combobox-item,
+  // vía su propiedad/atributo "selected".
+  const combobox = document.getElementById("municipio-select");
+  if (combobox) {
+    combobox.querySelectorAll("calcite-combobox-item[selected]")
+      .forEach(item => { item.selected = false; });
+  }
 
   console.info(`[municipioSelector] − ${idsARetirar.length} capas municipales retiradas`);
 }
 
 // ─── Helpers privados ─────────────────────────────────────────────────────
 
-/** Muestra u oculta el spinner de carga del select Calcite */
+/** Muestra u oculta el spinner de carga del combobox Calcite */
 function _setLoading(isLoading) {
   const select = document.getElementById("municipio-select");
   if (!select) return;
