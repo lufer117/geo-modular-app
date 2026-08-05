@@ -49,6 +49,24 @@
  * búsqueda de municipio vuelve a la vista territorial base, nunca deja
  * capas municipales "huérfanas" en el mapa).
  *
+ * ── AGRUPACIÓN POR PROVINCIA (NUEVO, ver 3DECISIONS.md sesión combobox) ──
+ * Cuando municipiosDisponibles cruza varias provincias (típicamente en
+ * ambitoTerritorial "ccaa" multiprovincial, ej. País Vasco = Álava +
+ * Gipuzkoa + Bizkaia), el combobox agrupa visualmente los municipios bajo
+ * un <calcite-combobox-item-group> por provincia — SIN forzar un
+ * drill-down de dos pasos (elegir provincia → luego municipio). El
+ * usuario sigue escribiendo libremente el nombre del municipio; la
+ * agrupación es solo contexto visual en el desplegable, no una barrera
+ * de navegación (criterio de UX acordado: el usuario piensa en
+ * municipios, no en jerarquía administrativa — ver hilo de diseño del
+ * combobox en 3DECISIONS.md).
+ *
+ * Cuando todos los municipios visibles pertenecen a la MISMA provincia
+ * (ambitoTerritorial "provincia", o un Modelo A con municipios de un solo
+ * territorio), agrupar sería ruido visual — un único grupo repitiendo el
+ * mismo nombre no aporta nada. En ese caso se renderiza la lista plana de
+ * siempre, sin grupos. Ver _agruparPorProvincia() y _necesitaAgrupacion().
+ *
  * ── LO QUE NO HACE ───────────────────────────────────────────────────────
  * No instancia capas directamente (delegado a layerFactory).
  * No construye el árbol DOM de capas (delegado a layerTree).
@@ -172,21 +190,94 @@ export function renderMunicipioSelector(container, municipiosDisponibles = [], d
   combobox.setAttribute("placeholder", t("nav.municipio.placeholder"));
   combobox.setAttribute("label", t("nav.municipio.placeholder"));
 
-  municipiosVisibles.forEach(m => {
-    const item = document.createElement("calcite-combobox-item");
-    item.value   = m.codigo_ine;
-    item.heading = `${m.nombre}`;
-    if (_municipioActivo === m.codigo_ine) {
-      item.selected = true;
-    }
-    combobox.appendChild(item);
-  });
+  // ── Agrupación por provincia (NUEVO) ────────────────────────────────────
+  // Ver docstring del módulo, sección "AGRUPACIÓN POR PROVINCIA". Solo se
+  // agrupa si hay más de una provincia distinta entre los municipios
+  // visibles — con una sola provincia, un único grupo repitiendo su
+  // nombre no aportaría nada, así que se cae al render plano de siempre.
+  const grupos = _agruparPorProvincia(municipiosVisibles);
+
+  if (_necesitaAgrupacion(grupos)) {
+    [...grupos.values()]
+      .sort((a, b) => a.label.localeCompare(b.label, "es"))
+      .forEach(grupo => {
+        const groupEl = document.createElement("calcite-combobox-item-group");
+        groupEl.setAttribute("label", grupo.label);
+
+        grupo.municipios
+          .slice()
+          .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"))
+          .forEach(m => groupEl.appendChild(_crearComboboxItem(m)));
+
+        combobox.appendChild(groupEl);
+      });
+  } else {
+    municipiosVisibles
+      .slice()
+      .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"))
+      .forEach(m => combobox.appendChild(_crearComboboxItem(m)));
+  }
 
   // El handler de cambio se bifurca según el modelo — ver _onMunicipioChange.
   combobox.addEventListener("calciteComboboxChange", _onMunicipioChange);
 
   label.appendChild(combobox);
   el.appendChild(label);
+}
+
+// ─── Helpers de agrupación (NUEVO) ─────────────────────────────────────────
+
+/**
+ * Agrupa municipiosVisibles por provincia, indexado por un identificador
+ * estable (provincia_code — nunca provincia_nombre, que es solo para
+ * mostrar: dos provincias jamás comparten código, pero en teoría podrían
+ * tener nombres parecidos en datos futuros; agrupar por código evita ese
+ * riesgo).
+ *
+ * @param {Object[]} municipiosVisibles
+ * @returns {Map<string, {label: string, municipios: Object[]}>}
+ *   Clave = provincia_code. label = provincia_nombre si el dato lo trae
+ *   (generado por tools/generar_geografia.py — ver ese script), con el
+ *   propio provincia_code como respaldo si por algún motivo faltara.
+ */
+function _agruparPorProvincia(municipiosVisibles) {
+  const grupos = new Map();
+
+  for (const m of municipiosVisibles) {
+    const clave = m.provincia_code ?? "_sin_provincia";
+    const label = m.provincia_nombre ?? m.provincia_code ?? "—";
+
+    if (!grupos.has(clave)) {
+      grupos.set(clave, { label, municipios: [] });
+    }
+    grupos.get(clave).municipios.push(m);
+  }
+
+  return grupos;
+}
+
+/**
+ * Decide si vale la pena mostrar grupos visuales en el combobox.
+ * Con 0 o 1 provincia distinta, agrupar no aporta nada (ver docstring del
+ * módulo) — se usa la lista plana de siempre.
+ */
+function _necesitaAgrupacion(grupos) {
+  return grupos.size > 1;
+}
+
+/**
+ * Construye un <calcite-combobox-item> para un municipio. Extraído para
+ * no duplicar esta lógica entre la rama agrupada y la rama plana del
+ * render (DRY) — antes vivía inline dentro de un único forEach.
+ */
+function _crearComboboxItem(m) {
+  const item = document.createElement("calcite-combobox-item");
+  item.value   = m.codigo_ine;
+  item.heading = `${m.nombre}`;
+  if (_municipioActivo === m.codigo_ine) {
+    item.selected = true;
+  }
+  return item;
 }
 
 // ─── Handlers privados ─────────────────────────────────────────────────────

@@ -20,15 +20,32 @@
  * deployment.codigoEntidad para devolver el recorte que corresponde.
  *
  * ── CASOS DE ÁMBITO SOPORTADOS ─────────────────────────────────────────────
- *   "municipio"  → cliente tipo ayuntamiento único o lista corta.
- *                  Sin máscara territorial propia — el flujo existente de
- *                  selección de municipio (municipioSelector.js) ya cubre
- *                  este caso sin cambios. mascaraInicial: null.
+ *   "municipio"  → cliente tipo ayuntamiento único o lista corta arbitraria
+ *                  (puede cruzar varias provincias, ej. el deployment demo:
+ *                  Bilbao + Pamplona + Logroño + Burgos...). Usa el archivo
+ *                  único data/municipios.json — NO se migra al patrón por
+ *                  provincia/CCAA de abajo, porque cargar el JSON completo
+ *                  de 6 provincias para quedarse con 10 municipios sería
+ *                  peor que el problema que resolvemos con ellos.
+ *                  mascaraInicial: null.
  *   "provincia"  → cliente tipo diputación. Máscara inicial = polígono de
- *                  la provincia completa. municipiosDisponibles = todos los
- *                  municipios de esa provincia (para el buscador).
- *   "ccaa"       → cliente tipo gobierno regional. Igual que provincia,
- *                  a nivel autonómico.
+ *                  la provincia completa (data/provincias.json).
+ *                  municipiosDisponibles = TODOS los municipios de esa
+ *                  provincia, leídos de su propio archivo
+ *                  data/municipios_<provincia_code>.json — generado por
+ *                  tools/generar_geografia.py --municipios-de-provincia.
+ *   "ccaa"       → cliente tipo gobierno regional. Máscara inicial =
+ *                  polígono de la CCAA completa (data/ccaa.json).
+ *                  municipiosDisponibles = TODOS los municipios de esa
+ *                  CCAA (sin importar cuántas provincias la compongan),
+ *                  leídos de su propio archivo
+ *                  data/municipios_ccaa_<ccaa_code>.json — generado por
+ *                  tools/generar_geografia.py --municipios-de-ccaa. Ese
+ *                  archivo ya viene armado desde el shapefile municipal
+ *                  filtrando directo por ccaa_code (el NATCODE de cada
+ *                  municipio ya trae su ccaa_code propio) — este resolver
+ *                  NO fusiona archivos de provincias en runtime, todo el
+ *                  trabajo de agrupar ya se hizo una vez en build time.
  *   "comarca"    → sin geometría oficial IGN (no todas las CCAA tienen
  *                  comarcalización oficial, ej. Navarra). Trabajo futuro:
  *                  unión de polígonos municipales vía geometryEngine.union().
@@ -36,24 +53,89 @@
  *   "espana"     → sin caso de uso real previsto (ningún cliente pide
  *                  cobertura nacional completa). No implementado.
  *
+ * ── DATASETS POR PROVINCIA/CCAA (archivos separados, no un municipios.json global) ──
+ * Antes, "provincia" y "ccaa" cargaban TODOS los municipios de España
+ * desde un único data/municipios.json y filtraban en JavaScript. Con
+ * cientos de municipios por provincia, eso significa que el cliente
+ * Navarra descargaría también los municipios de Bizkaia, Madrid, etc.
+ * — datos que nunca va a usar.
+ *
+ * Ahora existen dos generadores nuevos en tools/generar_geografia.py:
+ *   --municipios-de-provincia → data/municipios_<provincia_code>.json
+ *   --municipios-de-ccaa      → data/municipios_ccaa_<ccaa_code>.json
+ * Ambos nombrados por código INE (no por texto), para que este módulo
+ * construya la ruta con una simple interpolación de string a partir de
+ * deployment.codigoEntidad, sin necesitar ningún mapeo código→nombre
+ * adicional en el frontend (mismo criterio que ya se aplicó al eliminar
+ * la tabla PROVINCIA_A_CCAA basada en NATCODE). Cada municipio dentro de
+ * esos archivos SÍ incluye "provincia_nombre" o "ccaa_nombre" — pero es
+ * solo para que un humano pueda hacer `git grep "Pamplona"` o abrir el
+ * JSON y entender de qué territorio es; el runtime nunca lee ese campo.
+ *
  * ── DATASETS CONSUMIDOS ─────────────────────────────────────────────────
- *   data/municipios.json  { codigo_ine, nombre, provincia_code, ccaa_code, bbox, polygon }
- *   data/provincias.json  { tipo:"provincia", provincia_code, ccaa_code, nombre, bbox, polygon }
- *   data/ccaa.json        { tipo:"ccaa", ccaa_code, nombre, bbox, polygon }
+ *   data/municipios.json              { codigo_ine, nombre, provincia_code, ccaa_code, bbox, polygon }
+ *                                       — usado SOLO por el caso "municipio".
+ *   data/municipios_<code>.json        Mismo shape + "provincia_nombre". Uno
+ *                                       por provincia — usado por "provincia".
+ *   data/municipios_ccaa_<code>.json   Mismo shape + "ccaa_nombre". Uno por
+ *                                       CCAA — usado por "ccaa".
+ *   data/provincias.json               { tipo:"provincia", provincia_code, ccaa_code, nombre, bbox, polygon }
+ *   data/ccaa.json                     { tipo:"ccaa", ccaa_code, nombre, bbox, polygon }
  *   (generados por tools/generar_geografia.py — ver ese script para el
  *   detalle de cómo se derivan ccaa_code/provincia_code desde NATCODE)
  */
 
 import { LocalJsonAdapter } from "./adapters/LocalJsonAdapter.js";
 
-// ─── Adaptadores propios de este módulo ────────────────────────────────────
-// Instancias separadas de las que use configEngine.js — dataset distinto
-// (territorios, no capas), aunque la clase adaptadora sea la misma.
+// ─── Adaptadores fijos (datasets que siguen siendo un archivo único) ───────
 // Rutas relativas desde config/ (mismo nivel que catalogo-capas.json en data/).
 
-const _adapterMunicipios = new LocalJsonAdapter("../data/municipios.json");
-const _adapterProvincias = new LocalJsonAdapter("../data/provincias.json");
-const _adapterCcaa       = new LocalJsonAdapter("../data/ccaa.json");
+const _adapterMunicipiosDemo = new LocalJsonAdapter("../data/municipios.json");
+const _adapterProvincias     = new LocalJsonAdapter("../data/provincias.json");
+const _adapterCcaa           = new LocalJsonAdapter("../data/ccaa.json");
+
+// ─── Adaptadores dinámicos por provincia/CCAA (creados bajo demanda) ──────
+// A diferencia de los adaptadores fijos de arriba, aquí NO sabemos de
+// antemano qué provincias o CCAA se van a pedir — depende del deployment
+// que se cargue en cada instancia de la app. Se usan dos Maps como caché:
+// la primera vez que se pide un código se crea su adaptador y se guarda;
+// las siguientes veces se reutiliza (mismo espíritu de caché que ya tiene
+// LocalJsonAdapter internamente para el fetch, pero aquí a nivel de "qué
+// adaptador instanciar", no "qué dato cachear").
+const _adaptadoresMunicipiosPorProvincia = new Map();
+const _adaptadoresMunicipiosPorCcaa      = new Map();
+
+/**
+ * Devuelve (creando si hace falta) el adaptador de municipios de una
+ * provincia concreta, a partir de su código INE.
+ * @param {string} provinciaCode - ej. "31"
+ * @returns {LocalJsonAdapter}
+ */
+function _getAdapterMunicipiosDeProvincia(provinciaCode) {
+  if (!_adaptadoresMunicipiosPorProvincia.has(provinciaCode)) {
+    _adaptadoresMunicipiosPorProvincia.set(
+      provinciaCode,
+      new LocalJsonAdapter(`../data/municipios_${provinciaCode}.json`)
+    );
+  }
+  return _adaptadoresMunicipiosPorProvincia.get(provinciaCode);
+}
+
+/**
+ * Devuelve (creando si hace falta) el adaptador de municipios de una
+ * CCAA concreta, a partir de su código INE.
+ * @param {string} ccaaCode - ej. "15"
+ * @returns {LocalJsonAdapter}
+ */
+function _getAdapterMunicipiosDeCcaa(ccaaCode) {
+  if (!_adaptadoresMunicipiosPorCcaa.has(ccaaCode)) {
+    _adaptadoresMunicipiosPorCcaa.set(
+      ccaaCode,
+      new LocalJsonAdapter(`../data/municipios_ccaa_${ccaaCode}.json`)
+    );
+  }
+  return _adaptadoresMunicipiosPorCcaa.get(ccaaCode);
+}
 
 // ─── API pública ──────────────────────────────────────────────────────────
 
@@ -115,15 +197,15 @@ export async function resolverAmbitoTerritorial(deployment) {
 // ─── Resolución por nivel ───────────────────────────────────────────────────
 
 /**
- * Caso "municipio" — sin máscara territorial propia.
+ * Caso "municipio" — sin máscara territorial propia. Sigue usando el
+ * archivo único data/municipios.json (lista curada a mano, puede cruzar
+ * varias provincias — ver nota al inicio del archivo).
  * El filtro por deployment.municipios (que antes vivía en
  * municipioSelector.js, acoplado al import estático de municipios.js)
- * ahora se resuelve aquí, contra data/municipios.json vía LocalJsonAdapter.
- * Este resolver solo homogeniza el shape de retorno para que main.js
- * llame siempre la misma función sin importar el ámbito del deployment.
+ * se resuelve aquí, contra data/municipios.json vía LocalJsonAdapter.
  */
 async function _resolverAmbitoMunicipio(deployment) {
-  const todos = await _adapterMunicipios.getData();
+  const todos = await _adapterMunicipiosDemo.getData();
   const codigosPermitidos = new Set(deployment.municipios ?? []);
 
   const municipiosDisponibles = codigosPermitidos.size > 0
@@ -139,6 +221,13 @@ async function _resolverAmbitoMunicipio(deployment) {
 /**
  * Caso "provincia" — máscara sobre la provincia completa, buscador
  * poblado con todos los municipios de esa provincia.
+ *
+ * Ya NO filtra sobre un municipios.json global: pide directamente el
+ * archivo data/municipios_<provincia_code>.json, que ya viene recortado
+ * a esa provincia desde el propio proceso de generación. El filtro por
+ * provincia_code se mantiene igual como salvaguarda barata (por si el
+ * archivo llegara a contener algo inesperado), no porque haga falta para
+ * el caso normal.
  */
 async function _resolverAmbitoProvincia(deployment) {
   const codigoProvincia = deployment.codigoEntidad;
@@ -151,7 +240,7 @@ async function _resolverAmbitoProvincia(deployment) {
 
   const [provincias, municipios] = await Promise.all([
     _adapterProvincias.getData(),
-    _adapterMunicipios.getData(),
+    _getAdapterMunicipiosDeProvincia(codigoProvincia).getData(),
   ]);
 
   const provincia = provincias.find(p => p.provincia_code === codigoProvincia);
@@ -191,8 +280,19 @@ async function _resolverAmbitoProvincia(deployment) {
 
 /**
  * Caso "ccaa" — máscara sobre la comunidad autónoma completa, buscador
- * poblado con todos los municipios de esa CCAA (cruzando por ccaa_code,
- * sin importar a qué provincia interna pertenezcan).
+ * poblado con todos los municipios de esa CCAA.
+ *
+ * A diferencia de un diseño anterior descartado (que fusionaba en
+ * runtime los archivos de cada provincia de la CCAA), aquí se pide
+ * directamente el archivo data/municipios_ccaa_<ccaa_code>.json — ya
+ * viene armado desde build time por
+ * tools/generar_geografia.py --municipios-de-ccaa, que filtra el
+ * shapefile municipal directo por ccaa_code del NATCODE (cada municipio
+ * ya trae su propio ccaa_code, sin pasar por el shapefile provincial).
+ * Esto simplifica este resolver a exactamente el mismo patrón que
+ * _resolverAmbitoProvincia: un solo fetch, sin Promise.all de múltiples
+ * provincias ni .flat() para fusionar — mismo comportamiento tanto para
+ * una CCAA uniprovincial (Navarra) como multiprovincial (País Vasco).
  */
 async function _resolverAmbitoCcaa(deployment) {
   const codigoCcaa = deployment.codigoEntidad;
@@ -205,7 +305,7 @@ async function _resolverAmbitoCcaa(deployment) {
 
   const [ccaas, municipios] = await Promise.all([
     _adapterCcaa.getData(),
-    _adapterMunicipios.getData(),
+    _getAdapterMunicipiosDeCcaa(codigoCcaa).getData(),
   ]);
 
   const ccaa = ccaas.find(c => c.ccaa_code === codigoCcaa);
@@ -217,6 +317,11 @@ async function _resolverAmbitoCcaa(deployment) {
     );
   }
 
+  // El filtro por ccaa_code se mantiene como salvaguarda barata, igual
+  // que en _resolverAmbitoProvincia — el archivo ya viene recortado a
+  // esta CCAA desde el generador, no debería hacer falta, pero es una
+  // línea de defensa gratuita si el archivo llegara a contener algo
+  // inesperado.
   const municipiosDisponibles = municipios.filter(
     m => m.ccaa_code === codigoCcaa
   );
