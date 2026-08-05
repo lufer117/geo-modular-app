@@ -60,8 +60,8 @@ import * as eventBus from '../utils/eventBus.js';
 import { initMapControls } from "../ui/mapControls.js";
 import { initToolPanel } from "../ui/toolPanel.js";
 
-
-
+// ── Utils ────────────────────────────────────────────────────────────────────
+import { resolverLogo } from "../utils/logoResolver.js";
 
 
 // ─── Bootstrap ────────────────────────────────────────────────────────────
@@ -107,30 +107,68 @@ async function waitForArcGISSDK(maxWaitMs = 5000) {
 }
 
 // ── Branding ────────────────────────────────────────────────────────────
-// Aplica la identidad visual de la instancia desde deployment.js.
-// Se ejecuta antes que cualquier otro módulo para que el logo sea
-// lo primero que el usuario vea al cargar, sin flash de contenido sin marca.
-function aplicarBranding(branding) {
-  if (!branding) return;
-
+// Aplica la identidad visual de la instancia desde DEPLOYMENT. Se ejecuta
+// antes que cualquier otro módulo para que el logo sea lo primero que el
+// usuario vea al cargar, sin flash de contenido sin marca.
+//
+// Recibe el DEPLOYMENT completo (no solo .branding) porque la clave para
+// resolver el logo de entidad depende de campos de nivel raíz
+// (ambitoTerritorial, codigoEntidad, municipios) — ver
+// _resolverClaveLogoEntidad().
+//
+// Es async porque resolverLogo() prueba la cascada de extensiones contra
+// el servidor antes de devolver una URL.
+async function aplicarBranding(deployment) {
   const navLogo = document.querySelector("calcite-navigation-logo");
   if (!navLogo) return;
 
-  // Nombre y descripción — sobreescriben los valores por defecto del HTML
-  if (branding.nombre_visible) navLogo.setAttribute("heading",     branding.nombre_visible);
-  if (branding.descripcion)    navLogo.setAttribute("description", branding.descripcion);
+  // Nombre y descripción — sobreescriben los valores por defecto del HTML.
+  // Corrección de bug: antes se leía branding.nombre_visible, pero ese
+  // campo vive en el nivel raíz del cliente en deployment.js, nunca dentro
+  // de branding — el setAttribute nunca se ejecutaba en la práctica.
+  if (deployment.nombre_visible) navLogo.setAttribute("heading", deployment.nombre_visible);
+  if (deployment.descripcion)    navLogo.setAttribute("description", deployment.descripcion);
 
-  // Logo del cliente — si existe, reemplaza el icono SVG por una imagen real
-  if (branding.logo_cliente) {
-    navLogo.setAttribute("thumbnail", branding.logo_cliente);
-    navLogo.removeAttribute("icon");   // icon y thumbnail son mutuamente excluyentes en Calcite
+  // Logo de entidad (municipio único / provincia / ccaa) — resuelto por
+  // código, con cascada de extensión automática. Ver
+  // _resolverClaveLogoEntidad() para el criterio de qué código usar.
+  const claveLogo = _resolverClaveLogoEntidad(deployment);
+  console.info(`[main] Resolviendo logo de entidad — clave: "${claveLogo ?? "(ninguna)"}"`);
+  const logoUrl   = await resolverLogo(claveLogo);
+
+  if (logoUrl) {
+    navLogo.setAttribute("thumbnail", logoUrl);
+    navLogo.removeAttribute("icon"); // icon y thumbnail son mutuamente excluyentes en Calcite
+  } else {
+    // Sin archivo subido para esta entidad (ej. paisvasco antes de subir
+    // el logo) — fallback explícito a icono genérico, nunca un thumbnail
+    // roto apuntando a un archivo inexistente.
+    navLogo.setAttribute("icon", "map-pin");
+    navLogo.removeAttribute("thumbnail");
   }
 
-  // Logo de empresa — se inyecta como elemento fijo en el extremo derecho del header
-  // y comparte alineación con el selector de idioma en content-end.
-  if (branding.logo_empresa) {
-    _inyectarLogoEmpresa(branding.logo_empresa);  
+  // Logo de empresa — elemento fijo en el extremo derecho del header.
+  // Ruta directa (no agnóstica): es un único archivo que la empresa
+  // integradora controla, no varía por cliente ni necesita cascada.
+  if (deployment.branding?.logo_empresa) {
+    _inyectarLogoEmpresa(deployment.branding.logo_empresa);
   }
+}
+
+/**
+ * Decide qué código usar como clave del logo de entidad, según el modelo
+ * de deployment activo:
+ *   - ambitoTerritorial definido (provincia/ccaa) → codigoEntidad
+ *     (ej. bizkaia → "48", paisvasco → "16")
+ *   - sin ambitoTerritorial (ayuntamiento único / comarca curada) →
+ *     primer código de municipios[] — mismo criterio ya usado en
+ *     municipioSelector para el caso de un único municipio.
+ * Devuelve null si no hay ninguno de los dos (ej. demo) — resolverLogo()
+ * ya maneja null devolviendo directamente sin probar red.
+ */
+function _resolverClaveLogoEntidad(deployment) {
+  if (deployment.ambitoTerritorial) return deployment.codigoEntidad ?? null;
+  return deployment.municipios?.[0] ?? null;
 }
 
 function _inyectarLogoEmpresa(src) {
@@ -162,42 +200,7 @@ function _inyectarLogoEmpresa(src) {
   }
 }
 
-// ── Logo por-municipio (runtime) ──────────────────────────────────────────
-// Prueba en cascada qué extensión existe realmente para un codigo_ine,
-// en vez de mantener una tabla editorial a mano dentro del código (ver
-// 3DECISIONS.md, 30.07.26 — logo desacoplado de generar_geografia.py).
 
-const _LOGO_EXTENSIONES = ["webp", "jpg", "jpeg", "png", "svg"];
-
-/**
- * Prueba si una imagen carga realmente en el navegador (existe en el
- * servidor), sin asumir nada de antemano.
- * @param {string} url
- * @returns {Promise<boolean>}
- */
-function _probarImagen(url) {
-  return new Promise(resolve => {
-    const img = new Image();
-    img.onload  = () => resolve(true);
-    img.onerror = () => resolve(false);
-    img.src = url;
-  });
-}
-
-/**
- * Resuelve la URL del logo de un municipio probando extensiones en orden.
- * Devuelve null si no existe ningún archivo de logo para ese codigo_ine
- * (caso normal para la mayoría de municipios — no todos tienen logo subido).
- * @param {string} codigoIne
- * @returns {Promise<string|null>}
- */
-async function _resolverLogoMunicipio(codigoIne) {
-  for (const ext of _LOGO_EXTENSIONES) {
-    const url = `../assets/logos/${codigoIne}.${ext}`;
-    if (await _probarImagen(url)) return url;
-  }
-  return null;
-}
 
 // ── ARRANQUE ────────────────────────────────────────────────────────────────────
 
@@ -207,7 +210,7 @@ async function main() {
 
 
     // 0. Aplicar branding de la instancia antes de montar cualquier UI
-    aplicarBranding(DEPLOYMENT.branding);
+    await aplicarBranding(DEPLOYMENT);
     // 1. Esperar SDK — bug corregido: la función existía pero no se llamaba
     await waitForArcGISSDK();
 
@@ -283,12 +286,15 @@ async function main() {
       const navLogo = document.querySelector("calcite-navigation-logo");
       if (!navLogo) return;
 
-      const logoUrl = await _resolverLogoMunicipio(municipioData.codigo_ine);
+      const logoUrl = await resolverLogo(municipioData.codigo_ine);
 
       navLogo.setAttribute("heading", municipioData.nombre);
       if (logoUrl) {
         navLogo.setAttribute("thumbnail", logoUrl);
         navLogo.removeAttribute("icon"); // Calcite requiere quitar el icono para mostrar el thumbnail
+        console.info(`[main] Logo actualizado para "${municipioData.nombre}": ${logoUrl}`);
+      } else {
+        console.info(`[main] "${municipioData.nombre}" sin logo propio — se mantiene el branding previo`);
       }
       // Si no se encontró ningún logo, se deja el icono/thumbnail que ya
       // hubiera (por ejemplo el de deployment.branding) — no se fuerza nada.
