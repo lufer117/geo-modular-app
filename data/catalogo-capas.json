@@ -47,7 +47,9 @@
   "url": "https://ovc.catastro.meh.es/Cartografia/WMS/ServidorWMS.aspx",
   "disponibilidad_municipal": "BBOX",
   "cobertura": {
-    "tipo": "nacional"
+    "tipo": "nacional",
+    "excluye_provincia_code": ["48"],
+    "excluye_ccaa_code": ["16", "15"]
   },
   "prioridad": "P0",
   "tags": ["parcelas", "edificios", "referencia catastral", "propiedad", "catastro"],
@@ -58,6 +60,7 @@
     { "id": "CONSTRU", "title": "Construcciones", "visible": false, "legendUrl": "https://ovc.catastro.meh.es/Cartografia/WMS/simbolos.png"}
   ]
   },
+
 
   {
     "id": "ign-cnig-redes-geodesicas-del-ign-de-espana-wfs",

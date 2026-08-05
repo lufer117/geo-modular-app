@@ -25,13 +25,19 @@
  * inyectado debe exponer getData() → Promise<Capa[]>.
  *
  * ── REGLAS DE COBERTURA ──────────────────────────────────────────────────
- *   "nacional"   → siempre incluir (aplica a toda España)
- *   "europeo"    → siempre incluir (cobertura supranacional)
- *   "global"     → siempre incluir (cobertura mundial)
+ *   "nacional"   → incluir, salvo exclusión declarativa por provincia/ccaa
+ *                  (ver cobertura.excluye_provincia_code / excluye_ccaa_code).
+ *                  Aplica a toda España por defecto.
+ *   "europeo"    → misma regla de exclusión que "nacional". Cobertura supranacional.
+ *   "global"     → misma regla de exclusión que "nacional". Cobertura mundial.
  *   "autonomica" → incluir si capa.cobertura.ccaa_code === territorio.ccaa_code
  *   "provincial" → incluir si capa.cobertura.provincia_code === territorio.provincia_code
  *   "municipal"  → incluir si territorio.codigo_ine ∈ capa.cobertura.codigos_ine[]
  *   "espacial"   → reservado para PostGISAdapter (futuro). Excluido con aviso.
+ *
+ * Nota sobre exclusión declarativa (05.08.26, ver 3DECISIONS.md): MVP sin
+ * resolución espacial real (GetFeatureInfo por pixel/bbox). Caso de uso:
+ * Catastro estatal no cubre País Vasco/Navarra (competencia foral).
  *
  * ── AJUSTE (soporte de ámbito territorial provincia/ccaa) ──────────────────
  * fetchCapas() resuelve el paquete completo para un municipio concreto —
@@ -207,8 +213,23 @@ function _aplicaAlMunicipio(capa, municipio) { //solo recibe si es true o false
   switch (cobertura.tipo) {
     case "nacional":
     case "europeo":
-    case "global":
+    case "global": {
+      // Exclusión declarativa por provincia y/o CCAA (ej. competencia foral
+      // Catastro en País Vasco/Navarra). MVP sin resolución espacial real —
+      // ver 3DECISIONS.md. Se chequean ambos códigos porque en ambitoTerritorial
+      // "ccaa" municipio.provincia_code puede venir null (una CCAA no
+      // pertenece a una única provincia) — el chequeo por ccaa_code cubre
+      // ese caso sin depender del primero.
+      const excluidaPorProvincia = cobertura.excluye_provincia_code
+        ?.includes(municipio.provincia_code);
+      const excluidaPorCcaa = cobertura.excluye_ccaa_code
+        ?.includes(municipio.ccaa_code);
+
+      if (excluidaPorProvincia || excluidaPorCcaa) {
+        return false;
+      }
       return true;
+    }
 
     case "autonomica":
       return cobertura.ccaa_code === municipio.ccaa_code;
