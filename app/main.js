@@ -44,10 +44,6 @@ import { DEPLOYMENT }              from "../config/deployment.js";
 // Main no crea el mapa directamente, lo inicializa 
 import * as mapManager from "../core/mapManager.js";
 
-
-// ── Lang ─────────────────────────────────────────────────────────────────
-import { init as initI18n } from "../config/i18n/i18nManager.js";
-
 // ── UI ────────────────────────────────────────────────────────────────────
 // Cada función importada monta una parte visual
 import { initActionBar } from "../ui/actionBar.js";
@@ -63,6 +59,7 @@ import { initToolPanel } from "../ui/toolPanel.js";
 // ── Utils ────────────────────────────────────────────────────────────────────
 import { resolverLogo } from "../utils/logoResolver.js";
 
+import { init as initI18n } from "../utils/i18nManager.js";
 
 // ─── Bootstrap ────────────────────────────────────────────────────────────
 

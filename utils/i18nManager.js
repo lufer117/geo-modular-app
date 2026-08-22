@@ -1,5 +1,5 @@
 /**
- * config/i18n/i18nManager.js
+ * utils/i18nManager.js
  *
  * Motor de internacionalización (i18n) de la aplicación.
  *
@@ -30,8 +30,8 @@
  * Trabajo futuro: SSR o endpoint que sirva el locale antes de la carga del SDK.
  */
 
-import { DEPLOYMENT } from "../deployment.js";
-import { emit } from "../../utils/eventBus.js";
+import { DEPLOYMENT } from "../config/deployment.js";
+import { emit } from "./eventBus.js";
 
 // ── Constantes ──────────────────────────────────────────────────────────────
 const STORAGE_KEY  = "geo-app-lang";
@@ -185,7 +185,7 @@ function _resolverIdioma() {
  */
 async function _cargarTraducciones(lang) {
   try {
-    const res = await fetch(`../config/i18n/${lang}.json`);
+    const res = await fetch(`../data/i18n/${lang}.json`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return {
       lang,
@@ -196,7 +196,7 @@ async function _cargarTraducciones(lang) {
 
     // Fallback: intentar cargar español
     if (lang !== "es") {
-      const res = await fetch("../config/i18n/es.json");
+      const res = await fetch("../data/i18n/es.json");
       return {
         lang: "es",
         traducciones: await res.json()

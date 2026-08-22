@@ -80,7 +80,7 @@ import { crearCapa }              from "../core/layerFactory.js";
 import { inicializarCapa }        from "../core/layerInitializer.js";
 import { emit, on }               from "../utils/eventBus.js";
 import { clearContainer }         from "../utils/domUtils.js";
-import { t }                      from "../config/i18n/i18nManager.js";
+import { t }                      from "../utils/i18nManager.js";
 
 // ─── Estado interno del módulo ─────────────────────────────────────────────
 

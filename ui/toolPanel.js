@@ -78,7 +78,7 @@
  */
 
 import { on } from "../utils/eventBus.js";
-import { t } from "../config/i18n/i18nManager.js";
+import { t } from "../utils/i18nManager.js";
 import * as mapManager from "../core/mapManager.js";
 
 // ─── Estado del módulo ──────────────────────────────────────────────────────

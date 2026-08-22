@@ -3,7 +3,7 @@
   
 
   import { DEPLOYMENT }        from "../config/deployment.js";
-  import { getLang, setLang }  from "../config/i18n/i18nManager.js";
+  import { getLang, setLang }  from "../utils/i18nManager.js";
   import { getMunicipioActivo }  from "./municipioSelector.js";
   import * as mapManager from "../core/mapManager.js";
   import { clearContainer } from "../utils/domUtils.js";

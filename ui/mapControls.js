@@ -17,7 +17,7 @@
 
 import * as mapManager from "../core/mapManager.js";
 import * as eventBus   from "../utils/eventBus.js";
-import { t }           from "../config/i18n/i18nManager.js";
+import { t }           from "../utils/i18nManager.js";
 
 let _btnMap   = null; // botón en arcgis-map (vista 2D activa)
 let _btnScene = null; // botón en arcgis-scene (vista 3D activa)
