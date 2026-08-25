@@ -46,6 +46,44 @@
  * punto que SÍ asumía escala municipal: _estrategiaFiltrable(), que
  * construía el filtro contra codigo_ine de forma fija. Ahora lee
  * config.filtro_nivel para decidir contra qué campo filtrar.
+ * 
+ * /**
+ * ── LIMITACIÓN CONOCIDA / MEJORA FUTURA (hallazgo 25.08.26, ver 3DECISIONS.md) ──
+ *
+ * Esta función solo distingue dos casos de proyección: EPSG:3857 (reproyecta
+ * vía webMercatorUtils) o "cualquier otro valor" (asume WGS84 y envía el
+ * bbox sin transformar). No es una reproyección genérica.
+ *
+ * Al automatizar la resolución del catálogo (enriquecer-catalogo.py, capa
+ * data/), se confirmó que algunos servicios WFS reales declaran su
+ * DefaultCRS/DefaultSRS en sistemas distintos a 4326/3857 — ej. el
+ * Seccionado Estadístico del INE responde en EPSG:25830 (UTM 30N ETRS89).
+ * Hoy esa capa cae en la rama "else" (se le envía el bbox en 4326 sin
+ * transformar, como si el servicio hablara WGS84), lo que no rompe la
+ * petición pero tampoco es correcto estrictamente — el filtro BBOX que
+ * llega al servidor no está en su sistema de coordenadas real.
+ *
+ * No se corrige ahora porque el impacto práctico es bajo (el servidor
+ * normalmente sigue devolviendo resultados utilizables, con un margen de
+ * imprecisión en el recorte) y no había evidencia previa de que fuera
+ * necesario — surge como hallazgo al automatizar la lectura de
+ * GetCapabilities, no como bug reportado en producción.
+ *
+ * CAMINO PARA GENERALIZAR (cuando se priorice):
+ *   webMercatorUtils solo sabe convertir WGS84 ↔ Web Mercator, por eso el
+ *   switch actual es binario. Para soportar cualquier CRS declarado por
+ *   el servicio (no solo 3857), el módulo correcto del SDK es
+ *   esri/geometry/projection (no webMercatorUtils):
+ *     - projection.load() — carga el motor de proyección (async, una vez)
+ *     - projection.project(geometry, targetSpatialReference) — reproyecta
+ *       a cualquier WKID, incluidos sistemas UTM/ETRS89 como 25830.
+ *   Esto reemplazaría el if/else por: construir el Point en 4326 → cargar
+ *   projection → project() al wkid real extraído de srsname → formatear
+ *   bboxStr con ese resultado. Coste: projection.load() es más pesado que
+ *   webMercatorUtils (carga más recursos del SDK), por eso no se adoptó
+ *   de entrada — evaluar si el volumen de capas con CRS no estándar
+ *   justifica el costo antes de implementarlo.
+ 
  */
 
 // ─── API pública ──────────────────────────────────────────────────────────

@@ -73,14 +73,14 @@
  * JSON y entender de qué territorio es; el runtime nunca lee ese campo.
  *
  * ── DATASETS CONSUMIDOS ─────────────────────────────────────────────────
- *   data/municipios.json              { codigo_ine, nombre, provincia_code, ccaa_code, bbox, polygon }
+ *   data/territorio/municipios.json              { codigo_ine, nombre, provincia_code, ccaa_code, bbox, polygon }
  *                                       — usado SOLO por el caso "municipio".
- *   data/municipios_<code>.json        Mismo shape + "provincia_nombre". Uno
+ *   data/territorio/municipios_<code>.json        Mismo shape + "provincia_nombre". Uno
  *                                       por provincia — usado por "provincia".
- *   data/municipios_ccaa_<code>.json   Mismo shape + "ccaa_nombre". Uno por
+ *   data/territorio/municipios_ccaa_<code>.json   Mismo shape + "ccaa_nombre". Uno por
  *                                       CCAA — usado por "ccaa".
- *   data/provincias.json               { tipo:"provincia", provincia_code, ccaa_code, nombre, bbox, polygon }
- *   data/ccaa.json                     { tipo:"ccaa", ccaa_code, nombre, bbox, polygon }
+ *   data/territorio/provincias.json               { tipo:"provincia", provincia_code, ccaa_code, nombre, bbox, polygon }
+ *   data/territorio/ccaa.json                     { tipo:"ccaa", ccaa_code, nombre, bbox, polygon }
  *   (generados por tools/generar_geografia.py — ver ese script para el
  *   detalle de cómo se derivan ccaa_code/provincia_code desde NATCODE)
  */
@@ -90,9 +90,9 @@ import { LocalJsonAdapter } from "./adapters/LocalJsonAdapter.js";
 // ─── Adaptadores fijos (datasets que siguen siendo un archivo único) ───────
 // Rutas relativas desde config/ (mismo nivel que catalogo-capas.json en data/).
 
-const _adapterMunicipiosDemo = new LocalJsonAdapter("../data/municipios.json");
-const _adapterProvincias     = new LocalJsonAdapter("../data/provincias.json");
-const _adapterCcaa           = new LocalJsonAdapter("../data/ccaa.json");
+const _adapterMunicipiosDemo = new LocalJsonAdapter("../data/territorio/municipios.json");
+const _adapterProvincias     = new LocalJsonAdapter("../data/territorio/provincias.json");
+const _adapterCcaa           = new LocalJsonAdapter("../data/territorio/ccaa.json");
 
 // ─── Adaptadores dinámicos por provincia/CCAA (creados bajo demanda) ──────
 // A diferencia de los adaptadores fijos de arriba, aquí NO sabemos de
@@ -115,7 +115,7 @@ function _getAdapterMunicipiosDeProvincia(provinciaCode) {
   if (!_adaptadoresMunicipiosPorProvincia.has(provinciaCode)) {
     _adaptadoresMunicipiosPorProvincia.set(
       provinciaCode,
-      new LocalJsonAdapter(`../data/municipios_${provinciaCode}.json`)
+      new LocalJsonAdapter(`../data/territorio/municipios_${provinciaCode}.json`)
     );
   }
   return _adaptadoresMunicipiosPorProvincia.get(provinciaCode);
@@ -131,7 +131,7 @@ function _getAdapterMunicipiosDeCcaa(ccaaCode) {
   if (!_adaptadoresMunicipiosPorCcaa.has(ccaaCode)) {
     _adaptadoresMunicipiosPorCcaa.set(
       ccaaCode,
-      new LocalJsonAdapter(`../data/municipios_ccaa_${ccaaCode}.json`)
+      new LocalJsonAdapter(`../data/territorio/municipios_ccaa_${ccaaCode}.json`)
     );
   }
   return _adaptadoresMunicipiosPorCcaa.get(ccaaCode);

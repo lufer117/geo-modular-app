@@ -112,8 +112,8 @@ from shapely.ops import unary_union
 # funcione igual sin importar desde qué carpeta lo ejecutes.
 
 SCRIPT_DIR = Path(__file__).parent
-DATA_DIR   = SCRIPT_DIR.parent / "data"
-SHP_DIR    = DATA_DIR / "SHP_ETRS89"
+DATA_DIR   = SCRIPT_DIR.parent / "data" / "territorio"
+SHP_DIR    = DATA_DIR / "data" / "SHP_ETRS89"
 
 # Rutas a los 3 shapefiles oficiales del IGN. Cada shapefile es en
 # realidad un conjunto de varios archivos (.shp, .dbf, .shx, etc.)

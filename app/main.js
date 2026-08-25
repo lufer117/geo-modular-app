@@ -216,7 +216,7 @@ async function main() {
     await initI18n();
 
     // 3. Registrar adaptador de datos antes de cualquier operación de catálogo
-    setAdaptador(new LocalJsonAdapter("../data/catalogo-capas.json"));
+    setAdaptador(new LocalJsonAdapter("../data/catalogo/catalogo-capas.json"));
 
     // 4. Inicializar el Map único con sus dos vistas (2D y 3D)
     await mapManager.initMap({

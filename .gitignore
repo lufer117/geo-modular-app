@@ -13,6 +13,8 @@ Thumbs.db
 config/deployment.js
 config/deployment_final.js
 data/SHP_ETRS89
+data/pruebas_catalogo
+
 
 # Carpetas de build/distribución
 dist/
