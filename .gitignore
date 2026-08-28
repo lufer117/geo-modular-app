@@ -26,6 +26,7 @@ build/
 # VS Code
 .vscode/
 app/geo-app.code-workspace
+geo-app.code-workspace
 
 # Carpetas que no subo todavía 
 
