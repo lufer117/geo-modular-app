@@ -1,70 +1,274 @@
 /**
- * config/deployment.example.js
+ * config/deploymentTemplate.js
  *
- * Plantilla de configuración de instancia.
+ * Plantilla de referencia para config/deployment.js
  *
  * ── INSTRUCCIONES ────────────────────────────────────────────────────────
  * 1. Copia este archivo como config/deployment.js
- * 2. Edita los valores según el cliente o el entorno
- * 3. Nunca subas deployment.js a git (está en .gitignore)
+ * 2. Deja UN SOLO bloque `export const DEPLOYMENT = {...}` descomentado
+ *    (el que corresponda al cliente). Comenta o borra el resto.
+ * 3. Nunca subas deployment.js a git (está en .gitignore).
  *
- * ── CAMPOS ───────────────────────────────────────────────────────────────
+ * Este archivo NO lee ?cliente= de la URL. Eso es exclusivo del arnés
+ * de pruebas multi-cliente usado en desarrollo/demo del TFM. En
+ * producción cada cliente recibe su propio deployment.js con un único
+ * DEPLOYMENT ya resuelto en build time.
+ *
+ * ── CAMPOS COMUNES ───────────────────────────────────────────────────────
  *
  *   mode
- *     "demo"       → todos los municipios disponibles (TFM / reuniones)
+ *     "demo"       → sin restricción de municipios (TFM / reuniones)
  *     "production" → instancia real para un cliente concreto
  *
  *   cliente
- *     Identificador libre. Solo para trazabilidad interna.
- *     No afecta al comportamiento de la app.
+ *     Identificador libre. Solo trazabilidad interna, no afecta comportamiento.
  *
  *   nombre_visible
- *     Nombre del cliente que aparece en la UI (cabecera, accesibilidad).
+ *     Nombre del cliente en la UI (cabecera, accesibilidad).
  *
- *   municipios
- *     Array de codigos_ine que delimitan el ámbito de la instancia.
- *     []          → sin restricción (modo demo: todos los del catálogo)
- *     ["X"]       → un municipio: carga automática al arrancar, sin interacción
- *     ["X","Y",...] → varios: selector activo restringido al ámbito
+ *   idiomas / idioma_defecto
+ *     Idiomas disponibles según el territorio del cliente. El primero del
+ *     array marca el idioma de arranque si no se fija idioma_defecto aparte.
+ *     Ejemplos: País Vasco → ["eu","es","en"]; Galicia → ["gl","es","en"].
  *
- *   idiomas
- *     Idiomas disponibles en esta instancia. Depende del territorio del cliente.
- *     Ejemplos:
- *       País Vasco  → ["eu", "es", "en"]   (euskera primero = idioma del territorio)
- *       Galicia     → ["gl", "es", "en"]
- *       Nacional    → ["es", "en"]
- *     El primer idioma del array es el idioma_defecto si no se especifica otro.
+ *   branding.logo_cliente / branding.logo_empresa
+ *     Rutas relativas desde app/ o URL absoluta. logo_cliente: null → icono
+ *     SVG por defecto (icon="map-pin"). logo_empresa siempre visible.
  *
- *   idioma_defecto
- *     Idioma activo al arrancar. Debe estar incluido en el array idiomas.
+ * ── MODELOS DE ÁMBITO TERRITORIAL (mutuamente excluyentes) ────────────────
  *
- *   branding.logo_cliente
- *     Ruta relativa desde app/ o URL absoluta al logo del cliente.
- *     null → se muestra el icono SVG por defecto (icon="map-pin").
+ *   MODELO A — `municipios: [...]`
+ *     Lista curada de codigos_ine. Correcto cuando el cliente ES el
+ *     municipio (ayuntamiento único) o gestiona un puñado fijo y estable
+ *     de municipios sin ámbito administrativo superior que resolver.
+ *       []            → sin restricción (demo: todos los del catálogo)
+ *       ["X"]         → un municipio: carga automática al arrancar
+ *       ["X","Y",...] → varios: selector activo restringido a esa lista
  *
- *   branding.logo_empresa
- *     Logo de la empresa integradora. Siempre visible.
+ *   MODELO B — `ambitoTerritorial` + `codigoEntidad`
+ *     Para clientes cuyo ámbito ES una entidad administrativa completa
+ *     (diputación/provincia, gobierno autonómico/CCAA), no una selección
+ *     manual. Activa config/territorioResolver.js: máscara inicial sobre
+ *     el territorio COMPLETO al arrancar y buscador con todos sus
+ *     municipios, sin editar deployment.js cada vez que el cliente suma
+ *     un municipio a su ámbito.
+ *       ambitoTerritorial: "provincia" | "ccaa"
+ *       codigoEntidad:     código INE de la provincia o CCAA
+ *     Ausencia de ambitoTerritorial = caso "municipio" por defecto
+ *     (retrocompatible con Modelo A).
  *
- * ── RESOLUCIÓN EN DESARROLLO ─────────────────────────────────────────────
- * deployment.js lee ?cliente= de la URL para simular distintas instancias
- * sin cambiar el archivo. Clientes disponibles en el script:
+ *   No combinar A y B en el mismo deployment.
  *
- *   ?cliente=pamplona  → 1 municipio, es/eu/en, idioma_defecto es
- *   ?cliente=bilbao    → 1 municipio, eu/es/en, idioma_defecto eu
- *   ?cliente=bizkaia   → 3 municipios País Vasco
- *   ?cliente=navarra   → 3 municipios Navarra
- *   ?cliente=demo      → todos los municipios (sin restricción)
- *   (sin parámetro)    → fallback a "demo"
- *
- * En producción el archivo exporta directamente un único DEPLOYMENT
- * sin leer la URL — el cliente ya está configurado en el despliegue.
+ * ── CAMPO `herramientas[]` ──────────────────────────────────────────────
+ *   Tres estados válidos, cada uno con significado distinto:
+ *     1. Array con contenido  → panel con acciones habilitadas/deshabilitadas
+ *     2. Array vacío []       → decisión de producto: panel presente, sin
+ *                                acciones (el cliente conoce el catálogo y
+ *                                elige no exponer ninguna herramienta)
+ *     3. Campo ausente        → caso legado / deployment sin migrar.
+ *                                initToolPanel() resuelve con
+ *                                `DEPLOYMENT.herramientas ?? []` de forma
+ *                                seguridad, sin lanzar excepción.
+ *   Un `componente`/`componentes` es el nombre del Web Component de
+ *   ArcGIS o Calcite que implementa la herramienta. `habilitada: false`
+ *   deja la herramienta visible pero inactiva (útil para placeholders sin
+ *   backend, como imprimir sin printServiceUrl).
  * ─────────────────────────────────────────────────────────────────────────
  */
 
 
-// ── MODO DEMO / TFM ───────────────────────────────────────────────────────
-// Todos los municipios del catálogo disponibles. Para desarrollo y reuniones.
+// ── CASO MÁS COMPLETO: ámbito CCAA + set completo de herramientas ────────
+// Activo por defecto en esta plantilla. Cliente tipo gobierno autonómico:
+// cubre TODO el territorio (Modelo B), expone análisis, dibujo e impresión
+// (placeholder deshabilitado por falta de backend).
 
+export const DEPLOYMENT = {
+  mode:           "production",
+  cliente:        "gobierno-autonomico",
+  nombre_visible: "Nombre del Gobierno / Comunidad Autónoma",
+  ambitoTerritorial: "ccaa",
+  codigoEntidad:     "00", // código INE de la CCAA
+  idiomas:        ["es", "en"], // añadir lengua cooficial si aplica, primero en el array
+  idioma_defecto: "es",
+  branding: {
+    logo_cliente:  null,
+    logo_empresa:  "../assets/logos/empresa.png",
+  },
+  herramientas: [
+    {
+      id:         "distancia",
+      componentes: {
+        "2D": "arcgis-distance-measurement-2d",
+        "3D": "arcgis-direct-line-measurement-3d"
+      },
+      icono:      "measure-line",
+      categoria:  "analisis",
+      habilitada: true
+    },
+    {
+      id:         "area",
+      componentes: {
+        "2D": "arcgis-area-measurement-2d",
+        "3D": "arcgis-area-measurement-3d"
+      },
+      icono:      "measure-area",
+      categoria:  "analisis",
+      habilitada: true
+    },
+    {
+      id:         "dibujo",
+      componente: "arcgis-sketch",
+      icono:      "pencil",
+      categoria:  "analisis",
+      habilitada: true,
+      sketchOpciones: {
+        availableCreateTools: ["point", "polyline", "polygon", "rectangle", "circle"],
+        layout: "horizontal"
+      }
+    },
+    {
+      id:         "imprimir",
+      componente: "arcgis-print",
+      icono:      "print",
+      categoria:  "exportar",
+      habilitada: false, // placeholder: requiere printServiceUrl (backend propio)
+    },
+    {
+      id:         "limpiar",
+      componente: null,
+      icono:      "trash",
+      categoria:  "accion",
+      habilitada: true
+    }
+  ]
+};
+
+
+// ── VARIANTE — ámbito PROVINCIA (diputación) ──────────────────────────────
+// Modelo B con ambitoTerritorial "provincia". Mismo patrón que CCAA, cambia
+// el nivel administrativo y el codigoEntidad (código INE de provincia).
+
+/*
+export const DEPLOYMENT = {
+  mode:           "production",
+  cliente:        "diputacion-provincia",
+  nombre_visible: "Diputación / Nombre de la Provincia",
+  ambitoTerritorial: "provincia",
+  codigoEntidad:     "00", // código INE de la provincia
+  idiomas:        ["es", "en"],
+  idioma_defecto: "es",
+  branding: {
+    logo_cliente:  null,
+    logo_empresa:  "../assets/logos/empresa.png",
+  },
+  herramientas: [
+    {
+      id:         "distancia",
+      componentes: {
+        "2D": "arcgis-distance-measurement-2d",
+        "3D": "arcgis-direct-line-measurement-3d"
+      },
+      icono:      "measure-line",
+      categoria:  "analisis",
+      habilitada: true
+    },
+    {
+      id:         "area",
+      componentes: {
+        "2D": "arcgis-area-measurement-2d",
+        "3D": "arcgis-area-measurement-3d"
+      },
+      icono:      "measure-area",
+      categoria:  "analisis",
+      habilitada: true
+    },
+    {
+      id:         "dibujo",
+      componente: "arcgis-sketch",
+      icono:      "pencil",
+      categoria:  "analisis",
+      habilitada: true,
+      sketchOpciones: {
+        availableCreateTools: ["point", "polyline", "polygon", "rectangle", "circle"],
+        layout: "horizontal"
+      }
+    },
+    {
+      id:         "limpiar",
+      componente: null,
+      icono:      "trash",
+      categoria:  "accion",
+      habilitada: true
+    }
+  ]
+};
+*/
+
+
+// ── VARIANTE — MODELO A, ayuntamiento único (1 municipio) ─────────────────
+// La app arranca y carga el municipio automáticamente, sin interacción del
+// usuario final. Caso mínimo viable: mismo patrón que pamplona/logroño.
+
+/*
+export const DEPLOYMENT = {
+  mode:           "production",
+  cliente:        "ayuntamiento-nombre",
+  nombre_visible: "Ayuntamiento de [Nombre]",
+  municipios:     ["00000"], // codigo_ine del municipio
+  idiomas:        ["es", "en"],
+  idioma_defecto: "es",
+  branding: {
+    logo_cliente:  null,
+    logo_empresa:  "../assets/logos/empresa.png",
+  },
+  herramientas: [
+    {
+      id:         "distancia",
+      componentes: {
+        "2D": "arcgis-distance-measurement-2d",
+        "3D": "arcgis-direct-line-measurement-3d"
+      },
+      icono:      "measure-line",
+      categoria:  "analisis",
+      habilitada: true
+    },
+    {
+      id:         "limpiar",
+      componente: null,
+      icono:      "trash",
+      categoria:  "accion",
+      habilitada: true
+    }
+  ]
+};
+*/
+
+
+// ── VARIANTE — MODELO A, mancomunidad/comarca (N municipios) ─────────────
+// Lista curada y estable de municipios sin ámbito administrativo superior
+// que resolver. Selector activo restringido a esa lista.
+
+/*
+export const DEPLOYMENT = {
+  mode:           "production",
+  cliente:        "mancomunidad-nombre",
+  nombre_visible: "Mancomunidad de [Nombre]",
+  municipios:     ["00000", "00001", "00002"], // codigos_ine del ámbito
+  idiomas:        ["es", "en"],
+  idioma_defecto: "es",
+  branding: {
+    logo_cliente:  null,
+    logo_empresa:  "../assets/logos/empresa.png",
+  },
+  herramientas: [] // ejemplo de decisión de producto: panel sin acciones
+};
+*/
+
+
+// ── VARIANTE — MODO DEMO (sin restricción, todos los municipios) ─────────
+// Para desarrollo y reuniones. No es un cliente real.
+
+/*
 export const DEPLOYMENT = {
   mode:           "demo",
   cliente:        "tfm-demo",
@@ -75,45 +279,53 @@ export const DEPLOYMENT = {
   branding: {
     logo_cliente:  null,
     logo_empresa:  "../assets/logos/bilbomatica.svg",
-  }
-};
-
-
-// ── MODO AYUNTAMIENTO (1 municipio) ───────────────────────────────────────
-// La app arranca y carga el municipio automáticamente sin interacción.
-// Descomentar y ajustar codigo_ine, idiomas y branding al cliente.
-
-/*
-export const DEPLOYMENT = {
-  mode:           "production",
-  cliente:        "ayuntamiento-pamplona",
-  nombre_visible: "Ayuntamiento de Pamplona / Iruñako Udala",
-  municipios:     ["31201"],
-  idiomas:        ["es", "eu", "en"],
-  idioma_defecto: "es",
-  branding: {
-    logo_cliente:  "../assets/logos/pamplona.svg",
-    logo_empresa:  "../assets/logos/bilbomatica.svg",
-  }
-};
-*/
-
-
-// ── MODO COMARCA / MANCOMUNIDAD (N municipios) ────────────────────────────
-// Selector activo restringido al ámbito del cliente.
-// Descomentar y ajustar codigos_ine, idiomas y branding al cliente.
-
-/*
-export const DEPLOYMENT = {
-  mode:           "production",
-  cliente:        "gobierno-navarra",
-  nombre_visible: "Gobierno de Navarra / Nafarroako Gobernua",
-  municipios:     ["31201", "31232", "31084"],
-  idiomas:        ["es", "eu", "en"],
-  idioma_defecto: "es",
-  branding: {
-    logo_cliente:  "../assets/logos/navarra.svg",
-    logo_empresa:  "../assets/logos/bilbomatica.svg",
-  }
+  },
+  herramientas: [
+    {
+      id:         "distancia",
+      componentes: {
+        "2D": "arcgis-distance-measurement-2d",
+        "3D": "arcgis-direct-line-measurement-3d"
+      },
+      icono:      "measure-line",
+      categoria:  "analisis",
+      habilitada: true
+    },
+    {
+      id:         "area",
+      componentes: {
+        "2D": "arcgis-area-measurement-2d",
+        "3D": "arcgis-area-measurement-3d"
+      },
+      icono:      "measure-area",
+      categoria:  "analisis",
+      habilitada: true
+    },
+    {
+      id:         "dibujo",
+      componente: "arcgis-sketch",
+      icono:      "pencil",
+      categoria:  "analisis",
+      habilitada: true,
+      sketchOpciones: {
+        availableCreateTools: ["point", "polyline", "polygon", "rectangle", "circle"],
+        layout: "horizontal"
+      }
+    },
+    {
+      id:         "imprimir",
+      componente: "arcgis-print",
+      icono:      "print",
+      categoria:  "exportar",
+      habilitada: false,
+    },
+    {
+      id:         "limpiar",
+      componente: null,
+      icono:      "trash",
+      categoria:  "accion",
+      habilitada: true
+    }
+  ]
 };
 */
