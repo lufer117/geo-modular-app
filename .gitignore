@@ -1,6 +1,7 @@
 # Dependencias
 node_modules/
 venv/
+.venv/
 
 # Sistema operativo
 .DS_Store
