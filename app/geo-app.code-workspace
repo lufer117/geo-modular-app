@@ -1,9 +1,11 @@
 {
 	"folders": [
 		{
+			"name": "geo-app",
 			"path": ".."
 		},
 		{
+			"name": "proyecto_gis_docs",
 			"path": "G:/Otros ordenadores/My Laptop/UPNA/Practicas/proyecto_gis_docs"
 		}
 	],

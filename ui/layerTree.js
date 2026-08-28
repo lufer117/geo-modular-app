@@ -7,6 +7,7 @@
  *   bloque_tematico → nivel 1  (SIN checkbox, expandible, negrita)
  *   subtema         → nivel 2  (SIN checkbox, expandible)
  *   title (capa)    → nivel 3  (seleccionable → activa/desactiva la capa)
+ *     ├── [WMS con sublayers curadas] → nivel 4 (sublayers ya cargadas, sin fetch)
  *     └── [WFS sin name] → nivel 4  (FeatureTypes descubiertos via Capabilities)
  *                          (solo estos tienen checkbox efectivo)
  *
@@ -29,6 +30,18 @@
  *   5. Se inyectan nodos hijo en el árbol (uno por FeatureType)
  *   6. Al activar un hijo → aplicarBboxWfs() + addCapa() (lazy)
  *
+ * ── WMS CON SUBLAYERS CURADAS (sin discovery automático) ──────────────────
+ * A diferencia de WFS, donde cualquier FeatureType expuesto es potencialmente
+ * útil, el servidor WMS mezcla geometría real con elementos de renderizado
+ * puro (labels). Por eso aquí NO se hace discovery vía GetCapabilities:
+ * el catálogo declara explícitamente qué sublayers se exponen y cómo se
+ * llaman (config.sublayers: [{id, title, visible}]) — ver 3DECISIONS.md 30.06.26.
+ *
+ * layerFactory ya instancia la WMSLayer con su array layer.sublayers
+ * poblado y con visible correcto (forzado desde catálogo, no heredado del
+ * servidor). Por eso el renderizado aquí es síncrono: solo se pinta lo que
+ * ya existe, sin esperar ningún fetch.
+ *
  * ── POR QUÉ selection-mode="ancestors" y NO calcite-checkbox manual ───────
  * calcite-tree-item intercepta todos los pointer events para su mecanismo
  * de selección nativo. Añadir calcite-checkbox como hijo provoca que el
@@ -42,8 +55,28 @@
  *   - Los grupos (nivel 1 y 2) no tienen data-layer-id → el listener los ignora
  *
  * ── REACTIVIDAD ───────────────────────────────────────────────────────────
- * El árbol se reconstruye completamente al recibir "municipio-cargado".
- * Árbol limpio por municipio → sin riesgo de estado inconsistente.
+ * El árbol se reconstruye completamente al recibir "municipio-cargado" o
+ * "territorio-cargado" (ambos entregan un conjunto completo desde cero).
+ *
+ * ── AJUSTE (soporte de ámbito territorial provincia/ccaa) ───────────────────
+ * Se añade un segundo modo de actualización, incremental, para el caso
+ * ambitoTerritorial "provincia"/"ccaa": al elegir un municipio dentro del
+ * territorio, sus capas ("capas-municipio-agregadas") se SUMAN como un
+ * grupo propio al final del árbol, sin reconstruir la base territorial ya
+ * renderizada. Al limpiar la selección ("capas-municipio-retiradas") ese
+ * grupo se retira como bloque único.
+ *
+ * Por qué un grupo fijo y no fusión dentro de bloque_tematico/subtema:
+ * patrón GIS estándar (IDENA/GeoBizkaia) — el árbol de un ámbito territorial
+ * no se reestructura al navegar dentro de él; las capas específicas de un
+ * municipio se presentan como sección propia y reconocible. Ver 3DECISIONS.md,
+ * hilo "ámbito territorial: soporte provincia/ccaa".
+ *
+ * El resto del árbol (_renderTree, discovery WFS, sublayers WMS, selección)
+ * no cambia — el grupo municipal reutiliza las mismas funciones de
+ * construcción de nodos (_crearItemCapa, _crearItemWmsConSublayers,
+ * _crearItemWfsDiscovery) y el mismo mecanismo de selección por índice
+ * global en _layersRef/_configsRef.
  */
 
 import { on, emit }        from "../utils/eventBus.js";
@@ -60,11 +93,15 @@ let _layersRef     = [];
 let _configsRef    = [];
 let _lazyLayerIds  = new Set();
 
-// ← CAMBIO: guardar municipioData para aplicar BBOX a las capas hijas WFS
-// creadas on-demand en _crearHijoWfs(). Las hijas no pasan por
-// inicializarCapa() porque no tienen entrada en el catálogo; necesitamos
-// el contexto del municipio activo para filtrarlas igual que al padre.
-let _municipioData = null;
+// ← CAMBIO: renombrado de _municipioData a _territorioData. Guarda el
+// territorio activo (municipio individual O territorio completo
+// provincia/ccaa) para aplicar BBOX a las capas hijas WFS creadas
+// on-demand en _crearHijoWfs(). Las hijas no pasan por inicializarCapa()
+// porque no tienen entrada en el catálogo; necesitamos el contexto del
+// ámbito activo para filtrarlas igual que al padre. El nombre ya no
+// asume escala municipal — sigue siendo el mismo mecanismo, agnóstico
+// a si el bbox es de un municipio o de un territorio completo.
+let _territorioData = null;
 
 /**
  * Conjunto de IDs de nodos WFS "discovery" que ya han sido expandidos.
@@ -73,6 +110,12 @@ let _municipioData = null;
  * Clave: config.id del padre. Valor: true (ya expandido).
  */
 const _wfsDiscoveryExpanded = new Map();
+
+// ── Grupo municipal incremental (Modelo B — ver AJUSTE en cabecera) ───────
+// Índice en _layersRef/_configsRef donde empieza el grupo municipal actual,
+// o null si no hay ninguno activo. Solo puede existir un grupo municipal
+// a la vez (un territorio tiene, como mucho, un municipio "en foco").
+let _inicioGrupoMunicipal = null;
 
 // ─── Inicialización ────────────────────────────────────────────────────────
 
@@ -88,18 +131,38 @@ export function initLayerTree(container) {
 
   // Mensaje inicial — layerTree es dueño único de este contenedor.
   // Se elimina en _renderTree via clearContainer cuando llegue municipio-cargado.
-  const msg = document.createElement("p");
-  msg.className   = "layer-tree-empty";
-  msg.textContent = "Selecciona un municipio para ver las capas disponibles.";
-  _containerEl.appendChild(msg);
+  // const msg = document.createElement("p");
+  // msg.className   = "layer-tree-empty";
+  // msg.textContent = "Selecciona un municipio para ver las capas disponibles.";
+  // _containerEl.appendChild(msg);
 
   // ← CAMBIO: desestructurar también municipioData del evento
   on("municipio-cargado", ({ layers, configs, lazyLayerIds, municipioData }) => {
     // Limpiar el estado de discovery al cambiar de municipio.
     // Un municipio nuevo puede tener las mismas URLs WFS pero con distinto contexto.
     _wfsDiscoveryExpanded.clear();
-    _municipioData = municipioData ?? null; // ← CAMBIO: actualizar contexto municipal
+    _territorioData = municipioData ?? null; // ← CAMBIO: actualizar contexto (municipio)
     _renderTree(layers, configs, lazyLayerIds ?? new Set());
+  });
+
+  // ← NUEVO: carga inicial de la base territorial (Modelo B — ambitoTerritorial
+  // "provincia"/"ccaa"). Mismo tratamiento que municipio-cargado: es una
+  // carga completa desde cero, no hay nada previo en el árbol que preservar.
+  on("territorio-cargado", ({ layers, configs, lazyLayerIds, territorioData }) => {
+    _wfsDiscoveryExpanded.clear();
+    _territorioData = territorioData ?? null;
+    _renderTree(layers, configs, lazyLayerIds ?? new Set());
+  });
+
+  // ← NUEVO: capas municipales incrementales (Modelo B). A diferencia de
+  // los dos listeners anteriores, estos NO llaman a _renderTree — suman
+  // o retiran un grupo propio sin tocar la base territorial ya renderizada.
+  on("capas-municipio-agregadas", ({ layers, configs, municipioData }) => {
+    _agregarGrupoMunicipal(layers, configs, municipioData);
+  });
+
+  on("capas-municipio-retiradas", () => {
+    _retirarGrupoMunicipal();
   });
 }
 
@@ -113,6 +176,11 @@ function _renderTree(layers, configs, lazyLayerIds) {
   _layersRef    = layers;
   _configsRef   = configs;
 
+  // Reconstrucción completa → cualquier grupo municipal previo queda
+  // huérfano en el DOM que acabamos de limpiar. Resetear el puntero para
+  // que _retirarGrupoMunicipal() no intente operar sobre estado obsoleto.
+  _inicioGrupoMunicipal = null;
+
   if (!configs || configs.length === 0) {
     const msg = document.createElement("p");
     msg.className   = "layer-tree-empty";
@@ -124,7 +192,7 @@ function _renderTree(layers, configs, lazyLayerIds) {
   const grupos = _agrupar(configs, layers);
 
   const tree = document.createElement("calcite-tree");
-  tree.setAttribute("selection-mode", "ancestors");
+  tree.setAttribute("selection-mode", "multiple");
   tree.setAttribute("lines", "");
 
   // ── Listener de selección (toggle visibilidad) ─────────────────────────
@@ -158,6 +226,26 @@ function _renderTree(layers, configs, lazyLayerIds) {
       pares.forEach(({ config, layer }) => {
         const globalIndex = configs.indexOf(config);
 
+        // ── Nodo WMS con sublayers curadas ──────────────────────────────
+        // A diferencia del discovery WFS, las sublayers WMS NO se descubren
+        // en runtime vía GetCapabilities: layerFactory ya las instanció con
+        // el objeto layer.sublayers poblado (ver layerFactory._buildParams,
+        // caso "WMS"). Aquí solo pintamos lo que ya existe — sin fetch,
+        // sin estado "expandido" que cachear, sin spinner real.
+        //
+        // Por qué NO es discovery automático (ver 3DECISIONS.md 30.06.26):
+        // a diferencia de WFS donde cualquier FeatureType expuesto es
+        // potencialmente útil, el servidor WMS mezcla geometría real con
+        // elementos de renderizado puro (labels). El catálogo decide qué
+        // sublayers se exponen vía config.sublayers — curación editorial,
+        // no automatización del Capabilities.
+        if (config.tipo === "WMS" && config.sublayers?.length) {
+          subtemaChildren.appendChild(
+            _crearItemWmsConSublayers(config, layer, globalIndex)
+          );
+          return;
+        }
+
         // ── Nodo WFS sin name: discovery mode ─────────────────────────
         // Una entrada WFS sin campo "name" en el catálogo es un servicio
         // con múltiples FeatureTypes. Se renderiza como nodo expandible
@@ -167,7 +255,7 @@ function _renderTree(layers, configs, lazyLayerIds) {
             _crearItemWfsDiscovery(config, globalIndex)
           );
         } else {
-          // Nodo hoja estándar (WMS, WMTS, WFS con name, GeoJSON…)
+          // Nodo hoja estándar (WMS sin sublayers, WMTS, WFS con name, GeoJSON…)
           subtemaChildren.appendChild(
             _crearItemCapa(config, layer, globalIndex)
           );
@@ -184,6 +272,115 @@ function _renderTree(layers, configs, lazyLayerIds) {
 
   _containerEl.appendChild(tree);
   console.info(`[layerTree] Árbol renderizado: ${configs.length} capas`);
+}
+
+// ─── Grupo municipal incremental (Modelo B) ────────────────────────────────
+
+/**
+ * Añade un grupo de nodos al final del árbol existente, SIN reconstruir
+ * nada de lo ya renderizado (base territorial intacta).
+ *
+ * ── POR QUÉ UN GRUPO FIJO Y NO FUSIÓN POR bloque_tematico ─────────────────
+ * Ver AJUSTE en la cabecera del archivo — patrón GIS estándar, evita que
+ * el usuario pierda la referencia de qué es del territorio y qué es
+ * específico del municipio elegido.
+ *
+ * ── POR QUÉ EXTIENDE _layersRef/_configsRef EN VEZ DE UN ARRAY PROPIO ────
+ * _handleLayerSelect (el listener ya existente de toggle) localiza capas
+ * por índice global en estos dos arrays. Las capas municipales deben vivir
+ * en el mismo espacio de índices para reutilizar ese listener sin duplicar
+ * lógica de selección — solo se les asigna el índice siguiente al último
+ * ocupado por la base territorial.
+ *
+ * @param {Layer[]} layers
+ * @param {Object[]} configs
+ * @param {Object} municipioData
+ */
+function _agregarGrupoMunicipal(layers, configs, municipioData) {
+  if (!configs || configs.length === 0) return;
+
+  // Defensivo: si quedó un grupo municipal anterior sin retirar, se retira
+  // primero. municipioSelector.agregarCapasMunicipio() ya llama a retirar
+  // antes de agregar, pero el árbol no debe asumir que ese orden siempre
+  // se respeta desde cualquier punto de llamada futuro.
+  _retirarGrupoMunicipal();
+
+  _inicioGrupoMunicipal = _layersRef.length;
+  _layersRef  = [..._layersRef, ...layers];
+  _configsRef = [..._configsRef, ...configs];
+
+  // Los ids WFS municipales también deben lazy-cargar igual que los
+  // territoriales — se suman al mismo Set, no uno nuevo, mismo mecanismo
+  // que ya usa _handleLayerSelect para decidir cuándo llamar a addCapa().
+  configs
+    .filter(c => c.tipo === "WFS")
+    .forEach(c => _lazyLayerIds.add(c.id));
+
+  const grupoItem = document.createElement("calcite-tree-item");
+  grupoItem.dataset.grupoMunicipal = "true"; // única marca necesaria para localizarlo al retirar
+  grupoItem.setAttribute("expanded", "");
+
+  const label = document.createElement("span");
+  label.className   = "layer-group-label layer-group-bloque";
+  label.textContent = `Capas específicas de ${municipioData.nombre}`;
+  grupoItem.appendChild(label);
+
+  const childrenTree = document.createElement("calcite-tree");
+  childrenTree.slot  = "children";
+
+  configs.forEach((config, i) => {
+    const layer       = layers[i];
+    const globalIndex = _inicioGrupoMunicipal + i;
+
+    // Mismas tres ramas de construcción de nodo que _renderTree — se
+    // reutilizan tal cual, sin ninguna modificación, porque construyen
+    // nodos idénticos sea cual sea el origen de la config.
+    if (config.tipo === "WMS" && config.sublayers?.length) {
+      childrenTree.appendChild(_crearItemWmsConSublayers(config, layer, globalIndex));
+    } else if (config.tipo === "WFS" && !config.name) {
+      childrenTree.appendChild(_crearItemWfsDiscovery(config, globalIndex));
+    } else {
+      childrenTree.appendChild(_crearItemCapa(config, layer, globalIndex));
+    }
+  });
+
+  grupoItem.appendChild(childrenTree);
+
+  // Se inserta como último hijo del <calcite-tree> raíz ya construido por
+  // _renderTree — no se recrea el <calcite-tree>, solo se le añade un hijo.
+  const treeRaiz = _containerEl.querySelector("calcite-tree");
+  if (treeRaiz) {
+    treeRaiz.appendChild(grupoItem);
+  } else {
+    // Caso límite: no debería ocurrir si territorio-cargado ya renderizó
+    // la base antes de que el usuario pueda elegir un municipio, pero se
+    // deja el aviso explícito para no fallar en silencio.
+    console.warn("[layerTree] No hay <calcite-tree> raíz — ¿se cargó la base territorial?");
+  }
+
+  console.info(`[layerTree] + Grupo municipal añadido: ${configs.length} capas`);
+}
+
+/**
+ * Retira el grupo municipal completo (DOM + estado), sin tocar el resto
+ * del árbol. Inverso exacto de _agregarGrupoMunicipal().
+ */
+function _retirarGrupoMunicipal() {
+  if (_inicioGrupoMunicipal === null) return;
+
+  const grupoItem = _containerEl.querySelector('[data-grupo-municipal="true"]');
+  grupoItem?.remove();
+
+  // Recortar los arrays globales de vuelta al tamaño previo. Es seguro
+  // porque el grupo municipal siempre es lo último que se añadió — nunca
+  // hay un segundo grupo incremental después de él (agregarCapasMunicipio
+  // siempre retira el anterior antes de sumar el nuevo).
+  _layersRef  = _layersRef.slice(0, _inicioGrupoMunicipal);
+  _configsRef = _configsRef.slice(0, _inicioGrupoMunicipal);
+
+  _inicioGrupoMunicipal = null;
+
+  console.info("[layerTree] − Grupo municipal retirado");
 }
 
 // ─── Handlers de eventos ──────────────────────────────────────────────────
@@ -207,6 +404,13 @@ function _handleLayerSelect(e) {
     return;
   }
 
+  // Nodo hijo de sublayer WMS: la instancia ya existe desde la carga inicial
+  // (no es lazy como WFS). Se gestiona en _handleWmsSublayerSelect.
+  if (item.dataset.wmsSublayer === "true") {
+    _handleWmsSublayerSelect(item, layerId);
+    return;
+  }
+
   const globalIndex = parseInt(layerIndex, 10);
   // Calcite actualiza "selected" antes de emitir el evento.
   const visible = !item.hasAttribute("selected");
@@ -225,6 +429,9 @@ function _handleLayerSelect(e) {
   }
 
   layer.visible = visible;
+
+
+
   emit(visible ? "capa-activada" : "capa-desactivada", { layerId, layer, config });
   console.info(`[layerTree] "${layerId}" → visible: ${visible}`);
 }
@@ -248,9 +455,30 @@ function _handleWfsHijoSelect(item, hijoId) {
     return;
   }
 
+  // TEMPORAL — depuración, capturar solo si es la capa que nos interesa
+  if (hijoId.includes("RED_ERGNSS")) {
+    window._debugLayer = layer;
+    console.log("[DEBUG] Capturada instancia:", hijoId);
+  }
+
   // Lazy: añadir al mapa solo la primera vez que se activa
   if (visible && !layer.map) {
     mapManager.addCapa(layer);
+
+    layer.load()
+      .then(() => {
+        // POPUP POST-LOAD — timing crítico.
+        // WFSLayer.load() reconstruye internamente el popupTemplate y
+        // resetea fieldInfos a null, pisando cualquier asignación hecha
+        // en construcción (layerFactory._aplicarPopupGenerico).
+        // createPopupTemplate() es el método nativo del SDK para este
+        // caso: genera el template completo desde layer.fields ya
+        // disponibles, sin que tengamos que construirlo a mano.
+        layer.popupTemplate = layer.createPopupTemplate();
+      })
+      .catch(err => {
+        console.error(`[layerTree] Error al cargar capa WFS hija "${hijoId}":`, err);
+      });
   }
 
   layer.visible = visible;
@@ -261,6 +489,50 @@ function _handleWfsHijoSelect(item, hijoId) {
     config: { id: hijoId, title: layer.title, tipo: "WFS" }
   });
   console.info(`[layerTree] WFS hijo "${hijoId}" → visible: ${visible}`);
+}
+
+/**
+ * Activa/desactiva una sublayer WMS individual.
+ *
+ * ── DIFERENCIA CON _handleWfsHijoSelect ──────────────────────────────────
+ * No hay lazy-load: la WMSLayer padre ya está en el mapa desde la carga
+ * inicial del municipio (las WMS no se excluyen de capasInmediatas como
+ * sí ocurre con WFS — ver municipioSelector.js paso 4). Por tanto no hace
+ * falta comprobar `!layer.map` ni llamar a mapManager.addCapa(): solo se
+ * alterna sublayer.visible.
+ *
+ * Importante: alternar sublayer.visible no fuerza layer.visible = true en
+ * la capa padre. Si el usuario activa una sublayer pero el WMS padre está
+ * con visible=false, no se verá nada. Por eso forzamos layer.visible = true
+ * al activar una sublayer — mismo patrón de "activar el contenedor cuando
+ * se activa el contenido" usado en otros puntos de la app.
+ *
+ * @param {HTMLElement} item   - El calcite-tree-item de la sublayer
+ * @param {string}      hijoId - ID derivado: "{idPadre}::{sublayer.name}"
+ */
+function _handleWmsSublayerSelect(item, hijoId) {
+  const visible   = !item.hasAttribute("selected");
+  const layer     = item._parentLayer;
+  const sublayer  = item._sublayerInstance;
+
+  if (!layer || !sublayer) {
+    console.warn(`[layerTree] Sublayer WMS sin instancia: "${hijoId}"`);
+    return;
+  }
+
+  // Si se activa una sublayer y el WMS padre está oculto, lo mostramos.
+  // Sin esto, sublayer.visible=true sería invisible para el usuario.
+  if (visible && !layer.visible) {
+    layer.visible = true;
+  }
+
+  sublayer.visible = visible;
+  emit(visible ? "capa-activada" : "capa-desactivada", {
+    layerId: hijoId,
+    layer,
+    config: { id: hijoId, title: sublayer.title ?? sublayer.name, tipo: "WMS" }
+  });
+  console.info(`[layerTree] WMS sublayer "${hijoId}" → visible: ${visible}`);
 }
 
 /**
@@ -302,6 +574,7 @@ async function _handleWfsDiscovery(item) {
     }
 
     clearContainer(childrenTree);
+    _setDiscoveryState(item, childrenTree, "loading"); // para que spinner sea visible hasta que los hijos estén listos
 
     // ── Verificar disponibilidad espacial en paralelo ─────────────────────
     // Por qué en paralelo: con N FeatureTypes, el tiempo total pasa de
@@ -310,18 +583,29 @@ async function _handleWfsDiscovery(item) {
     //
     // checkFeaturesInBbox nunca rechaza (captura internamente todos los errores),
     // por lo que Promise.all es seguro sin .catch adicional.
-    const bbox = _municipioData?.bbox ?? null;
+    const bbox = _territorioData?.bbox ?? null; // ← CAMBIO: _municipioData → _territorioData
 
     let availabilityMap; // Map<nombre_featureType, boolean>
 
     if (bbox) {
-      const checks  = featureTypes.map(ft => checkFeaturesInBbox(config.url, ft.name, bbox));
-      const results = await Promise.all(checks);
-      availabilityMap = new Map(featureTypes.map((ft, i) => [ft.name, results[i]]));
+      // const checks  = featureTypes.map(ft => checkFeaturesInBbox(config.url, ft.name, bbox));
+      // const results = await Promise.all(checks);
+
+        const results = await _checkConPool(featureTypes, config.url, bbox, {
+          concurrencia: 4   // mismo valor conservador, sin pausa artificial
+        });
+        availabilityMap = new Map(featureTypes.map((ft, i) => [ft.name, results[i]]));
     } else {
-      // Sin bbox no podemos filtrar → asumir disponibles (degradación segura)
-      console.warn("[layerTree] _municipioData.bbox no disponible; omitiendo check BBOX");
+      // Sin bbox no podemos verificar disponibilidad espacial → degradación segura:
+      // asumir todos los FeatureTypes disponibles y dejar que el usuario decida.
+      // Si el servidor no tiene datos en esta zona, la capa quedará vacía pero
+      // no bloqueará el discovery.
+      console.warn("[layerTree] _territorioData.bbox no disponible; omitiendo check BBOX");
       availabilityMap = new Map(featureTypes.map(ft => [ft.name, true]));
+
+      // BUG MARCADO: aquí se usa `results[i]` aunque `results` no existe en esta rama.
+      // Si se corrige, esta rama debería mapear a `true` por defecto.q
+      // availabilityMap = new Map(featureTypes.map((ft, i) => [ft.name, results[i]]));
     }
 
     // Crear instancias y nodos DOM en paralelo.
@@ -330,6 +614,9 @@ async function _handleWfsDiscovery(item) {
     const hijos = await Promise.all(
       featureTypes.map(ft => _crearHijoWfs(ft, config, availabilityMap.get(ft.name) ?? false))
     );
+
+    // Limpiar el spinner antes de añadir los hijos
+    clearContainer(childrenTree); // espera los hijos antes de limpiar para evitar parpadeo excesivo si la carga es rápida
 
     hijos.forEach(({ item: hijoItem }) => {
       if (hijoItem) childrenTree.appendChild(hijoItem);
@@ -353,7 +640,7 @@ async function _handleWfsDiscovery(item) {
  */
 function _crearItemGrupo(label, negrita) {
   const item = document.createElement("calcite-tree-item");
-  item.setAttribute("expanded", "");
+  // item.setAttribute("expanded", ""); // Opcional: expandir por defecto los grupos (puede ser mucho contenido)
 
   const span = document.createElement("span");
   span.className   = negrita
@@ -382,7 +669,98 @@ function _crearItemCapa(config, layer, globalIndex) {
   span.textContent = config.title;
   item.appendChild(span);
 
-  _añadirBadges(item, config);
+  // _añadirBadges(item, config);
+
+  return item;
+}
+
+/**
+ * Crea el nodo Calcite para un servicio WMS con sublayers curadas en catálogo.
+ *
+ * ── DIFERENCIA CLAVE CON WFS DISCOVERY ───────────────────────────────────
+ * No hay fetch ni GetCapabilities en este punto: layerFactory ya instanció
+ * la WMSLayer con su array layer.sublayers poblado (ver _buildParams, caso
+ * "WMS"). Cada elemento de layer.sublayers ya trae name/title/visible
+ * correctos porque layerFactory los construyó desde config.sublayers del
+ * catálogo, forzando visible=false salvo que el catálogo diga lo contrario.
+ * Por eso esta función es síncrona: solo recorre y pinta, no espera nada.
+ *
+ * El nodo padre (la entrada WMS en sí) se renderiza igual que _crearItemCapa
+ * —activable como conjunto— porque el usuario puede querer activar/desactivar
+ * todas las sublayers a la vez sin entrar al detalle. Sus hijos son las
+ * sublayers individuales.
+ *
+ * @param {Object} config      - Config del catálogo (tipo WMS, con sublayers)
+ * @param {WMSLayer} layer     - Instancia ya cargada con sublayers
+ * @param {number} globalIndex - Índice en _configsRef (para trazabilidad)
+ */
+function _crearItemWmsConSublayers(config, layer, globalIndex) {
+  const item = document.createElement("calcite-tree-item");
+  item.dataset.layerId    = config.id;
+  item.dataset.layerIndex = globalIndex;
+
+  if (layer.visible) {
+    item.setAttribute("selected", "");
+  }
+
+  const label = document.createElement("span");
+  label.className   = "layer-label layer-label--wms-service";
+  label.textContent = config.title;
+  item.appendChild(label);
+
+  const badge = document.createElement("calcite-chip");
+  badge.setAttribute("scale", "s");
+  badge.setAttribute("kind", "neutral");
+  badge.setAttribute("icon", "layers");
+  badge.textContent = "WMS";
+  item.appendChild(badge);
+
+  const childrenTree = document.createElement("calcite-tree");
+  childrenTree.slot  = "children";
+
+  // Recorre layer.sublayers (objeto Esri ya cargado) en vez de config.sublayers
+  // (JSON crudo del catálogo) para asegurar que pintamos exactamente lo que
+  // el SDK terminó construyendo — incluye name/title/visible ya resueltos.
+  const sublayersEsri = layer.sublayers?.toArray?.() ?? [];
+
+  sublayersEsri.forEach(sublayerEsri => {
+    childrenTree.appendChild(
+      _crearItemWmsSublayer(sublayerEsri, layer, config.id)
+    );
+  });
+
+  item.appendChild(childrenTree);
+  return item;
+}
+
+/**
+ * Crea el nodo Calcite para una sublayer WMS individual.
+ *
+ * La instancia de la sublayer (y de su capa padre) se almacena directamente
+ * en el nodo DOM —mismo patrón que item._layerInstance en hijos WFS— para
+ * acceso O(1) desde el listener de selección sin necesitar un Map externo.
+ *
+ * @param {Sublayer} sublayerEsri - Objeto Sublayer del SDK, ya con visible correcto
+ * @param {WMSLayer} parentLayer  - Instancia WMSLayer padre
+ * @param {string} parentId       - config.id del WMS padre
+ */
+function _crearItemWmsSublayer(sublayerEsri, parentLayer, parentId) {
+  const hijoId = `${parentId}::${sublayerEsri.name}`;
+
+  const item = document.createElement("calcite-tree-item");
+  item.dataset.layerId     = hijoId;
+  item.dataset.wmsSublayer = "true"; // Identificador para _handleLayerSelect
+  item._parentLayer        = parentLayer;
+  item._sublayerInstance   = sublayerEsri;
+
+  if (sublayerEsri.visible) {
+    item.setAttribute("selected", "");
+  }
+
+  const span = document.createElement("span");
+  span.className   = "layer-label";
+  span.textContent = sublayerEsri.title || sublayerEsri.name;
+  item.appendChild(span);
 
   return item;
 }
@@ -410,8 +788,8 @@ function _crearItemWfsDiscovery(config, globalIndex) {
   // El listener de selección lo ignorará.
   item.dataset.wfsDiscovery = "true";
   item.dataset.configId     = config.id;
-  // Expandido por defecto para descubrir sus hijos al cargar
-  item.setAttribute("expanded", "");
+  // Opcional Expandido por defecto para descubrir sus hijos al cargar
+  // item.setAttribute("expanded", "");
 
   // Etiqueta con icono de servicio WFS para diferenciarlo visualmente
   const label = document.createElement("span");
@@ -427,7 +805,7 @@ function _crearItemWfsDiscovery(config, globalIndex) {
   badge.textContent = "WFS";
   item.appendChild(badge);
 
-  _añadirBadges(item, config);
+  // _añadirBadges(item, config); //opcional: añadir badges de prioridad/INSPIREy
 
   // Slot de hijos: debe existir vacío para que Calcite muestre el chevron.
   // Se rellena con el spinner o los FeatureTypes en _setDiscoveryState/_handleWfsDiscovery.
@@ -449,7 +827,7 @@ function _crearItemWfsDiscovery(config, globalIndex) {
 /**
  * Crea el nodo Calcite para un FeatureType hijo de un nodo WFS discovery,
  * crea la instancia WFSLayer correspondiente, y le aplica el filtro BBOX
- * del municipio activo antes de que entre al mapa.
+ * del territorio activo antes de que entre al mapa.
  *
  * ── POR QUÉ SE APLICA BBOX AQUÍ ──────────────────────────────────────────
  * La hija no tiene entrada en el catálogo → no pasa por inicializarCapa().
@@ -478,7 +856,7 @@ async function _crearHijoWfs(featureType, configPadre, disponible = true) {
   item.dataset.layerId = hijoId;
   item.dataset.wfsHijo = "true";
   item.setAttribute("disabled", "");
-  
+
   // Tooltip nativo (visible al hacer hover)
   item.title = `${featureType.name} — sin datos en este municipio`;
 
@@ -488,28 +866,7 @@ async function _crearHijoWfs(featureType, configPadre, disponible = true) {
   item.appendChild(label);
 
   return { item, layer: null };
-    // const item = document.createElement("calcite-tree-item");
-    // item.dataset.layerId = hijoId;
-    // item.dataset.wfsHijo = "true";
-    // item.setAttribute("disabled", "");
 
-    // const wrapper = document.createElement("span");
-    // wrapper.style.cssText = "display:flex; align-items:center; gap:6px; flex-wrap:wrap;";
-
-    // const label = document.createElement("span");
-    // label.className   = "layer-label layer-label--unavailable";
-    // label.textContent = featureType.title || featureType.name;
-
-    // const chip = document.createElement("calcite-chip");
-    // chip.setAttribute("kind",  "neutral");
-    // chip.setAttribute("scale", "s");
-    // chip.textContent = featureType.title;
-
-    // wrapper.appendChild(label);
-    // wrapper.appendChild(chip);
-    // item.appendChild(wrapper);
-
-    // return { item, layer: null };
   }
 
   // Crear la instancia de capa antes de crear el nodo DOM.
@@ -542,8 +899,8 @@ async function _crearHijoWfs(featureType, configPadre, disponible = true) {
   // La hija hereda el srsname del configPadre (que sí está en el catálogo).
   // El filtro debe aplicarse ANTES de map.add() para que el primer
   // GetFeature request ya lleve el parámetro BBOX al servidor.
-  if (_municipioData) {
-    await aplicarBboxWfs(layer, _municipioData, configPadre.srsname ?? "EPSG:4326");
+  if (_territorioData) { // ← CAMBIO: _municipioData → _territorioData
+    await aplicarBboxWfs(layer, _territorioData, configPadre.srsname ?? "EPSG:4326");
   }
 
   // Almacenar referencia directa en el nodo DOM para acceso O(1) desde el listener
@@ -650,23 +1007,70 @@ function _agrupar(configs, layers) {
 // ─── Helpers privados ─────────────────────────────────────────────────────
 
 /**
+ * Pool de concurrencia fija para checkFeaturesInBbox.
+ *
+ * Por qué pool en vez de lotes con pausa:
+ * - Los lotes con pausa fija desperdician tiempo cuando el servidor responde rápido
+ *   (INE responde en ~80ms pero el lote espera 500ms igualmente).
+ * - El pool mantiene exactamente `concurrencia` peticiones activas en todo momento:
+ *   en cuanto una termina, la siguiente arranca sin esperar al resto del lote.
+ * - Mismo control de carga para servidores lentos (Fomento/ArcGIS gubernamental),
+ *   sin penalizar a los servidores rápidos (INE/GeoServer).
+ *
+ * @param {FeatureTypeInfo[]} featureTypes
+ * @param {string} serviceUrl
+ * @param {number[]} bbox
+ * @param {object} opciones
+ * @param {number} opciones.concurrencia - Máximo de peticiones simultáneas (default: 4)
+ * @returns {Promise<boolean[]>} - Array de disponibilidad, mismo orden que featureTypes
+ */
+async function _checkConPool(featureTypes, serviceUrl, bbox, { concurrencia = 4 } = {}) {
+  const resultados = new Array(featureTypes.length);
+  let siguiente = 0;
+
+  // Cada "worker" es una cadena de promesas que consume el array de trabajo
+  // hasta agotarlo. Se lanzan `concurrencia` workers en paralelo.
+  async function worker() {
+    while (true) {
+      // Reserva atómica del siguiente índice pendiente
+      const idx = siguiente++;
+      if (idx >= featureTypes.length) break;
+
+      resultados[idx] = await checkFeaturesInBbox(
+        serviceUrl,
+        featureTypes[idx].name,
+        bbox
+      );
+    }
+  }
+
+  // Lanza exactamente `concurrencia` workers concurrentes
+  const workers = Array.from({ length: Math.min(concurrencia, featureTypes.length) }, worker);
+  await Promise.all(workers);
+
+  return resultados;
+}
+
+
+
+/**
  * Añade badges visuales (P0, INSPIRE) a un calcite-tree-item.
  * Extraído para reutilizarlo en nodos estándar y nodos discovery.
  */
-function _añadirBadges(item, config) {
-  if (config.prioridad === "P0 - MVP") {
-    const badge = document.createElement("calcite-chip");
-    badge.setAttribute("scale", "s");
-    badge.setAttribute("kind", "brand");
-    badge.textContent = "P0";
-    item.appendChild(badge);
-  }
+// function _añadirBadges(item, config) {
+//   if (config.prioridad === "P0 - MVP") {
+//     const badge = document.createElement("calcite-chip");
+//     badge.setAttribute("scale", "s");
+//     badge.setAttribute("kind", "brand");
+//     badge.textContent = "P0";
+//     item.appendChild(badge);
+//   }
 
-  if (config.inspire) {
-    const chip = document.createElement("calcite-chip");
-    chip.setAttribute("scale", "s");
-    chip.setAttribute("kind", "neutral");
-    chip.textContent = "INSPIRE";
-    item.appendChild(chip);
-  }
-}
+//   if (config.inspire) {
+//     const chip = document.createElement("calcite-chip");
+//     chip.setAttribute("scale", "s");
+//     chip.setAttribute("kind", "neutral");
+//     chip.textContent = "INSPIRE";
+//     item.appendChild(chip);
+//   }
+// }

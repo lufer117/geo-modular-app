@@ -1,7 +1,7 @@
 """
 migrar-catalogo.py
 
-Script de transformación: Excel (.xlsx) o CSV → catalogo-capas.json
+Script de transformación: Excel (.xlsx) o CSV → catalogo-capas-ne.json
 
 USO:
     Opción A — desde Excel directamente (recomendado):
@@ -10,7 +10,7 @@ USO:
     Opción B — desde CSV exportado:
         python migrar-catalogo.py capas.csv
 
-    El archivo catalogo-capas.json se genera en la misma carpeta.
+    El archivo catalogo-capas-ne.json se genera en la misma carpeta.
 
 REQUISITOS:
     pip install openpyxl pandas
@@ -23,21 +23,53 @@ COLUMNAS ESPERADAS EN EL EXCEL/CSV:
     pts_cobertura, pts_fuente, pts_tecnica, total_pts, prioridad_app,
     justificacion_prioridad, estado_revision, referencia
 
+COLUMNAS NUEVAS (respecto a la versión anterior del script):
+    id_estable              → identificador opcional declarado a mano.
+                               Si está presente, se usa en vez del slug
+                               autogenerado. Motivo: el slug se deriva de
+                               proveedor+nombre_capa+tipo, así que una simple
+                               corrección de nombre en el Excel cambia el id
+                               y rompe la trazabilidad con curaciones previas
+                               hechas sobre el id anterior (ver 3DECISIONS.md).
+    tags                     → lista separada por comas, pasa tal cual al
+                               JSON. No derivable de GetCapabilities, por lo
+                               que se declara aquí en vez de vivir en un
+                               archivo de overrides aparte (DRY: una sola
+                               fuente de verdad).
+    incluir_en_catalogo_final → "sí"/"no". Selección editorial de qué capas
+                               pasan de catalogo-capas-ne.json (referencia
+                               completa) al catálogo activo. La aplica la
+                               ETAPA 2 (enriquecer-catalogo.py), no este
+                               script — aquí solo se pasa el valor tal cual,
+                               sin filtrar, porque catalogo-capas-ne.json debe
+                               seguir siendo la referencia completa filtrada
+                               solo por los 5 criterios de viabilidad técnica
+                               de aplicar_filtros(), no por selección editorial.
+
+CAMPO DEGRADADO A REFERENCIA (ya no es fuente de verdad):
+    formato_datos → se conserva en el JSON de salida como
+                     "formato_datos_manual_ref" (texto libre, sin parsear),
+                     únicamente como apunte de trabajo para quien revisa el
+                     Excel. YA NO alimenta formatos_salida/formato_consumo,
+                     y YA NO se usa para excluir capas en este script bajo
+                     ningún criterio (corrección 25/08/2026 — ver
+                     3DECISIONS.md). Es texto libre inconsistente escrito a
+                     mano; la fuente de verdad real de qué formatos ofrece
+                     un servicio es el propio servicio, vía GetCapabilities,
+                     resuelto exclusivamente en la ETAPA 2. Una versión
+                     anterior de este script excluía aquí mismo los WFS
+                     cuyo formato_datos no mencionara GeoJSON — se retiró
+                     ese filtro porque un Excel mal transcrito podía perder
+                     una capa con GeoJSON real en el servicio, sin que la
+                     ETAPA 2 llegara a tener oportunidad de verificarla. La
+                     exclusión real de WFS sin GeoJSON ahora ocurre
+                     únicamente en enriquecer-catalogo.py::resolver_capa(),
+                     contra el servicio real.
+
 NORMALIZACIÓN DE tipo_acceso:
     El Excel puede contener valores como "OGC WFS" o "WFS / Descarga directa".
     El script los normaliza al tipo canónico ("WFS") antes de filtrar y exportar.
     Tipos reconocidos: WMS, WMTS, WFS, GEOJSON, ArcGIS_REST, FEATURE, WCS.
-
-CAMPOS NUEVOS EN EL JSON DE SALIDA (respecto a versión anterior):
-    formatos_salida  → lista de formatos que el servicio declara ofrecer
-                       Ejemplo: ["GML", "GeoJSON", "KML"]
-    formato_consumo  → formato concreto que usará layerFactory para consumir el servicio
-                       Ejemplo: "GeoJSON"
-                       Para WFS: se fuerza a "GeoJSON" (requerimiento de WFSLayer SDK v5)
-                       Si un WFS no ofrece GeoJSON → capa excluida con motivo explícito
-
-CAMPO ELIMINADO:
-    formato  → era siempre vacío y no tenía semántica. Reemplazado por los dos campos anteriores.
 """
 
 import sys
@@ -59,17 +91,14 @@ except ImportError:
 
 ARCHIVO_SALIDA = "catalogo-capas-ne.json"
 
-# Filtros de inclusión
+# Filtros de inclusión (viabilidad técnica, NO selección editorial —
+# la selección editorial vive en incluir_en_catalogo_final y la aplica
+# la ETAPA 2, no este script)
 PRIORIDADES_INCLUIDAS   = {"P0 - MVP", "P1 - Alta", "P2 - Media"}
 ESTADOS_INCLUIDOS       = {"Revisada"}
 COSTES_INCLUIDOS        = {"Gratuita"}
 DISPONIBILIDAD_EXCLUIDA = {"RECORTE", "LOTE"}  # no viables sin backend
 
-# Alias normalizados a "GeoJSON" canónico al parsear la columna formato_datos.
-# El campo del Excel puede traer variantes como "geojson", "GeoJson", "json", "geojson/"
-_GEOJSON_ALIASES = {"geojson", "json", "geojson/"}
-
-# Mapeo cobertura_geografica → cobertura.tipo (valores del JSON de arquitectura)
 MAPA_COBERTURA = {
     "Nacional":                    "nacional",
     "Autonómico":                  "autonomica",
@@ -85,10 +114,7 @@ MAPA_COBERTURA = {
 # ─────────────────────────────────────────────
 
 def slugify(texto: str, max_len: int = 60) -> str:
-    """
-    Convierte texto libre a kebab-case sin tildes.
-    Ejemplo: "FEGA - MAPA" + "WMS SIGPAC" → "fega-mapa-wms-sigpac"
-    """
+    """Convierte texto libre a kebab-case sin tildes."""
     texto = unicodedata.normalize("NFD", texto.lower())
     texto = "".join(c for c in texto if unicodedata.category(c) != "Mn")
     texto = re.sub(r"[^a-z0-9\s-]", "", texto)
@@ -97,126 +123,21 @@ def slugify(texto: str, max_len: int = 60) -> str:
 
 
 def limpiar(valor) -> str:
-    """Convierte NaN de pandas a cadena vacía y elimina espacios."""
     if pd.isna(valor):
         return ""
     return str(valor).strip()
 
 
-def parsear_formatos(raw: str) -> list:
-    """
-    Convierte la cadena de formatos del Excel en una lista normalizada.
-
-    Entrada:  "GML/XML/GeoJson/KML"  |  "SHP; GeoJSON; KML"  |  "GML / XML"
-    Salida:   ["GML", "XML", "GeoJSON", "KML"]
-
-    Separadores reconocidos: / ; ,  (NO espacios).
-    El espacio NO es separador porque algunos campos del Excel contienen texto libre
-    tras los formatos reales, ej: "GML / XML; formatos adicionales según GetCapabilities".
-    Partir por espacios produciría tokens basura como "formatos", "adicionales", etc.
-
-    Filtro de tokens:
-      - Se descartan tokens de más de 20 caracteres (texto libre, no nombres de formato).
-      - Se descartan tokens que empiezan por minúscula (frases en español, no acrónimos).
-      - Se normalizan variantes de GeoJSON → "GeoJSON" canónico.
-
-    Devuelve lista vacía si la entrada está vacía.
-    """
-    if not raw:
-        return []
-
-    # Pre-normalizar MIME types OGC antes de partir por separadores.
-    # 'application/json' y 'application/geo+json' usan '/' internamente,
-    # por lo que se partirían en tokens 'application' + 'json' (ambos en minúscula
-    # y por tanto descartados por el filtro de texto libre).
-    # Solución: sustituirlos por el token canónico 'GeoJSON' antes del split.
-    raw = re.sub(r'application/geo\+json', 'GeoJSON', raw, flags=re.IGNORECASE)
-    raw = re.sub(r'application/json',      'GeoJSON', raw, flags=re.IGNORECASE)
-
-    # Partir solo por separadores duros; los espacios son parte del texto de cada token
-    partes = re.split(r'[/;,]+', raw.strip())
-    resultado = []
-
-    for p in partes:
-        p = p.strip()
-        if not p:
-            continue
-
-        # Descartar texto libre: los nombres de formato son cortos y en mayúsculas/mixto
-        if len(p) > 20:
-            continue
-        if p[0].islower():   # "formatos adicionales..." empieza en minúscula → texto libre
-            continue
-
-        # Normalizar variantes de GeoJSON a la forma canónica
-        if p.lower().replace(" ", "") in _GEOJSON_ALIASES:
-            resultado.append("GeoJSON")
-        else:
-            resultado.append(p)
-
-    return resultado
-
-
 def normalizar_tipo(tipo_raw: str) -> str:
-    """
-    Normaliza los valores de tipo_acceso del Excel al tipo canónico de layerFactory.
-
-    El Excel puede contener valores no homogéneos escritos por humanos:
-      "OGC WFS"                → "WFS"
-      "WFS / Descarga directa" → "WFS"
-      "WMS"                    → "WMS"
-      "WMTS"                   → "WMTS"
-
-    Estrategia: buscar el tipo canónico como subcadena del valor en mayúsculas.
-    Orden de búsqueda importa: "ArcGIS_REST" antes de tokens genéricos.
-
-    Si no hay coincidencia, devuelve el valor original para que layerFactory
-    emita console.warn con el tipo desconocido (fail visible, no silencioso).
-    """
-    # Orden deliberado: los tipos más específicos primero
     TIPOS_CANONICOS = ["WMTS", "WFS", "WMS", "GEOJSON", "ArcGIS_REST", "FEATURE", "WCS"]
     tipo_upper = tipo_raw.upper()
-
     for tipo in TIPOS_CANONICOS:
         if tipo.upper() in tipo_upper:
             return tipo
-
-    return tipo_raw  # fallback: devolver original → layerFactory lo logeará como desconocido
-
-
-def determinar_formato_consumo(tipo: str, formatos: list) -> str | None:
-    """
-    Determina el formato que layerFactory usará para consumir el servicio.
-
-    ── WFS ──────────────────────────────────────────────────────────────────
-    WFSLayer del SDK v5 necesita GeoJSON internamente.
-    Si el servicio no lo ofrece, devuelve None → señal para excluir la capa.
-    Decisión provisional: llevar al tutor si se necesita proxy GML→GeoJSON.
-
-    ── Resto de tipos ───────────────────────────────────────────────────────
-    Devuelve el primer formato declarado, o cadena vacía si no hay ninguno.
-    (WMS, WMTS y otros no necesitan negociación de formato en este prototipo.)
-
-    @param tipo     Valor canónico ya normalizado por normalizar_tipo() (ej. "WFS", "WMS")
-    @param formatos Lista producida por parsear_formatos()
-    @returns        String con el formato a usar, o None si la capa no es consumible
-    """
-    if tipo.upper() == "WFS":
-        return "GeoJSON" if "GeoJSON" in formatos else None
-
-    return formatos[0] if formatos else ""
+    return tipo_raw
 
 
 def construir_cobertura(cobertura_geografica: str, cobertura_codigo: str) -> dict:
-    """
-    Construye el objeto cobertura a partir de los campos del Excel.
-
-    cobertura_codigo puede ser:
-      - vacío           → nacional, europeo, global (no lo necesitan)
-      - "15"            → código CCAA (autonómica)
-      - "31"            → código provincia (provincial)
-      - "31201,31007"   → códigos INE separados por coma (municipal)
-    """
     tipo = MAPA_COBERTURA.get(cobertura_geografica.strip())
 
     if not tipo:
@@ -231,67 +152,61 @@ def construir_cobertura(cobertura_geografica: str, cobertura_codigo: str) -> dic
             cobertura["ccaa_code"] = codigo
         else:
             print(f"  ⚠  falta cobertura_codigo para cobertura autonómica")
-
     elif tipo == "provincial":
         if codigo:
             cobertura["provincia_code"] = codigo
         else:
             print(f"  ⚠  falta cobertura_codigo para cobertura provincial")
-
     elif tipo == "municipal":
         if codigo:
             cobertura["codigos_ine"] = [c.strip() for c in codigo.split(",") if c.strip()]
         else:
             print(f"  ⚠  falta cobertura_codigo para cobertura municipal")
 
-    # nacional, europeo, global: no necesitan código adicional
-
     return cobertura
 
 
+def parsear_tags(raw: str) -> list:
+    """tags: lista separada por comas en el Excel → lista JSON."""
+    if not raw:
+        return []
+    return [t.strip() for t in raw.split(",") if t.strip()]
+
+
 # ─────────────────────────────────────────────
-# FILTROS DE INCLUSIÓN
+# FILTROS DE INCLUSIÓN (viabilidad técnica)
 # ─────────────────────────────────────────────
 
 def aplicar_filtros(fila: pd.Series) -> tuple[bool, str]:
     """
-    Aplica todos los filtros de inclusión sobre una fila del Excel.
-    Devuelve (incluida: bool, motivo_exclusion: str).
+    Filtros de VIABILIDAD TÉCNICA para entrar a catalogo-capas-ne.json.
+    NO es la selección editorial de qué entra al catálogo activo — esa
+    decisión vive en incluir_en_catalogo_final y la resuelve la ETAPA 2.
 
-    Orden de checks:
-      1. Coste → solo capas gratuitas
-      2. Estado → solo capas revisadas
-      3. Prioridad → P0, P1, P2
-      4. Disponibilidad → excluye RECORTE y LOTE (requieren backend)
-      5. WFS sin GeoJSON → no consumible con WFSLayer SDK v5 sin proxy
+    CORRECCIÓN (hallazgo real, 25/08/2026): este filtro excluía WFS aquí
+    mismo si formato_datos (texto libre escrito a mano) no mencionaba
+    GeoJSON — pero formato_datos ya no es fuente de verdad para formatos
+    (ver formato_datos_manual_ref). Si el Excel quedaba mal transcrito,
+    una capa con GeoJSON real en el servicio se perdía aquí, ANTES de que
+    la ETAPA 2 pudiera verificarla contra GetCapabilities real. La
+    verificación real y autoritativa de soporte GeoJSON para WFS vive
+    exclusivamente en enriquecer-catalogo.py::resolver_capa() — ahí sí se
+    consulta el servicio real antes de excluir. Este script ya no excluye
+    WFS por ese motivo bajo ninguna circunstancia.
     """
     coste     = limpiar(fila.get("coste", ""))
     estado    = limpiar(fila.get("estado_revision", ""))
     prioridad = limpiar(fila.get("prioridad_app", ""))
     disponib  = limpiar(fila.get("disponibilidad_municipal", "")).upper()
-    tipo      = normalizar_tipo(limpiar(fila.get("tipo_acceso", "")))
-    formatos_raw = limpiar(fila.get("formato_datos", ""))
 
     if coste not in COSTES_INCLUIDOS:
         return False, f"coste: '{coste}'"
-
     if estado not in ESTADOS_INCLUIDOS:
         return False, f"estado_revision: '{estado}'"
-
     if prioridad not in PRIORIDADES_INCLUIDAS:
         return False, f"prioridad_app: '{prioridad}'"
-
     if disponib in DISPONIBILIDAD_EXCLUIDA:
         return False, f"disponibilidad_municipal: '{disponib}'"
-
-    # Filtro WFS: WFSLayer del SDK v5 requiere GeoJSON como formato de salida.
-    # Si el servicio no lo ofrece, la capa no es consumible desde cliente sin proxy.
-    # Decisión provisional — pendiente de validar con el tutor.
-    if tipo == "WFS":
-        formatos = parsear_formatos(formatos_raw)
-        if "GeoJSON" not in formatos:
-            formatos_str = ", ".join(formatos) if formatos else "no declarados"
-            return False, f"WFS sin soporte GeoJSON — formatos disponibles: [{formatos_str}]"
 
     return True, ""
 
@@ -300,24 +215,26 @@ def aplicar_filtros(fila: pd.Series) -> tuple[bool, str]:
 # TRANSFORMACIÓN DE FILAS
 # ─────────────────────────────────────────────
 
-def transformar_fila(fila: pd.Series) -> dict:
-    """
-    Convierte una fila del Excel/CSV en un objeto de capa para catalogo-capas.json.
-
-    Cambios respecto a la versión anterior:
-      - Eliminado: "formato" (siempre vacío, sin semántica)
-      - Añadido:   "formatos_salida" (lista de lo que el servicio ofrece)
-      - Añadido:   "formato_consumo" (el que usará layerFactory — para WFS, siempre GeoJSON)
-    """
+def transformar_fila(fila: pd.Series, ids_usados: set) -> dict:
     proveedor    = limpiar(fila.get("proveedor", ""))
     nombre_capa  = limpiar(fila.get("nombre_capa", ""))
     tipo_acceso  = normalizar_tipo(limpiar(fila.get("tipo_acceso", "")))
-    formatos_raw = limpiar(fila.get("formato_datos", ""))
+    id_manual    = limpiar(fila.get("id_estable", ""))
 
-    formatos        = parsear_formatos(formatos_raw)
-    formato_consumo = determinar_formato_consumo(tipo_acceso, formatos)
+    # id_estable tiene prioridad sobre el slug autogenerado — evita que
+    # una corrección de nombre/proveedor en el Excel rompa la trazabilidad
+    # con curaciones ya hechas sobre el id anterior.
+    if id_manual:
+        capa_id = slugify(id_manual, max_len=80)
+    else:
+        capa_id = slugify(f"{proveedor}-{nombre_capa}-{tipo_acceso}")
 
-    capa_id = slugify(f"{proveedor}-{nombre_capa}-{tipo_acceso}")
+    id_final = capa_id
+    sufijo_n = 1
+    while id_final in ids_usados:
+        id_final = f"{capa_id}-{sufijo_n}"
+        sufijo_n += 1
+    ids_usados.add(id_final)
 
     def to_int(campo):
         try:
@@ -326,28 +243,21 @@ def transformar_fila(fila: pd.Series) -> dict:
             return 0
 
     return {
-        "id":    capa_id,
+        "id":    id_final,
         "title": nombre_capa,
 
         "bloque_tematico": limpiar(fila.get("bloque_tematico", "")),
         "subtema":         limpiar(fila.get("subtema", "")),
         "proveedor":       proveedor,
 
-        "tipo":             tipo_acceso,         # tipo canónico normalizado → alimenta layerFactory._TIPO_MAP
+        "tipo": tipo_acceso,
         "url":              limpiar(fila.get("url_endpoint", "")),
         "capabilities_url": limpiar(fila.get("capabilities", "")) or None,
 
-        # ── Campos de formato (reemplazan al antiguo "formato": "") ──────────
-        # formatos_salida: lo que el servicio declara que puede entregar.
-        #   Útil para documentación, auditoría y futura lógica de adaptadores.
-        "formatos_salida": formatos,
-
-        # formato_consumo: el formato que layerFactory usará para instanciar la capa.
-        #   Para WFS siempre es "GeoJSON" (requerimiento de WFSLayer SDK v5).
-        #   Para otros tipos, primer formato declarado o cadena vacía.
-        #   None aquí no debería llegar (el filtro de inclusión lo habrá excluido antes).
-        "formato_consumo": formato_consumo,
-        # ────────────────────────────────────────────────────────────────────
+        # Ya NO se calculan aquí formatos_salida/formato_consumo — los
+        # resuelve la ETAPA 2 contra el servicio real. Se conserva el
+        # texto original solo como apunte de trabajo, sin parsear.
+        "formato_datos_manual_ref": limpiar(fila.get("formato_datos", "")),
 
         "inspire":    limpiar(fila.get("tematica_inspire", "")),
         "notas":      limpiar(fila.get("notas_limitaciones", "")),
@@ -355,7 +265,7 @@ def transformar_fila(fila: pd.Series) -> dict:
 
         "requiere_registro": limpiar(fila.get("requiere_registro", "")).lower() in ("sí", "si", "yes", "true"),
         "coste":   limpiar(fila.get("coste", "")),
-        "visible": False,  # siempre False — las capas arrancan ocultas, el usuario las activa
+        "visible": False,
 
         "disponibilidad_municipal": limpiar(fila.get("disponibilidad_municipal", "")),
 
@@ -373,6 +283,10 @@ def transformar_fila(fila: pd.Series) -> dict:
             limpiar(fila.get("cobertura_geografica", "")),
             limpiar(fila.get("cobertura_codigo", "")),
         ),
+
+        # Pass-through sin filtrar — la ETAPA 2 decide qué hacer con esto.
+        "tags": parsear_tags(limpiar(fila.get("tags", ""))),
+        "incluir_en_catalogo_final": limpiar(fila.get("incluir_en_catalogo_final", "")).lower() in ("sí", "si", "yes", "true"),
     }
 
 
@@ -381,15 +295,11 @@ def transformar_fila(fila: pd.Series) -> dict:
 # ─────────────────────────────────────────────
 
 def leer_archivo(ruta: Path) -> pd.DataFrame:
-    """Lee Excel (.xlsx) o CSV y devuelve un DataFrame."""
     sufijo = ruta.suffix.lower()
 
     if sufijo == ".xlsx":
         return pd.read_excel(ruta, dtype=str)
-
     elif sufijo == ".csv":
-        # Intenta tabulador primero (exportación directa desde Excel).
-        # Si falla o produce una sola columna, reintenta con coma.
         try:
             df = pd.read_csv(ruta, sep="\t", dtype=str, encoding="utf-8")
             if df.shape[1] > 1:
@@ -397,7 +307,6 @@ def leer_archivo(ruta: Path) -> pd.DataFrame:
         except Exception:
             pass
         return pd.read_csv(ruta, sep=",", dtype=str, encoding="utf-8")
-
     else:
         print(f"❌ Formato no soportado: {sufijo}. Usa .xlsx o .csv")
         sys.exit(1)
@@ -409,7 +318,7 @@ def leer_archivo(ruta: Path) -> pd.DataFrame:
 
 def main():
     print("═══════════════════════════════════════════")
-    print("  Migración Excel → catalogo-capas.json")
+    print("  Migración Excel → catalogo-capas-ne.json")
     print("═══════════════════════════════════════════\n")
 
     if len(sys.argv) < 2:
@@ -431,51 +340,31 @@ def main():
 
     for i, fila in df.iterrows():
         nombre = limpiar(fila.get("nombre_capa", f"fila {i+2}"))
-
         incluida, motivo = aplicar_filtros(fila)
 
         if not incluida:
             excluidas.append({"nombre": nombre, "motivo": motivo})
             continue
 
-        capa = transformar_fila(fila)
-
-        # Garantizar IDs únicos ante colisiones de slug
-        id_final = capa["id"]
-        sufijo_n = 1
-        while id_final in ids_usados:
-            id_final = f"{capa['id']}-{sufijo_n}"
-            sufijo_n += 1
-        capa["id"] = id_final
-        ids_usados.add(id_final)
-
+        capa = transformar_fila(fila, ids_usados)
         catalogo.append(capa)
-        print(f"  ✅ {nombre}")
+        marca_final = "→ candidata a catálogo final" if capa["incluir_en_catalogo_final"] else ""
+        print(f"  ✅ {nombre} {marca_final}")
 
-    # Escribir JSON
     ruta_salida = ruta_entrada.parent / ARCHIVO_SALIDA
     with open(ruta_salida, "w", encoding="utf-8") as f:
         json.dump(catalogo, f, ensure_ascii=False, indent=2)
 
-    # ── Resumen ───────────────────────────────
     print("\n───────────────────────────────────────────")
-    print(f"✅ Capas incluidas:  {len(catalogo)}")
+    print(f"✅ Capas incluidas en referencia:  {len(catalogo)}")
+    print(f"   de ellas, candidatas a catálogo final: "
+          f"{sum(1 for c in catalogo if c['incluir_en_catalogo_final'])}")
     print(f"❌ Capas excluidas: {len(excluidas)}")
 
     if excluidas:
-        # Agrupar por motivo para lectura rápida
-        wfs_sin_geojson = [e for e in excluidas if "WFS sin soporte GeoJSON" in e["motivo"]]
-        otros           = [e for e in excluidas if "WFS sin soporte GeoJSON" not in e["motivo"]]
-
-        if wfs_sin_geojson:
-            print(f"\n⚠️  WFS excluidos por falta de GeoJSON ({len(wfs_sin_geojson)}) — pendiente de hablar con el tutor:")
-            for e in wfs_sin_geojson:
-                print(f"   - {e['nombre']} → {e['motivo']}")
-
-        if otros:
-            print(f"\nOtras exclusiones ({len(otros)}):")
-            for e in otros:
-                print(f"   - {e['nombre']} → {e['motivo']}")
+        print(f"\nExclusiones ({len(excluidas)}):")
+        for e in excluidas:
+            print(f"   - {e['nombre']} → {e['motivo']}")
 
     print(f"\n📦 Archivo generado: {ruta_salida}")
     print("═══════════════════════════════════════════\n")

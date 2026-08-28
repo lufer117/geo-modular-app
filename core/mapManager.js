@@ -5,6 +5,7 @@
  *   - Inicialización de un único Map compartido por dos vistas
  *   - Toggle 2D (MapView) ↔ 3D (SceneView) con sincronización de viewpoint
  *   - Gestión de la máscara visual municipal para recorte de capas WMS
+ *   - Resaltado visual del municipio en foco dentro de un ámbito territorial
  *   - Zoom al municipio seleccionado
  *   - Cambio de basemap
  *
@@ -23,10 +24,57 @@
  * relleno de gris semitransparente. Preserva contexto geográfico exterior.
  * Técnica: geometryEngine.difference(mundo, municipio) → "donut polygon"
  *
+ * ── RESALTADO DE MUNICIPIO (ámbito territorial) ─────────────────────────
+ * GraphicsLayer independiente de la máscara. Responsabilidad distinta:
+ * la máscara OCULTA lo que está fuera del territorio (se calcula una vez
+ * al arrancar y no se toca — decisión 03.08.26, 3DECISIONS.md). El
+ * resaltado SEÑALA un municipio dentro de un territorio ya visible; su
+ * ciclo de vida es corto (aparece/desaparece con cada selección de
+ * municipio dentro de ?cliente=provincia/ccaa), por lo que mezclarlo con
+ * la máscara acoplaría dos conceptos con vidas útiles distintas (mismo
+ * criterio SRP ya aplicado al separar layerFactory de layerInitializer).
+ *
+ * ── CAPAS DE INFRAESTRUCTURA PERSISTENTE ─────────────────────────────────
+ * Además de máscara y resaltado, cualquier GraphicsLayer que otro módulo
+ * cree y añada directamente a este Map (ej. sketch-layer en toolPanel.js,
+ * backing de arcgis-sketch) debe sobrevivir al ciclo de reemplazo de
+ * addCapas(). Sin esto, la PRIMERA carga de municipio/territorio después
+ * de initToolPanel() elimina silenciosamente esa capa del mapa: el widget
+ * SDK sigue apuntando a la misma instancia de GraphicsLayer en JS (nunca
+ * se le reasigna), pero esa instancia ya no cuelga de _map.layers, así
+ * que cualquier gráfico que el widget confirme en ella (ej. un polígono
+ * de sketch al completar el dibujo) deja de renderizarse sin error visible
+ * en consola — bug diagnosticado 04.08.26, ver 3DECISIONS.md.
+ * IDS_CAPAS_INFRAESTRUCTURA centraliza esta lista para que addCapas() no
+ * vuelva a quedar desactualizada la próxima vez que se añada una nueva
+ * capa de infraestructura (ej. un futuro highlight de resultados de
+ * búsqueda): se añade el id aquí una sola vez, no en cada función que
+ * toque _map.layers.
+ *
+ * IMPORTANTE — no basta con EXCLUIR estas capas del borrado: addMany()
+ * inserta las capas de datos nuevas al FINAL del array, así que cualquier
+ * capa de infraestructura que ya estuviera en el mapa (ej. sketch, añadida
+ * por toolPanel.js antes de la primera carga de municipio) queda por
+ * DEBAJO de los datos recién llegados. Un WMS con relleno opaco (catastro,
+ * SIGPAC) tapa visualmente cualquier gráfico de sketch en esa posición —
+ * mismo síntoma que la eliminación (el dibujo "desaparece"), pero con
+ * causa distinta. Por eso, además de excluir del borrado, hay que
+ * reafirmar su posición por ENCIMA de los datos en cada carga — ver
+ * IDS_INFRAESTRUCTURA_SUPERIOR más abajo.
+ *
  * ── ORDEN DE CAPAS ───────────────────────────────────────────────────────
  * ArcGIS renderiza la primera capa del array abajo y la última arriba.
- * La máscara siempre se reposiciona al final para quedar sobre los datos.
+ * Orden objetivo, de fondo a frente:
+ *   [ resaltadoLayer, ...capas de datos (WMS/WFS/...), sketchLayer, maskLayer ]
+ * El resaltado va justo sobre el basemap (por debajo de los datos) para
+ * no competir visualmente con la lectura de capas activas — es una
+ * referencia de fondo, no un elemento de primer plano. Sketch va por
+ * encima de TODOS los datos (para que lo dibujado siempre sea visible,
+ * sin importar qué WMS/WFS esté activo) pero por debajo de la máscara.
+ * La máscara sigue reposicionándose siempre al final (por encima de todo).
  */
+
+import * as eventBus from "../utils/eventBus.js";
 
 // ── Variables privadas del módulo ───────────────────────────────────────────────
 // Las variables viven mientras la página este cargada
@@ -36,8 +84,30 @@ let _mapEl             = null; // guarda el web component <arcgis-map> (contened
 let _sceneEl           = null; // guarda el web component <arcgis-scene> (contenedor 3d)
 let _vistaActiva       = "2D"; // guarda el estado global, default 2D
 let _maskLayer         = null; // GraphicsLayer usada para la máscara municipal
+let _resaltadoLayer    = null; // GraphicsLayer usada para el contorno del municipio en foco (ámbito territorial)
 let _sceneReadyPromise = null;  // Guarda la Promesa de inicialización 3D en background
+let _municipioViewpoint = null; // Viewpoint del último municipio cargado
 
+// Ids de capas que NUNCA deben eliminarse en el ciclo de reemplazo de
+// addCapas() — infraestructura visual de la app, no datos de municipio.
+// Ver comentario de cabecera "CAPAS DE INFRAESTRUCTURA PERSISTENTE".
+// "sketch-layer" es el id fijo que toolPanel.js asigna a la GraphicsLayer
+// backing de arcgis-sketch (_crearSketchLayerSiHaceFalta) — se referencia
+// aquí por valor literal, no por import, para no crear un acoplamiento
+// de módulo core → ui (mapManager no debe conocer toolPanel.js).
+const IDS_CAPAS_INFRAESTRUCTURA = new Set([
+  "municipio-mask",
+  "municipio-resaltado",
+  "sketch-layer"
+]);
+
+// Subconjunto de IDS_CAPAS_INFRAESTRUCTURA que además debe reposicionarse
+// SIEMPRE por encima de las capas de datos tras cada addCapas()/addCapa()
+// — no solo sobrevivir al borrado, sino no quedar tapado por un WMS/WFS
+// recién añadido. Orden del array = orden de apilado (el último id queda
+// más arriba). "municipio-resaltado" NO está aquí porque su regla es la
+// opuesta (va al fondo, ver el bloque dedicado en addCapas()).
+const IDS_INFRAESTRUCTURA_SUPERIOR = ["sketch-layer", "municipio-mask"];
 
 // ─── INICIALIZACIÓN ───────────────────────────────────────────────────────
 
@@ -68,11 +138,22 @@ export async function initMap({ mapContainerId, sceneContainerId }) { // paramet
     listMode: "hide" //Indicates how the layer should display eg: in the Layer List component
   });
 
+  // Misma razón que _maskLayer: listMode:"hide" — es infraestructura
+  // visual (resaltado del municipio en foco), no una capa de datos que
+  // el usuario deba ver ni activar/desactivar desde el árbol de capas.
+  _resaltadoLayer = new GraphicsLayer({
+    id:       "municipio-resaltado",
+    title:    "Resaltado de municipio",
+    listMode: "hide"
+  });
+
   // Sin API Key activa → basemap "osm".
-  // La máscara se añade desde el inicio al Map; las capas de datos vendrán via addCapas().
+  // Orden inicial [resaltado, mask]: el resaltado queda por debajo (fondo,
+  // aún sin datos) y la máscara al final (arriba). Las capas de datos
+  // vendrán via addCapas(), que respeta y refuerza este orden.
   _map = new Map({
     basemap: "osm",
-    layers:  [_maskLayer] 
+    layers:  [_resaltadoLayer, _maskLayer] 
   });
 
   //buscar los web components (contenedores)
@@ -103,12 +184,45 @@ export async function initMap({ mapContainerId, sceneContainerId }) { // paramet
   // <arcgis-map>.goTo (m) : Sets the view to a given target.
   await _mapEl.view.goTo({ center: [-3.7038, 40.4168], zoom: 6 });
 
-  // SceneView en lazy empieza a prepararse en paralelo mientras usuario usa 2D
-  // toggleVista() esperará esta promesa solo la primera vez que se necesite 3D.
-  _sceneReadyPromise = _sceneEl.viewOnReady().then(() => { // (m)
+  // ─── OVERRIDE DEL BOTÓN HOME — MapView (2D) ───────────────────────────────
+  // arcgis-home en SDK v5 usa view.initialExtent (extensión al arrancar),
+  // no view.homeViewpoint. Como la vista se inicializa antes de seleccionar
+  // municipio, initialExtent es siempre el mundo entero.
+  // Solución: interceptar el click y redirigir a _municipioViewpoint si existe.
+  // Si no hay municipio activo aún, el botón hace su comportamiento por defecto.
+  // El listener de MapView se registra aquí porque viewOnReady() ya se completó
+  // y el Light DOM de <arcgis-map> está garantizado.
+  const homeMap = _mapEl.querySelector("arcgis-home");
+  if (homeMap) {
+    homeMap.addEventListener("click", (e) => {
+      if (!_municipioViewpoint) return; // sin municipio → comportamiento nativo
+      e.stopImmediatePropagation();     // cancela el handler interno del componente
+      _mapEl.view.goTo(_municipioViewpoint, { animate: true, duration: 800 });
+    });
+  }
+
+  // ─── SCENEVIEW LAZY ───────────────────────────────────────────────────────
+  // Se inicializa en background para no bloquear el arranque.
+  // toggleVista() esperará esta promesa solo la primera vez que se active 3D.
+  _sceneReadyPromise = _sceneEl.viewOnReady().then(() => {
     console.info("[mapManager] SceneView (3D) lista (background)");
-    _sceneEl.view.viewpoint = _mapEl.view.viewpoint.clone(); //copia de _mapE1 : accede a la vista (p), accede al viewpoint (p) y clona (m) posición, centro, zoom, tilt, escala, orientación y cámara de 2D a 3D.
+    _sceneEl.view.viewpoint = _mapEl.view.viewpoint.clone();
+
+    // ─── OVERRIDE DEL BOTÓN HOME — SceneView (3D) ─────────────────────────
+    // Se registra aquí, no antes, porque la SceneView y su Light DOM
+    // solo están garantizados cuando viewOnReady() se resuelve.
+    // Registrarlo en initMap() antes de este punto podría devolver null
+    // si el componente aún no ha renderizado sus hijos.
+    const homeScene = _sceneEl.querySelector("arcgis-home");
+    if (homeScene) {
+      homeScene.addEventListener("click", (e) => {
+        if (!_municipioViewpoint) return;
+        e.stopImmediatePropagation();
+        _sceneEl.view.goTo(_municipioViewpoint, { animate: true, duration: 800 });
+      });
+    }
   });
+
 }
 
 // ─── TOGGLE 2D / 3D ──────────────────────────────────────────────────────
@@ -125,42 +239,73 @@ export async function initMap({ mapContainerId, sceneContainerId }) { // paramet
 
 
 export async function toggleVista() {
-  // Guarda de seguridad. Esperar SceneView solo la primera vez — después no hace falta esperar
-  if (_sceneReadyPromise) { //evalua si la variable contiene la promesa o si no hay ninguna tarea pendiente de carga (null)
-    await _sceneReadyPromise; // si promesa activa = true -> await
-    _sceneReadyPromise = null; // si promesa activa = false, se limpia variable = null -> la próxima vez el if será false por asignarle "null" y salta el paso
+  // Si la promesa existe, espera a que la SceneView esté lista antes de alternar la vista. Solo se espera la primera vez.
+  if (_sceneReadyPromise) {
+    await _sceneReadyPromise;
+    _sceneReadyPromise = null;
+
+    // Al inicializar la SceneView por primera vez, si ya hay un municipio activo,
+    // aplicar su homeViewpoint. Sin esto, el Home en 3D siempre volvería al mundo
+    // porque la SceneView no existía cuando irAlMunicipio() se ejecutó en 2D.
+    if (_municipioViewpoint && _sceneEl?.view) {
+    _sceneEl.view.homeViewpoint = _municipioViewpoint;
+    }
+  
   }
 
-  // detectar la vista actual "===" evaluación lógica
-  //¿Es el valor actual de _vistaActiva exactamente igual al string "2D"?".
-  // Devuelve: true/false
-  const is2D = _vistaActiva === "2D"; 
+  const is2D = _vistaActiva === "2D";
+  const sourceView = is2D ? _mapEl.view : _sceneEl.view;
+  const targetView = is2D ? _sceneEl.view : _mapEl.view;
 
-  // Elegir vista origen y destino
-  // Si is2D true : sourceView = 2D y targetView = 3D
-  // Si is2D false : sourceView = 3D y targetView = 2D
-  // operador compacto (if...else)
-  const sourceView = is2D ? _mapEl.view : _sceneEl.view; //if is2D true ? (entonces) sourceView = _mapEl.view : (si falso)  sourceView = _sceneEl.view
-  const targetView = is2D ? _sceneEl.view : _mapEl.view; //if is2D false ? (entonces) targetView = _sceneEl.view : (si falso) targetView = _mapEl.view 
-
-  // Clonar viewpoint y sincronizar posición antes del cambio visual
-  // mueve la otra vista a la misma posición
+  // Capturar viewpoint ANTES de cambiar visibilidad
   const vp = sourceView.viewpoint.clone();
-  await targetView.goTo(vp); //goTo (m) devuelve una promesa que se resuelve cuando la animación de transición termina.
 
-  // Cambio visual alternando visibilidad (no destruye)
-  // classList: manipula clases css en elementos del DOM
+  // 1. Cambiar visibilidad primero — el componente destino debe estar
+  //    activo antes de recibir goTo(), si no la SceneView está suspendida
+  //    y no procesa la animación.
   if (is2D) {
-    _sceneEl.classList.add("vista-activa"); //webapis js/element
-    _mapEl.classList.remove("vista-activa"); 
+    _mapEl.hidden   = true;
+    _sceneEl.hidden = false;
     _vistaActiva = "3D";
   } else {
-    _mapEl.classList.add("vista-activa");
-    _sceneEl.classList.remove("vista-activa");
+    _sceneEl.hidden = true;
+    _mapEl.hidden   = false;
     _vistaActiva = "2D";
   }
 
+  // Sincronizar también las clases de estado visual para evitar
+  // que una vista siga oculta por CSS cuando el atributo hidden cambia.
+  const activeEl = is2D ? _sceneEl : _mapEl;
+  const inactiveEl = is2D ? _mapEl : _sceneEl;
+
+  activeEl.classList.add("vista-activa");
+  activeEl.classList.remove("vista-inactiva");
+  inactiveEl.classList.add("vista-inactiva");
+  inactiveEl.classList.remove("vista-activa");
+
+  // 2. Sincronizar posición DESPUÉS de activar el componente
+  //console.time("goTo");
+    // 2. Sincronizar posición DESPUÉS de activar el componente
+  // duration:0 al volver a 2D — evita animar el "aplanado" de cámara (tilt/heading),
+  // que no aporta contexto útil y es la causa medida de los ~525ms de loading
+  // en el botón toggle (ver 2ARCHITECTURE.md / medición console.time 28.07.26).
+  // Al entrar en 3D se conserva la animación por defecto: da contexto espacial
+  // de cómo el terreno se eleva desde el plano.
+  const opcionesGoTo = is2D ? {} : { duration: 0 };
+  await targetView.goTo(vp, opcionesGoTo);
+
+  // console.timeEnd("goTo"); // para verificar demora de animacion al volver de 3d a 2d  
+
   console.info(`[mapManager] Vista cambiada a ${_vistaActiva}`);
+  eventBus.emit("vista-cambiada", { modo: _vistaActiva });
+
+  // Actualizar reference-element del componente de coordenadas al cambiar vista
+  document.querySelector("arcgis-coordinate-conversion")
+    ?.setAttribute("reference-element", _vistaActiva === "3D" ? "scene-view" : "map-view");
+
+
+  
+  
   return _vistaActiva;
 }
 
@@ -190,23 +335,57 @@ export function getMap() {
 // ─── GESTION DE CAPAS ─────────────────────────────────────────────────────
 
 /**
+ * Reposiciona en orden las capas de IDS_INFRAESTRUCTURA_SUPERIOR por
+ * encima de cualquier capa de datos ya presente en _map.layers. Se llama
+ * al final de addCapas() y addCapa() — cualquier punto donde se añadan
+ * datos nuevos puede empujar estas capas hacia abajo del stack.
+ *
+ * Por qué una función separada y no repetir el patrón remove+add inline
+ * dos veces (como ya pasaba con la máscara antes de este fix): centraliza
+ * el ÚNICO lugar donde se decide "qué infraestructura va arriba", así
+ * agregar una futura capa (ej. un highlight de resultados de búsqueda)
+ * es una línea en el array, no una nueva función.
+ *
+ * Usa _map.layers.find() por id en vez de guardar una referencia directa
+ * a cada capa (como si hiciera _sketchLayer aquí) porque mapManager no
+ * posee esa instancia — la crea y gestiona toolPanel.js. Consultar por id
+ * evita el acoplamiento inverso (core → ui) que rompería la capa de
+ * abstracción del proyecto.
+ */
+function _reposicionarInfraestructuraSuperior() {
+  IDS_INFRAESTRUCTURA_SUPERIOR.forEach(id => {
+    const layer = _map.layers.find(l => l.id === id);
+    if (!layer) return; // ej. sketch-layer no existe si "dibujo" no está habilitado en este deployment
+    _map.layers.remove(layer);
+    _map.layers.add(layer);
+  });
+}
+
+/**
  * Añade capas al Map compartido eliminando las anteriores.
- * Mantiene siempre la máscara como última capa (renderiza encima de todo).
- * Ejecturada por municipioSelector.js para cargar capas inmediatas !WFS
- * 
+ * Mantiene siempre la máscara, el resaltado y cualquier otra capa de
+ * infraestructura (ver IDS_CAPAS_INFRAESTRUCTURA) como persistente — no
+ * forman parte del ciclo de reemplazo de capas de datos. Además,
+ * reafirma que la infraestructura "superior" (sketch, máscara) quede por
+ * encima de los datos recién añadidos — ver IDS_INFRAESTRUCTURA_SUPERIOR
+ * y el comentario de cabecera "CAPAS DE INFRAESTRUCTURA PERSISTENTE".
+ *  
  * @param {Layer[]} capas - Array de instancias Esri ya inicializadas
  */
 
-
+// Ejecturada por municipioSelector.js para cargar capas inmediatas !WFS
 export function addCapas(capas) {
   if (!_map) { // verifica que el objeto _map exista
     console.error("[mapManager] Map no inicializado. Llama a initMap() primero.");
     return;
   }
 
-  // Limpia todas las capas de datos — excepto la máscara
+  // Limpia todas las capas de datos — excepto la infraestructura visual
+  // persistente (máscara, resaltado, sketch, y cualquier futura capa que
+  // se añada a IDS_CAPAS_INFRAESTRUCTURA). Ver comentario de cabecera
+  // "CAPAS DE INFRAESTRUCTURA PERSISTENTE" y "ORDEN DE CAPAS".
    const capasPrevias = _map.layers //(p) map
-    .filter(l => l.id !== "municipio-mask") //(m) map layers collection 
+    .filter(l => !IDS_CAPAS_INFRAESTRUCTURA.has(l.id)) //(m) map layers collection 
     .toArray(); //(m) map layers collection 
   _map.layers.removeMany(capasPrevias); // (p) (m) map
 
@@ -215,11 +394,25 @@ export function addCapas(capas) {
     _map.layers.addMany(capas); //(p) (m) map
   }
 
+  // Reposicionar resaltado al fondo (índice 0 → justo sobre el basemap,
+  // por debajo de todas las capas de datos recién añadidas). Se reafirma
+  // aquí en cada carga, no solo en initMap(), para que el orden quede
+  // garantizado sin depender de que nadie reordene _map.layers por error.
+  if (_resaltadoLayer) {
+    _map.layers.remove(_resaltadoLayer); //(p) (m) map
+    _map.layers.add(_resaltadoLayer, 0); //(p) (m) map
+  }
 
-  // Reposicionar máscara al final → siempre por encima de los datos
-  // Arcgis renderiza primera capa abajo, última capa arriba
-  _map.layers.remove(_maskLayer); //(p) (m) map
-  _map.layers.add(_maskLayer); //(p) (m) map , así la mask siempre queda encima
+  // Reposicionar infraestructura "superior" (sketch, máscara) por encima
+  // de las capas de datos que acaban de entrar con addMany() — sin esto,
+  // addMany() las deja intercaladas por debajo de los datos nuevos aunque
+  // ya existieran antes en el mapa (bug diagnosticado 04.08.26: el
+  // polígono de sketch dejaba de eliminarse pero quedaba tapado por un
+  // WMS opaco). El orden interno del array ya garantiza mask siempre
+  // encima de sketch.
+  _reposicionarInfraestructuraSuperior();
+
+  console.log("[DEBUG] Orden final:", _map.layers.map(l => l.id).toArray());
 
   console.info(`[mapManager] ${capas.length} capas añadidas al Map`);
 }
@@ -228,17 +421,21 @@ export function addCapas(capas) {
 
 /**
  * Añade una sola capa al Map (lazy-load on-demand para WFS).
- * La máscara se reposiciona encima.
- * Ejecturada por layerTree.js para cargar WFS cuando el usuario marca el checkbox
+ * Reposiciona la infraestructura "superior" (sketch, máscara) encima de
+ * la capa recién añadida — mismo mecanismo que addCapas(), ver
+ * _reposicionarInfraestructuraSuperior(). El resaltado no se toca aquí:
+ * al añadirse una capa individual (siempre al final/arriba por defecto),
+ * no puede terminar por debajo del resaltado, así que no hace falta
+ * reafirmar su posición en cada llamada.
+ *
  * @param {Layer} capa
  */
 
-
+// Ejecturada por layerTree.js para cargar WFS cuando el usuario marca el checkbox
 export function addCapa(capa) {
   if (!_map) return; //verifica si el objeto _map se ha inicializado
   _map.layers.add(capa); //añade capa por defecto en la parte superior de la pila visual 
-  _map.layers.remove(_maskLayer); // elimina mask
-  _map.layers.add(_maskLayer); // añade mask para que quede encima
+  _reposicionarInfraestructuraSuperior(); // sketch y mask vuelven a quedar por encima
 }
 
 // ─── MÁSCARA MUNICIPAL ────────────────────────────────────────────────────
@@ -250,12 +447,12 @@ export function addCapa(capa) {
  * exterior al municipio. Se rellena de gris semitransparente para que el
  * contexto geográfico exterior sea visible pero quede en segundo plano.
  *
- * Función ejecutada por municipioSelector.js
- * 
- * @param {Object} polygon - { rings, spatialReference } de municipios.js municipioData.polygon
+ * @param {Object} polygon - { rings, spatialReference } — campo .polygon
+ *   del municipio activo ya resuelto
  * @returns {Promise<void>}
  */
 
+// Ejecutada en municipioSelector.js usando mapManager.actualizarMascara()
 export async function actualizarMascara(polygon) {
   if (!_maskLayer) return; //Verifica si _maskLayer existe. Si no está inicializada, la función se detiene para evitar errores
 
@@ -274,7 +471,7 @@ export async function actualizarMascara(polygon) {
     spatialReference: { wkid: 4326 }
   });
 
-  // definición del polígono municipal -> municipioData.polygon de municipios.js ejecutado por municipioSelector.js
+// definición del polígono municipal -> municipioData.polygon
   const municipioPoly = new Polygon({
     rings:            polygon.rings,
     spatialReference: polygon.spatialReference ?? { wkid: 4326 }
@@ -310,20 +507,85 @@ export function limpiarMascara() {
   _maskLayer?.removeAll(); //(m) GraphicsLayer
 }
 
+// ─── RESALTADO DE MUNICIPIO (ámbito territorial) ──────────────────────────
+
+/**
+ * Dibuja (o actualiza) el contorno del municipio en foco dentro de un
+ * ámbito territorial (provincia/ccaa). NO sustituye ni toca la máscara
+ * territorial ya existente — son dos capas independientes con
+ * responsabilidades distintas (ver comentario de cabecera del módulo).
+ *
+ * Reutiliza deliberadamente el mismo patrón de construcción de geometría
+ * que actualizarMascara() (Polygon + spatialReference con fallback a
+ * WGS84) para no introducir una segunda forma de interpretar el campo
+ * .polygon del municipio.
+ *
+ * Z-order: gestionado en addCapas() / initMap(), no aquí — esta función
+ * solo dibuja el gráfico; la posición del GraphicsLayer dentro de
+ * _map.layers ya está garantizada por debajo de las capas de datos.
+ *
+ * @param {Object} polygon - { rings, spatialReference } del municipio activo
+ * @returns {Promise<void>}
+ */
+
+// Ejecutada por municipioSelector.js (agregarCapasMunicipio) con
+// mapManager.resaltarMunicipio(municipioData.polygon)
+export async function resaltarMunicipio(polygon) {
+  if (!_resaltadoLayer || !polygon) return; //sin capa inicializada o sin geometría → no hay nada que dibujar
+
+  const [Graphic, Polygon] = await Promise.all([
+    $arcgis.import("esri/Graphic"),
+    $arcgis.import("esri/geometry/Polygon")
+  ]);
+
+  const municipioPoly = new Polygon({
+    rings:            polygon.rings,
+    spatialReference: polygon.spatialReference ?? { wkid: 4326 }
+  });
+
+  //limpiar cualquier resaltado anterior antes de dibujar el nuevo
+  _resaltadoLayer.removeAll(); //(m) GraphicsLayer
+
+  _resaltadoLayer.add(new Graphic({ //(m) GraphicsLayer.add()
+    geometry: municipioPoly,
+    symbol: {
+      type:  "simple-fill",
+      color: [0, 122, 194, 0.10],   // relleno muy ligero — foco sutil, no compite con los datos
+      outline: {
+        color: [0, 122, 194, 1],      // contorno de foco — ajustar al color de acento real de la app
+        width: 1.5
+      }
+    }
+  }));
+
+  console.info("[mapManager] Resaltado de municipio actualizado");
+}
+
+/**
+ * Retira el resaltado del municipio en foco. Se usa al volver de un
+ * municipio concreto a la vista territorial completa.
+ */
+
+// Ejecutada por municipioSelector.js (retirarCapasMunicipio) con
+// mapManager.quitarResaltadoMunicipio() — simétrica a resaltarMunicipio()
+export function quitarResaltadoMunicipio() {
+  _resaltadoLayer?.removeAll(); //(m) GraphicsLayer
+}
+
 // ─── NAVEGACIÓN ───────────────────────────────────────────────────────────
 
 /**
  * Hace zoom al bounding box del municipio en la vista activa.
  * expand(1.2) añade 20% de margen para mostrar contexto geográfico inmediato.
  *
- * Ejecutada por municipioSelector.js
  * 
  * @param {number[]} bbox - [xmin, ymin, xmax, ymax] en WGS84
  * @returns {Promise<void>}
  */
 
-
+// Ejecutada por municipioSelector.js con mapManager.irAlMunicipio(municipioData.bbox)
 export async function irAlMunicipio(bbox) {
+  
   // uso de ?. Evita que la aplicación se detenga con un error si el elemento (_mapEl o _sceneEl) aún no está disponible en el DOM
   const view = _vistaActiva === "2D" ? _mapEl?.view : _sceneEl?.view; //detectar si el modo actual es 2D, si es true selecciona <arcgis-map>, si es false <arcgis-scene>
 
@@ -337,9 +599,10 @@ export async function irAlMunicipio(bbox) {
   // devolverá un array de una sola posición [ClaseExtent]
   // const [Extent] pide el primer elemento del array y lo guarda en la variable Extent
   // Extent es la CLASE o molde, no es un objeto geográfico todavía
-  const [Extent] = await Promise.all([
-    $arcgis.import("esri/geometry/Extent")
-  ]);
+  const [Extent, Viewpoint] = await Promise.all([
+  $arcgis.import("esri/geometry/Extent"),
+  $arcgis.import("esri/Viewpoint")
+])
 
   // Instancia concreta que usa Extent como molde
   const extent = new Extent({
@@ -349,6 +612,18 @@ export async function irAlMunicipio(bbox) {
   });
 
   await view.goTo(extent.expand(1.2), { animate: true, duration: 1200 }); //.goTo(m) de _mapEl o _sceneEl, .expand(m) de extent
+
+  
+  // Guardar viewpoint del municipio para que el botón Home pueda navegar de vuelta.
+  // El override del click está en initMap() — aquí solo se actualiza el valor.
+  // Se construye desde el Extent (no desde view.viewpoint.clone()) para garantizar
+  // targetGeometry de tipo "extent", que el SDK interpreta de forma determinista.
+  _municipioViewpoint = new Viewpoint({ targetGeometry: extent.expand(1.2) })
+
+  console.info("[mapManager] Punto de retorno 'Home' actualizado para el municipio");
+
+
+  
 }
 
 // ─── BASEMAP ──────────────────────────────────────────────────────────────
@@ -356,11 +631,11 @@ export async function irAlMunicipio(bbox) {
 /**
  * Cambia el basemap del mapa automáticamente en 2D y 3D
  * 
- * Ejecutada por basemapSelector.js al escuchar el evento de selección
  * 
  * @param {string} basemapId - Ej: "osm", "arcgis/satellite", "arcgis/topographic"
  */
 
+// Ejecutada por basemapSelector.js al escuchar el evento de selección → mapManager.setBasemap(basemapId)
 export function setBasemap(basemapId) {
   if (!_map) return; // verifica que el objeto _map este inicializado
   _map.basemap = basemapId; // (p) de _map. Aquí se asigna el id del basemap seleccionado a la instancia _map de esri
@@ -380,5 +655,3 @@ export function setBasemap(basemapId) {
 // differenceOperator https://developers.arcgis.com/javascript/latest/references/core/geometry/operators/differenceOperator/
 // Extent https://developers.arcgis.com/javascript/latest/references/core/geometry/Extent/
 // goTo https://developers.arcgis.com/javascript/latest/references/core/views/types/#GoToOptionsBase-duration
-
-

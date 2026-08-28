@@ -9,6 +9,13 @@ Thumbs.db
 .env
 *.env.local
 
+# Configuración de instancia — varía por cliente y entorno
+config/deployment.js
+config/deployment_final.js
+data/SHP_ETRS89
+data/pruebas_catalogo
+
+
 # Carpetas de build/distribución
 dist/
 build/
@@ -24,4 +31,7 @@ context/
 docs/
 prompts/
 research/
+data/
 
+# Ignorar carpeta de instrucciones de GitHub
+.github/instructions/

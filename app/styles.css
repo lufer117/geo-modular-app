@@ -30,46 +30,59 @@ calcite-shell {
   display: block;
   height: 100vh;
   width: 100vw;
+  --app-nav-height: 65px; /* altura real de calcite-navigation */
 }
 
 /* ── Contenedor del mapa ─────────────────────────────────────────────────── */
-
 #map-container {
-  position: relative;
-  width: 100%;
-  height: 100%;
+  position: fixed;
+  top: var(--app-nav-height);   /* ← altura exacta de calcite-navigation */
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: auto;
+  height: auto;
+  overflow: hidden;
+  z-index: 0;
 }
 
-/* Ambas vistas superpuestas e invisibles— ocupan el mismo espacio */
+/* Ambas vistas superpuestas — ocupan el mismo espacio */
 arcgis-map,
 arcgis-scene {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
-
-  /* Arrancan invisibles. Solo .vista-activa es visible.
-     opacity+visibility en lugar de display:none para no
-     interrumpir el ciclo de renderizado de los Web Components. */
-  opacity: 0;
-  visibility: hidden;
-
-  transition:
-    opacity 400ms ease,
-    visibility 400ms ease;
+  /* Asegurar que los slots del SDK no queden bajo otros elementos */
+  isolation: isolate;  /* ← crea contexto de apilamiento propio */
 }
 
-/* Vista activa: visible y encima */
+/* El atributo hidden nativo detiene el rendering del SDK.
+   Necesita display:none explícito porque algunos navegadores
+   no aplican hidden a custom elements sin esta regla. */
+arcgis-map[hidden],
+arcgis-scene[hidden] {
+  display: none !important;
+}
+
+/* Compatibilidad con las clases auxiliares de vista activa/inactiva */
 .vista-activa {
-  opacity: 1;
   visibility: visible;
+  opacity: 1;
+  pointer-events: auto;
   z-index: 1;
 }
-
+.vista-inactiva {
+  visibility: hidden;   /* ← detiene el render del shadow DOM */
+  opacity: 0;
+  pointer-events: none;
+  z-index: 0;
+}
 /* .hidden se mantiene para otros elementos de la app (banners, etc.) */
 .hidden {
   display: none !important;
 }
+
 /* ── Cabecera: selector de municipio ────────────────────────────────────── */
 
 #municipio-selector-container calcite-label {
@@ -81,18 +94,64 @@ arcgis-scene {
   font-size: var(--calcite-font-size--1, 0.875rem);
 }
 
-#municipio-selector-container calcite-select {
+#municipio-selector-container calcite-combobox {
   min-width: 280px;
 }
 
-/* ── Cabecera: toolbar end ───────────────────────────────────────────────── */
+/* ── Cabecera: acciones a la derecha ────────────────────────────────────── */
 
-.toolbar-end {
+#lang-selector-container,
+#logo-empresa-container {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding-right: 0.75rem;
 }
+
+#lang-selector-container {
+  margin-inline-end: 0.75rem;
+}
+
+/* ── Cabecera: logos ───────────────────────────────────────────────── */
+/* ── Logo de empresa (Bilbomática) ───────────────────────────────────── */
+.logo-empresa {
+  display: flex;
+  align-items: center;
+  padding: 0 var(--calcite-spacing-md, 12px);
+  border-left: 1px solid var(--calcite-color-border-3);
+  margin-inline-start: 0.25rem;
+}
+
+.logo-empresa-img {
+  height: 28px;      /* altura estándar del header de Calcite Navigation */
+  width: auto;
+  object-fit: contain;
+  opacity: 0.9;
+}
+
+/* ── ActionBar ───────────────────────────────────────────── */
+
+calcite-shell-panel {
+  --calcite-shell-panel-background-color: transparent;
+  --calcite-shell-panel-shadow: none;
+  height: fit-content !important;
+  align-self: flex-start;  /* ← evita que el flex del shell lo estire */
+}
+
+
+calcite-shell-panel[collapsed] {
+  --calcite-shell-panel-width: 0px;
+}
+
+#main-action-bar {
+  --calcite-action-bar-background: var(--calcite-color-foreground-1);
+  position: relative;
+  z-index: 1;
+}
+
+calcite-shell-panel::part(container) {
+  background: transparent;
+  box-shadow: none;
+}
+
 
 /* ── Panel lateral: secciones ───────────────────────────────────────────── */
 
@@ -107,6 +166,39 @@ calcite-block {
 #basemap-selector-container calcite-select {
   width: 100%;
 }
+
+
+
+/* ── Scroll del panel de capas ───────────────────────────────────────────────
+   Por qué: overflow-y:auto depende de que el navegador detecte que el
+   contenido supera la altura disponible — con Shadow DOM de Calcite ese
+   cálculo a veces falla. overflow-y:scroll fuerza la scrollbar siempre
+   visible, eliminando la condición de detección.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+
+#panel-capas,
+#panel-basemap  {
+  height: fit-content;
+  overflow: hidden;
+}
+
+
+#capas-block {
+  overflow-y: scroll;   /* scroll fijo, no condicional */
+  max-height: 70vh;     /* techo explícito por si el cálculo de altura falla */
+}
+
+
+
+#basemap-panel-container {
+  padding: 0.75rem;
+}
+
+#basemap-panel-container calcite-select {
+  width: 100%;
+}
+
 
 /* ── Árbol de capas ──────────────────────────────────────────────────────── */
 
@@ -123,43 +215,216 @@ calcite-block {
   text-align: center;
 }
 
-/* Grupos temáticos (nivel 1 y 2 del árbol, sin checkbox) */
-.layer-group-label {
-  font-weight: var(--calcite-font-weight-medium, 500);
-  color: var(--calcite-color-text-1, #2b2b2b);
-  font-size: var(--calcite-font-size-0, 0.9375rem);
+
+/* ── Leyenda flotante ────────────────────────────────────────────────────── */
+
+/* leyenda flotante — posición inicial izquierda del action bar
+   El action bar colapsado ocupa ~48px. left:58px deja 10px de margen.
+   Sin bottom/right fijos porque el drag los sustituye por top/left en JS */
+.legend-float {
+  position: absolute;
+  /* ELIMINAR top: auto y bottom: auto y left: 58px */
+  /* La posición inicial la calcula _posicionarJuntoAlTrigger() */
+  width: 200px;
+  max-height: 320px;
+  background: var(--calcite-color-foreground-1);
+  border: 1px solid var(--calcite-color-border-3);
+  border-radius: var(--calcite-border-radius);
+  overflow: hidden;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  user-select: none;
+  transition: opacity 0.15s, visibility 0.15s;
+}
+/* Ocultar con visibility en lugar de display:none —
+   evita que arcgis-legend se desmonte y re-renderice (causa del parpadeo) */
+.legend-float.hidden {
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
 }
 
-/* Wrapper de cada capa hoja (nivel 3: checkbox + label + badges) */
-.layer-item-wrapper {
+.legend-float-header {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  flex-wrap: wrap;
-  padding: 0.1rem 0;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--calcite-color-border-3);
+  flex-shrink: 0;
 }
 
-/* Etiqueta de la capa */
-.layer-label {
-  cursor: pointer;
-  font-size: var(--calcite-font-size--1, 0.875rem);
-  color: var(--calcite-color-text-2, #404040);
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.legend-drag-handle {
+  cursor: grab;
+  flex: 1;             /* ocupa todo el ancho menos el botón de cierre */
+  padding: 4px 0;      /* área de agarre más generosa */
 }
 
-/* ── Panel de leyenda ────────────────────────────────────────────────────── */
+.legend-float-header:active {
+  cursor: grabbing;
+}
 
-#legend-container {
+
+.legend-float-title {
+  font-size: var(--calcite-font-size--1);
+  font-weight: var(--calcite-font-weight-medium);
+  color: var(--calcite-color-text-1);
+}
+
+/* arcgis-legend necesita overflow-y para listas largas */
+.legend-float #legend-container {
   overflow-y: auto;
-  max-height: calc(100vh - 140px);
+  flex: 1;
 }
 
-#legend-container arcgis-legend {
-  padding: 0.5rem;
+/* trigger sube para no tapar coordinates-tool (~32px alto)*/
+
+.legend-map-trigger {
+  position: absolute;
+  z-index: 5;
+  background: var(--calcite-color-foreground-1);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s ease;
+}
+
+.legend-map-trigger.legend-trigger--posicionado {
+  opacity: 1;
+  visibility: visible;
+}
+
+
+.legend-map-trigger::part(button) {
+  outline: none;
+}
+
+.legend-map-trigger:focus-visible::part(button) {
+  outline: 2px solid var(--calcite-color-brand);
+  outline-offset: 2px;
+}
+
+
+/* ── Coordenadas ───────────────────────────────────────────────── */
+arcgis-coordinate-conversion {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  opacity: 0.70;
+  max-width: 280px;
+  width: 280px;
+
+  /* border-radius: 10px; */
+  /* box-shadow: 0 2px 8px rgba(255, 255, 255, 0.3); */
+  outline: none;
+}
+
+
+/* ─── Trigger de herramientas: bottom-right fijo ───────────────────────────
+   A diferencia de legend-map-trigger (posición dinámica bajo el toggle
+   2D/3D), este trigger vive en su propia esquina — zona independiente,
+   sin cálculo en runtime. Mismo criterio de "no competir por el mismo
+   espacio visual" que ya aplicamos separando leyenda de action-bar (P35).
+*/
+.tools-expand {
+  position: fixed;
+  bottom: 30px;
+  right: 16px;
+  z-index: 3;
+}
+#tools-action-bar {
+  width: max-content;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   PANEL FLOTANTE DE HERRAMIENTAS (medición + sketch)
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* Regla general: el wrapper mide su CONTENIDO, nunca al revés.
+   min/max son límites de seguridad, no medidas objetivo — evitan que un
+   widget minúsculo quede ridículamente estrecho o uno grande se salga
+   de pantalla, pero el tamaño real lo decide siempre lo que hay dentro.
+   Esto es lo que permite que el catálogo de herramientas cambie por
+   cliente (deployment.js) sin desajustar el layout: cada widget nuevo
+   que se añada o quite no requiere tocar este CSS. */
+.tool-widget-float {
+  position: fixed;
+  width: fit-content;
+  height: fit-content;
+
+  min-width: 220px;
+  max-width: min(90vw, 420px);
+  max-height: calc(100vh - var(--app-nav-height, 65px) - 32px);
+
+  display: flex;
+  flex-direction: column;
+
+  background: #ffffff;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+
+  z-index: 20;
+}
+
+.tool-widget-float[hidden] {
+  display: none !important;
+}
+
+.tool-widget-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: var(--calcite-color-foreground-2, #f4f4f4);
+  border-bottom: 1px solid var(--calcite-color-border-3, #e0e0e0);
+  cursor: default;
+  flex-shrink: 0;
+}
+
+.tool-widget-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: grab;
+  user-select: none;
+}
+
+.tool-widget-title:active {
+  cursor: grabbing;
+}
+
+.tool-widget-body {
+  padding: 12px;
+  overflow-x: visible;
+  overflow-y: auto;
+}
+
+/* ── Caso especial: arcgis-sketch en modo docked ─────────────────────────
+   El ancho/alto exacto NO se fija aquí: lo calcula toolPanel.js
+   (_dimensionarPanelSketch) a partir de cuántos botones tiene el toolbar
+   según sketchOpciones en deployment.js — así el overflow "..." que
+   Sketch dispara automáticamente cuando falta espacio (comportamiento
+   documentado del componente, no un bug) nunca se activa por un valor
+   adivinado en CSS.
+
+   Este bloque solo redefine los límites de seguridad heredados de la
+   regla general (más generosos, porque un toolbar con muchos
+   availableCreateTools puede superar los 420px por defecto) y quita el
+   padding genérico del body, que el propio toolbar de Sketch ya resuelve
+   con su espaciado interno — el padding genérico lo comprimía.
+
+   Selector por [data-widget-type="sketch"], no por id de herramienta:
+   el id (`h.id`) es una etiqueta de catálogo editorial y puede cambiar
+   entre clientes; el comportamiento depende del componente real, no del
+   nombre que le puso el catálogo. */
+.tool-widget-float[data-widget-type="sketch"] {
+  min-width: 220px;
+  max-width: min(90vw, 640px);
+}
+
+.tool-widget-float[data-widget-type="sketch"] .tool-widget-body {
+  padding: 0;
 }
 
 /* ── Banner de error fatal ───────────────────────────────────────────────── */
@@ -180,8 +445,10 @@ calcite-block {
   font-size: var(--calcite-font-size--1, 0.875rem);
 }
 
+
+
 /* ══════════════════════════════════════════════════════════════════
-   ÁRBOL DE CAPAS 
+   ÁRBOL DE CAPAS
    ══════════════════════════════════════════════════════════════════ */
 
 /* Nivel 1: bloque temático — negrita y color de acento */
