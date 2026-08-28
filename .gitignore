@@ -1,5 +1,6 @@
 # Dependencias
 node_modules/
+venv/
 
 # Sistema operativo
 .DS_Store
@@ -8,6 +9,7 @@ Thumbs.db
 # Variables de entorno y claves API
 .env
 *.env.local
+
 
 # Configuración de instancia — varía por cliente y entorno
 config/deployment.js
