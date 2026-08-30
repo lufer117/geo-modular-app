@@ -206,7 +206,7 @@ function _buildParams(config) { //config es json
 
   switch (config.tipo) { // la función adapta el JSON del catalogo a los requisitos del SDK según el servicio
 
-    case "WMS":
+   case "WMS":
   return {
     ...base,
     url: config.url,
@@ -217,6 +217,31 @@ function _buildParams(config) { //config es json
     // "text/plain" es el fallback seguro para servidores que no soportan HTML.
     // Se declara aquí (capa padre) porque afecta a todas las sublayers por igual.
     featureInfoFormat: config.featureInfoFormat ?? "text/html",
+
+    // Sustituye el mecanismo por defecto del SDK para GetFeatureInfo, que
+    // carga la respuesta text/html dentro de un <iframe> interno del popup
+    // (confirmado vía DevTools: sec-fetch-dest:"iframe", sec-fetch-mode:
+    // "navigate"; y en consola: "document's frame is sandboxed" / "violates
+    // frame-ancestors 'self'" / "X-Frame-Options to 'sameorigin'"). Cualquier
+    // servidor con X-Frame-Options/CSP restrictivo en esa navegación bloquea
+    // el popup — de inmediato en SIGPAC (lo declara la propia respuesta) o
+    // tras un clic en un enlace interno en Catastro.
+    //
+    // Se aplica SIEMPRE a nivel de WMSLayer, tenga o no sublayers curadas:
+    // fetchFeatureInfoFunction es una propiedad de la capa completa, no de
+    // cada WMSSublayer individual — el SDK ya resuelve internamente qué
+    // sublayers son "queryable" en el punto de clic y las incluye en
+    // query.layers/query.query_layers, así que no hace falta (ni es
+    // posible) declararla por sublayer. Corregido 30.08.26 tras confirmar
+    // en Logroño que Catastro/SIGPAC con sublayers seguían disparando el
+    // iframe porque la condición previa excluía este caso — ver
+    // 3DECISIONS.md.
+    //
+    // fetchFeatureInfoFunction (WMSLayer, SDK v5, desde 4.25) es el punto
+    // de extensión oficial documentado por Esri para sustituir ese
+    // comportamiento — usa esriRequest (XHR/fetch), no navegación
+    // embebida, así que X-Frame-Options no aplica.
+    fetchFeatureInfoFunction: (query) => _fetchFeatureInfoWmsAtomico(query, config),
 
     // sublayers: mapea las sublayers curadas del catálogo al formato que WMSLayer espera.
     //
@@ -261,8 +286,10 @@ function _buildParams(config) { //config es json
               // popupTemplate vacío declarado en construcción (no post-load).
               // Sublayer acepta popupTemplate como propiedad del constructor, igual que
               // name/title/visible. El SDK rellenará el contenido con la respuesta
-              // GetFeatureInfo al hacer clic. content:[] es el placeholder que indica
-              // "sin template propio → usar la respuesta del servidor directamente".
+              // GetFeatureInfo al hacer clic — ahora vía fetchFeatureInfoFunction (arriba),
+              // no vía el iframe por defecto. content:[] sigue siendo el placeholder que
+              // indica "sin template propio → usar la respuesta procesada por
+              // fetchFeatureInfoFunction directamente".
               popupTemplate: {
                 title:   sl.title,
                 content: []
@@ -458,24 +485,77 @@ function _aplicarPopupGenerico(layer, config) {
       content: [{ type: "fields"}]
     };
   } else if (config.tipo === "WMS") {
-
-    // El SDK v5 busca popupTemplate en la sublayer clickeada, no en la capa madre.
-    // Necesitamos recorrer las sublayers que el SDK ya cargó (que pueden ser más
-    // que las declaradas en el catálogo — el servidor puede tener capas adicionales).
-    if (!config.sublayers?.length) { 
-      // WMS atómico — popup a nivel de capa
-      layer.popupTemplate = {
-        title: layer.title || "Información",
-        content: "{*}"
-        };
-      } 
+    // WMS atómico (sin sublayers): el popup ya NO se define aquí con
+    // content:"{*}" — ese mecanismo usaba un <iframe> interno del SDK
+    // que quedaba bloqueado por X-Frame-Options en SIGPAC/Catastro (ver
+    // 3DECISIONS.md, 30.08.26). Ahora el popup se define por-Graphic
+    // dentro de fetchFeatureInfoFunction (_buildParams, case "WMS"),
+    // que usa esriRequest en vez de navegación embebida.
+    //
+    // WMS con sublayers ya recibió su popupTemplate por sublayer dentro
+    // de _buildParams — sin cambios en ese caso.
+  }
   // GEOJSON, WMTS, ArcGIS_REST: sin popup automático todavía —
   // fuera del alcance acordado en esta iteración.
-  }
 }
 
+// ─── GetFeatureInfo manual vía fetchFeatureInfoFunction ─────────────────
+/**
+ * Sustituye el mecanismo interno del SDK para popups WMS con
+ * featureInfoFormat "text/html" (que carga la respuesta en un <iframe>
+ * — ver comentario en _buildParams). En su lugar, usa esriRequest para
+ * pedir el HTML como datos (XHR), evitando así cualquier bloqueo por
+ * X-Frame-Options/CSP del servidor.
+ *
+ * Verificado en consola (30.08.26): $arcgis.import("esri/request")
+ * devuelve directamente la función invocable, no un módulo con .default.
+ *
+ * @param {Object} query - Objeto de consulta ya construido por el SDK
+ *   (bbox, crs, width, height, i, j, layers, query_layers, etc.)
+ * @param {Object} config - Config del catálogo (title/id/url)
+ * @returns {Promise<Graphic[]>}
+ */
+async function _fetchFeatureInfoWmsAtomico(query, config) {
+  const [Graphic, esriRequest] = await Promise.all([
+    $arcgis.import("esri/Graphic"),
+    $arcgis.import("esri/request")
+  ]);
 
+  try {
+    // Se fuerza "text/html" siempre, sin importar config.featureInfoFormat:
+    // esta función está diseñada para renderizar HTML formateado (innerHTML +
+    // ajuste de enlaces). Si config.featureInfoFormat declara "application/json"
+    // (posible residuo de P26/4STATUS.md, un intento anterior de workaround
+    // para SIGPAC antes de diagnosticar el problema real del iframe), pedir
+    // JSON aquí solo produce texto crudo sin formato dentro del popup.
+    query.info_format = "text/html";
 
+    const response = await esriRequest(config.url, {
+      query,
+      responseType: "text"
+    });
+
+    return [new Graphic({
+      attributes: { html: response.data },
+      popupTemplate: {
+        title: config.title || "Información",
+        content: (feature) => {
+          const div = document.createElement("div");
+          div.innerHTML = feature.graphic.attributes.html;
+          div.querySelectorAll("a").forEach(a => {
+            a.setAttribute("target", "_blank");
+            a.setAttribute("rel", "noopener noreferrer");
+          });
+          return div;
+        }
+      }
+    })];
+
+  } catch (err) {
+    console.error(`[layerFactory] Error en GetFeatureInfo "${config.id}":`, err);
+    return [];
+  }
+}
 
 
 // ─── REFERENCES ──────────────────────────────────
