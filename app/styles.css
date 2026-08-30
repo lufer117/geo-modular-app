@@ -223,14 +223,16 @@ calcite-block {
    Sin bottom/right fijos porque el drag los sustituye por top/left en JS */
 .legend-float {
   position: absolute;
-  /* ELIMINAR top: auto y bottom: auto y left: 58px */
-  /* La posición inicial la calcula _posicionarJuntoAlTrigger() */
   width: 200px;
-  max-height: 320px;
+  min-width: 200px;
+  min-height: 150px;
+  max-width: min(90vw, 480px);
+  max-height: 80vh;          /* antes 320px — lo subo para que el resize tenga margen real */
   background: var(--calcite-color-foreground-1);
   border: 1px solid var(--calcite-color-border-3);
   border-radius: var(--calcite-border-radius);
   overflow: hidden;
+  resize: both;               /* única línea nueva de comportamiento */
   z-index: 10;
   display: flex;
   flex-direction: column;
@@ -273,8 +275,10 @@ calcite-block {
 
 /* arcgis-legend necesita overflow-y para listas largas */
 .legend-float #legend-container {
-  overflow-y: auto;
+  overflow-y: scroll;
+  overflow-x: hidden;
   flex: 1;
+  
 }
 
 /* trigger sube para no tapar coordinates-tool (~32px alto)*/
