@@ -654,11 +654,41 @@ function _crearItemGrupo(label, negrita) {
 
 /**
  * Crea el nodo Calcite para una capa hoja estándar (con data-layer-id).
+ *
+ * ── SERVICIOS CAÍDOS (config.servicio_disponible === false) ──────────────
+ * Marcado por enriquecer-catalogo.py cuando el GetCapabilities del servicio
+ * responde con un ServiceExceptionReport en vez del capabilities esperado
+ * (ver hallazgo real 30/08/2026, Red Natura 2000/ENP — error interno del
+ * backend del proveedor, no un problema de configuración del cliente).
+ * La capa se conserva en el catálogo (no se excluye) para que el usuario
+ * vea que el dato existe pero no está disponible ahora mismo, en vez de
+ * que la capa simplemente desaparezca del árbol sin explicación.
+ * Mismo patrón visual que _crearHijoWfs usa para FeatureTypes sin
+ * cobertura en el municipio: nodo disabled + tooltip + chip informativo.
  */
 function _crearItemCapa(config, layer, globalIndex) {
   const item = document.createElement("calcite-tree-item");
   item.dataset.layerId    = config.id;
   item.dataset.layerIndex = globalIndex;
+
+  if (config.servicio_disponible === false) {
+    item.setAttribute("disabled", "");
+    item.title = `${config.title} — servicio no disponible actualmente`;
+
+    const span = document.createElement("span");
+    span.className   = "layer-label layer-label--error";
+    span.textContent = config.title;
+    item.appendChild(span);
+
+    const chip = document.createElement("calcite-chip");
+    chip.setAttribute("scale", "s");
+    chip.setAttribute("kind", "danger");
+    chip.setAttribute("icon", "exclamation-mark-triangle");
+    chip.textContent = "No disponible";
+    item.appendChild(chip);
+
+    return item;
+  }
 
   if (layer.visible) {
     item.setAttribute("selected", "");
@@ -677,22 +707,14 @@ function _crearItemCapa(config, layer, globalIndex) {
 /**
  * Crea el nodo Calcite para un servicio WMS con sublayers curadas en catálogo.
  *
- * ── DIFERENCIA CLAVE CON WFS DISCOVERY ───────────────────────────────────
- * No hay fetch ni GetCapabilities en este punto: layerFactory ya instanció
- * la WMSLayer con su array layer.sublayers poblado (ver _buildParams, caso
- * "WMS"). Cada elemento de layer.sublayers ya trae name/title/visible
- * correctos porque layerFactory los construyó desde config.sublayers del
- * catálogo, forzando visible=false salvo que el catálogo diga lo contrario.
- * Por eso esta función es síncrona: solo recorre y pinta, no espera nada.
- *
- * El nodo padre (la entrada WMS en sí) se renderiza igual que _crearItemCapa
- * —activable como conjunto— porque el usuario puede querer activar/desactivar
- * todas las sublayers a la vez sin entrar al detalle. Sus hijos son las
- * sublayers individuales.
- *
- * @param {Object} config      - Config del catálogo (tipo WMS, con sublayers)
- * @param {WMSLayer} layer     - Instancia ya cargada con sublayers
- * @param {number} globalIndex - Índice en _configsRef (para trazabilidad)
+ * ── SUBLAYERS AUXILIARES (config.sublayers[].auxiliar === true) ──────────
+ * enriquecer-catalogo.py marca como "auxiliar" las sublayers que son solo
+ * elementos de composición cartográfica (etiquetas de texto TXT*, líneas
+ * de apoyo EJES/ELEMLIN/LIMITES/TEXTOS) en vez de capas temáticas reales
+ * (ver hallazgo real 30/08/2026, Catastro). Se filtran aquí, cruzando cada
+ * sublayer Esri ya cargada (layer.sublayers) con su entrada correspondiente
+ * en config.sublayers por nombre — el SDK no distingue esto, así que el
+ * filtro debe aplicarse en la UI, no en la carga de datos.
  */
 function _crearItemWmsConSublayers(config, layer, globalIndex) {
   const item = document.createElement("calcite-tree-item");
@@ -718,16 +740,20 @@ function _crearItemWmsConSublayers(config, layer, globalIndex) {
   const childrenTree = document.createElement("calcite-tree");
   childrenTree.slot  = "children";
 
-  // Recorre layer.sublayers (objeto Esri ya cargado) en vez de config.sublayers
-  // (JSON crudo del catálogo) para asegurar que pintamos exactamente lo que
-  // el SDK terminó construyendo — incluye name/title/visible ya resueltos.
+  // Mapa de consulta rápida: nombre de sublayer → info curada del catálogo
+  const infoAuxiliarPorNombre = new Map(
+    (config.sublayers ?? []).map(s => [s.id, s.auxiliar === true])
+  );
+
   const sublayersEsri = layer.sublayers?.toArray?.() ?? [];
 
-  sublayersEsri.forEach(sublayerEsri => {
-    childrenTree.appendChild(
-      _crearItemWmsSublayer(sublayerEsri, layer, config.id)
-    );
-  });
+  sublayersEsri
+    .filter(sublayerEsri => !infoAuxiliarPorNombre.get(sublayerEsri.name))
+    .forEach(sublayerEsri => {
+      childrenTree.appendChild(
+        _crearItemWmsSublayer(sublayerEsri, layer, config.id)
+      );
+    });
 
   item.appendChild(childrenTree);
   return item;

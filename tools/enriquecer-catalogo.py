@@ -3,6 +3,42 @@ enriquecer-catalogo.py
 
 Script de resolución final: catalogo-capas-ne.json → catalogo-capas.json
 
+# ═══════════════════════════════════════════════════════
+# CÓMO CORRER ESTE SCRIPT (leer antes de ejecutar)
+# ═══════════════════════════════════════════════════════
+#
+# PASO 1 — activar el entorno virtual (si no está activo ya):
+#     .\.venv\Scripts\Activate.ps1
+#     (el prompt debe mostrar (.venv) al inicio)
+#
+# PASO 2 — exportar el bundle de certificados SSL, EN LA MISMA VENTANA
+#          de PowerShell donde vas a correr el script. Esto es obligatorio
+#          mientras varios servicios (wms.mapama.gob.es y dominios
+#          asociados) usen la CA intermedia FNMT que falta en certifi —
+#          ver tools/scratch/fix_certificado_fnmt.py para el detalle.
+#          Sin este paso, ~24 capas fallan con SSLCertVerificationError
+#          aunque el servicio esté perfectamente sano.
+#
+#     $env:REQUESTS_CA_BUNDLE = "C:\Dev\geo-app\tools\scratch\cacert_fnmt.pem"
+#
+#     (ajusta la ruta si tu repo está en otra carpeta. Esta variable solo
+#     dura mientras esa ventana de PowerShell esté abierta — si la cierras
+#     y abres una nueva, hay que exportarla de nuevo antes de correr el
+#     script otra vez. Si el archivo cacert_fnmt.pem todavía no existe,
+#     generarlo primero con: python tools\scratch\fix_certificado_fnmt.py)
+#
+# PASO 3 — correr el script apuntando al -ne.json real:
+#     python tools\enriquecer-catalogo.py data\catalogo\catalogo-capas-ne.json
+#
+#     Tarda varios minutos (recorre ~94 candidatas contra sus servicios
+#     reales, con reintentos y backoff). Es esperado, no interrumpir.
+#
+# PASO 4 — revisar antes de dar el catálogo por bueno:
+#     - data\catalogo\catalogo-capas.json          → catálogo final generado
+#     - data\catalogo\informe-enriquecimiento.txt  → detalle completo por capa
+#
+# ═══════════════════════════════════════════════════════
+
 Toma las capas marcadas incluir_en_catalogo_final=true en el catálogo de
 referencia, consulta el GetCapabilities real de cada servicio, y deriva
 por reglas de preferencia (nunca inventando) los campos que el propio
@@ -16,6 +52,24 @@ nunca se omite ni se completa en silencio.
 USO:
     python enriquecer-catalogo.py                    # usa catalogo-capas-ne.json
     python enriquecer-catalogo.py mi-catalogo-ne.json # archivo personalizado
+    python enriquecer-catalogo.py --solo-fallidas     # ver más abajo
+
+    --solo-fallidas:
+        Reprocesa SOLO las candidatas que en la última ejecución (leída de
+        catalogo-capas.json, si existe) NO quedaron incluidas — es decir,
+        cualquier capa que en el informe anterior salió con estado
+        excluida_* o que es nueva desde entonces. Las capas que ya estaban
+        ok/ok_con_pendientes se reutilizan tal cual, sin volver a golpear
+        el servicio. Pensado únicamente para iterar rápido durante
+        depuración (ej. ajustando un capabilities_url mal transcrito o
+        corrigiendo certificados SSL) — NO reemplaza una corrida completa
+        antes de dar el catálogo por definitivo: el catálogo final debe
+        reflejar el estado real y actual de TODOS los servicios, no un
+        acumulado de "lo que alguna vez funcionó" (una capa que hoy pasa
+        podría fallar mañana sin que nadie se entere si nunca se
+        re-verifica). Por eso el comportamiento por defecto, sin la
+        bandera, sigue siendo la corrida completa sobre las 94+
+        candidatas.
 
 SALIDA:
     catalogo-capas.json          → catálogo activo, listo para LocalJsonAdapter
@@ -31,6 +85,8 @@ ESTADOS POSIBLES por capa (campo _resolucion.estado):
     excluida_xml_invalido   → respuesta no parseable — no entra al catálogo final
     excluida_discrepancia   → disponibilidad_municipal del Excel no coincide con la
                                heurística del script — no entra hasta resolución manual
+    reutilizada_sin_red     → (solo con --solo-fallidas) ya estaba ok en la corrida
+                               anterior, no se volvió a consultar el servicio
 
 # ═══════════════════════════════════════════════════════
 # ETAPA 2 — enriquecer-catalogo.py en la raiz del proyecto  
@@ -47,6 +103,10 @@ ESTADOS POSIBLES por capa (campo _resolucion.estado):
 #    Genera catalogo-capas.json e informe-enriquecimiento.txt en esa misma carpeta.
 python tools\enriquecer-catalogo.py data\catalogo\catalogo-capas-ne.json
 
+# 2b. Durante depuración iterativa (ajustando capabilities_url, certificados,
+#     etc.), para no reprocesar TODAS las candidatas cada vez:
+python tools\enriquecer-catalogo.py data\catalogo\catalogo-capas-ne.json --solo-fallidas
+
 # 3. Revisar el resultado antes de promoverlo a producción:
 #    - data\catalogo\catalogo-capas.json          → catálogo final generado
 #    - data\catalogo\informe-enriquecimiento.txt  → detalle por capa:
@@ -54,8 +114,46 @@ python tools\enriquecer-catalogo.py data\catalogo\catalogo-capas-ne.json
 #
 #    Cualquier capa con estado distinto de "ok" requiere revisión manual
 #    antes de dar el catálogo por válido (ver informe para el motivo exacto).
+#
+#    IMPORTANTE: antes de dar el catálogo por DEFINITIVO (no solo durante
+#    depuración), correr SIEMPRE sin --solo-fallidas al menos una vez, para
+#    confirmar que las capas que ya pasaban siguen pasando hoy.
+
+# ═══════════════════════════════════════════════════════
+# CORRECCIÓN 30/08/2026 — heuristica_disponibilidad_base()
+# ═══════════════════════════════════════════════════════
+# Hallazgo real: la función original solo contemplaba WFS como tipo con
+# auditoría diferida a red ("return None"); cualquier otro tipo caía al
+# default {"BBOX"}. Esto es correcto para WMS/WMTS/XYZ (protocolos que
+# físicamente solo permiten filtrado por bbox), pero es un vacío de
+# cobertura para ATOM y API REST: ambos SÍ pueden filtrar por código INE
+# (confirmado en catálogo: Edificaciones/Parcelas Catastrales vía ATOM
+# declaran FILTRABLE/ATOM; AEMET/INE vía API REST declaran API). Sin esta
+# corrección, esas capas P0-MVP se marcaban excluida_discrepancia por un
+# hueco de diseño, no porque el servicio real fallara. Ver también el
+# tratamiento ya existente de CONDICIONAL, documentado con el mismo
+# patrón de vacío de cobertura en resolver_condicional().
+
+# ═══════════════════════════════════════════════════════
+# HALLAZGO 30/08/2026 — SSL CERTIFICATE_VERIFY_FAILED contra mapama.gob.es
+# ═══════════════════════════════════════════════════════
+# Confirmado con diagnóstico real: wms.mapama.gob.es (y dominios
+# asociados .miteco.gob.es/.mapama.es) usan un certificado emitido por
+# FNMT-RCM / AC Componentes Informáticos, cuya CA intermedia NO está
+# incluida en el bundle público de Mozilla que usa certifi/requests —
+# aunque Windows, navegadores y QGIS sí la resuelven automáticamente vía
+# AIA (Authority Information Access). Esto NO es un fallo del servicio:
+# el mismo GetCapabilities que falla en requests.get() carga sin problema
+# en QGIS y en el navegador. Solución aplicada (fuera de este script, ver
+# tools/scratch/fix_certificado_fnmt.py): generar un bundle de CA
+# combinado (certifi + la CA FNMT faltante) y apuntar requests a él via
+# la variable de entorno REQUESTS_CA_BUNDLE antes de correr este script.
+# Este script no necesita ningún cambio de código para beneficiarse del
+# fix — requests respeta REQUESTS_CA_BUNDLE automáticamente si está
+# exportada en el entorno donde se ejecuta.
 """
 
+import argparse
 import sys
 import json
 import datetime
@@ -186,6 +284,28 @@ HEADERS_PETICION = {
 # backoff más abajo, y como último recurso, curación manual documentada.
 
 
+def _es_service_exception(root: ET.Element) -> str | None:
+    """
+    Detecta si el XML descargado es un ServiceExceptionReport (WMS 1.1.1/1.3.0)
+    en vez del GetCapabilities esperado. Hallazgo real (30/08/2026, Red Natura
+    2000 / ENP, wms.mapama.gob.es/sig/Biodiversidad/*): el servidor devuelve
+    HTTP 200 con un XML bien formado que es un reporte de error interno
+    (confirmado: NullReferenceException en ConstruirServiceArcGISBaseUrl(),
+    bug del backend .NET del proveedor, no de la petición del cliente).
+    Como el XML es válido, fetch_xml() no lo detectaba como fallo — pasaba
+    de largo y _localizar_capa_raiz() simplemente no encontraba Capability/
+    Layer, dejando un pendiente_curacion genérico que no explica la causa
+    real. Devuelve el mensaje de excepción si lo detecta, None si no aplica.
+    """
+    tag_local = root.tag.split("}")[-1]
+    if tag_local != "ServiceExceptionReport":
+        return None
+    for el in root.iter():
+        if el.tag.split("}")[-1] == "ServiceException":
+            return (el.text or "").strip()[:200]
+    return "ServiceExceptionReport sin detalle"
+
+
 def fetch_xml(url: str, reintentos: int = 2) -> tuple[ET.Element | None, str]:
     ultimo_error = "error_red: sin intentos"
     for intento in range(reintentos + 1):
@@ -193,9 +313,15 @@ def fetch_xml(url: str, reintentos: int = 2) -> tuple[ET.Element | None, str]:
             resp = requests.get(url, timeout=TIMEOUT_SEGUNDOS, headers=HEADERS_PETICION)
             resp.raise_for_status()
             try:
-                return ET.fromstring(resp.content), "ok"
+                root = ET.fromstring(resp.content)
             except ET.ParseError as e:
                 return None, f"xml_invalido: {str(e)[:80]}"
+
+            excepcion = _es_service_exception(root)
+            if excepcion is not None:
+                return None, f"servicio_caido: {excepcion}"
+
+            return root, "ok"
         except requests.exceptions.Timeout:
             ultimo_error = "error_red: timeout"
         except requests.exceptions.ConnectionError as e:
@@ -325,6 +451,58 @@ def _find_seguro(elemento: ET.Element, *tags: str) -> ET.Element | None:
     return None
 
 
+PATRONES_SUBLAYER_AUXILIAR = ("TXT", "ELEMLIN", "EJES", "LIMITES", "TEXTOS")
+# Hallazgo real (30/08/2026, catálogo Catastro): algunos WMS gubernamentales
+# (confirmado en ovc.catastro.meh.es/Cartografia/WMS/ServidorWMS.aspx)
+# publican, junto a las capas temáticas reales (PARCELA, CONSTRU, MASA),
+# sublayers puramente auxiliares de composición cartográfica: etiquetas de
+# texto de esas mismas capas (TXTPARCELA, TXTCONSTRU, TXTMASA, TXTSUBPARCE)
+# y elementos de apoyo gráfico (EJES, ELEMLIN, LIMITES, TEXTOS). El WMS no
+# distingue esto en su GetCapabilities — todas llegan como <Layer> hijos
+# al mismo nivel, sin ningún atributo que las marque como "auxiliares".
+# Se detectan por patrón de nombre (heurística, no garantía absoluta) y se
+# marcan con "auxiliar": true en vez de eliminarse del JSON — la capa NO
+# se descarta silenciosamente, solo se señaliza para que layerTree.js
+# decida en runtime si la oculta del árbol de selección o la trata como
+# hija no-togglable de su capa temática asociada. Conservar el dato
+# completo (en vez de excluirlo aquí) respeta el principio de este script:
+# nunca omitir información que el servicio sí declara.
+
+
+def _es_sublayer_auxiliar(sublayer_id: str) -> bool:
+    id_upper = sublayer_id.upper()
+    return any(patron in id_upper for patron in PATRONES_SUBLAYER_AUXILIAR)
+
+
+# Diccionario global de nombres amigables por id técnico de sublayer.
+# Hallazgo real (30/08/2026, Catastro): el WMS declara title == name para
+# sus sublayers (ej. "CONSTRU" en vez de "Construcciones") — es el código
+# técnico interno del servicio, no un nombre pensado para usuario final.
+# Como estos códigos son estándar nacional (mismo WMS, mismos nombres en
+# cualquier municipio de España que use Catastro), se declaran UNA VEZ
+# aquí y se aplican como override sobre el title crudo del servicio, en
+# vez de editar el JSON generado a mano — así el nombre amigable sobrevive
+# a cualquier corrida futura del script sin mantenimiento repetido.
+# Clave: id técnico tal cual lo declara el WMS (mayúsculas exactas).
+# Ampliar esta tabla según se vayan curando más WMS con códigos crípticos.
+NOMBRES_AMIGABLES_SUBLAYER = {
+    # Catastro (ovc.catastro.meh.es/Cartografia/WMS/ServidorWMS.aspx)
+    "CONSTRU":  "Construcciones",
+    "SUBPARCE": "Subparcelas",
+    "PARCELA":  "Parcelas",
+    "MASA":     "Manzanas",
+}
+
+
+def _title_amigable(sublayer_id: str, title_original: str) -> str:
+    """
+    Devuelve el nombre amigable curado si existe entrada en el diccionario
+    para este id técnico; si no, devuelve el title tal cual lo declaró el
+    servicio (nunca se inventa un nombre para códigos no catalogados).
+    """
+    return NOMBRES_AMIGABLES_SUBLAYER.get(sublayer_id.upper(), title_original)
+
+
 def extraer_sublayers(root: ET.Element, capa: dict) -> list:
     ns = NS["wms130"]
     capa_raiz = _localizar_capa_raiz(root)
@@ -343,6 +521,7 @@ def extraer_sublayers(root: ET.Element, capa: dict) -> list:
 
         name  = name_el.text.strip()
         title = (title_el.text or name).strip() if title_el is not None else name
+        title = _title_amigable(name, title)
 
         legend_url, motivo = extraer_legend_url(sub_el)
         if legend_url is None and soporta_glg:
@@ -353,6 +532,7 @@ def extraer_sublayers(root: ET.Element, capa: dict) -> list:
             "id":        name,
             "title":     title,
             "visible":   False,   # constante de la app, no derivado
+            "auxiliar":  _es_sublayer_auxiliar(name),
             "legendUrl": legend_url,
             "_legend_motivo": motivo if legend_url is None else None,
         })
@@ -450,19 +630,33 @@ def resolver_formatos(tipo: str, root: ET.Element) -> tuple[list, str | None]:
 # AUDITORÍA DE disponibilidad_municipal
 # ─────────────────────────────────────────────
 
-def heuristica_disponibilidad_base(tipo: str) -> set:
+def heuristica_disponibilidad_base(tipo: str) -> set | None:
     """
     Conjunto plausible SIN consultar el servicio — válido para tipos donde
     el protocolo por sí solo ya decide: WMS/WMTS/XYZ nunca pueden filtrar
     por atributo del lado del servidor, así que solo BBOX es posible.
     Para WFS no hay nada que decidir aquí — la señal real requiere
-    consultar el servicio (ver heuristica_disponibilidad_wfs). ATOM/API REST
-    no tienen tratamiento especial todavía: no hay ninguna capa de ese tipo
-    conectada ni probada, así que se tratan como el caso general (BBOX) en
-    vez de asumir una capacidad de filtrado que no se ha verificado.
+    consultar el servicio (ver heuristica_disponibilidad_wfs).
+
+    CORRECCIÓN 30/08/2026: ATOM y API REST tampoco tienen una heurística
+    barata fiable. A diferencia de WMS/WMTS/XYZ, SÍ pueden filtrar por
+    atributo del lado del servidor (confirmado en catálogo: Edificaciones
+    y Parcelas Catastrales vía ATOM declaran FILTRABLE/ATOM porque el
+    feed es filtrable por código INE; AEMET/INE vía API REST declaran API
+    porque el endpoint se consulta directamente por municipio). Antes de
+    esta corrección, cualquier valor no-BBOX para estos tipos se
+    auditaba como discrepancia y la capa se descartaba — no porque el
+    servicio real fallara, sino por un vacío de cobertura en esta
+    heurística (mismo patrón de vacío ya documentado para CONDICIONAL en
+    resolver_condicional()). No hay verificación de red barata posible
+    para ATOM/API (no exponen GetCapabilities estándar), así que se
+    acepta el valor declarado en el Excel sin auditar, en vez de forzarlo
+    a coincidir con {"BBOX"}.
     """
     if tipo == "WFS":
         return None  # señal: requiere consulta real, no hay respuesta barata
+    if tipo in ("ATOM", "API REST", "API"):
+        return None  # señal: no auditable sin GetCapabilities estándar, se acepta el valor del Excel
     return {"BBOX"}
 
 
@@ -500,7 +694,9 @@ def auditar_disponibilidad_base(capa: dict) -> tuple[bool | None, str, set | Non
     """
     Auditoría SIN red. Devuelve (coincide, valor_excel, conjunto_o_None).
     coincide=None significa "no evaluable todavía" (caso WFS: requiere
-    consultar el servicio primero, ver auditar_disponibilidad_wfs).
+    consultar el servicio primero, ver auditar_disponibilidad_wfs; caso
+    ATOM/API REST: no auditable, se acepta el valor del Excel sin más —
+    ver heuristica_disponibilidad_base).
 
     CONDICIONAL YA NO está exento (corrección: es una restricción de
     alcance geográfico, no un valor técnico de acceso — el switch de
@@ -513,7 +709,7 @@ def auditar_disponibilidad_base(capa: dict) -> tuple[bool | None, str, set | Non
     valor_excel = (capa.get("disponibilidad_municipal") or "").upper()
     conjunto = heuristica_disponibilidad_base(capa.get("tipo", "").upper())
     if conjunto is None:
-        return None, valor_excel, None  # WFS: pendiente de red
+        return None, valor_excel, None  # WFS o ATOM/API: pendiente de red o no auditable
 
     if valor_excel == "CONDICIONAL":
         return True, valor_excel, conjunto  # pasa siempre; se resuelve aparte
@@ -588,6 +784,8 @@ def resolver_capa(capa: dict) -> dict:
     # posible) y se excluye aquí sin gastar ninguna petición. Para WFS
     # coincide=None: no hay señal barata, se resuelve más abajo una vez
     # descargado el capabilities real (ver heuristica_disponibilidad_wfs).
+    # Para ATOM/API REST coincide=None también: no auditable, se acepta
+    # el valor del Excel sin más (ver heuristica_disponibilidad_base).
     coincide, valor_excel, conjunto = auditar_disponibilidad_base(capa)
     if coincide is False:
         resolucion["estado"] = "excluida_discrepancia"
@@ -629,6 +827,32 @@ def resolver_capa(capa: dict) -> dict:
 
     root, estado_fetch = fetch_xml(url)
     if root is None:
+        if estado_fetch.startswith("servicio_caido"):
+            # A diferencia de error_red/xml_invalido (que sí excluyen la
+            # capa del catálogo), un servicio_caido detectado vía
+            # ServiceExceptionReport SÍ se incluye en catalogo-capas.json,
+            # pero marcado con servicio_disponible=false. Motivo: el
+            # servicio existe y está correctamente configurado en el
+            # catálogo (URL válida, proveedor real, capa legítima) — el
+            # problema es una caída puntual del lado del servidor, no un
+            # error de configuración del cliente. Excluirla del catálogo
+            # borraría el ítem del árbol sin dejar rastro para el usuario
+            # final; incluirla deshabilitada permite que layerTree.js
+            # muestre un estado "no disponible" en vez de que la capa
+            # simplemente no exista.
+            resolucion["estado"] = "ok_servicio_caido"
+            resolucion["servicio_disponible"] = False
+            resolucion["motivo_caida"] = estado_fetch
+            capa["_resolucion"] = resolucion
+            # Promovido a nivel raíz (no solo dentro de _resolucion): el
+            # pipeline de carga de la app (configEngine.js/LocalJsonAdapter.js)
+            # puede no preservar objetos de metadatos anidados del catálogo
+            # al construir el config que llega a layerTree.js. Un campo plano
+            # es más robusto frente a ese recorte — confirmar de todas formas
+            # revisando ese pipeline antes de asumir que llega intacto.
+            capa["servicio_disponible"] = False
+            return capa
+
         resolucion["estado"] = ("excluida_xml_invalido" if "xml_invalido" in estado_fetch
                                  else "excluida_error_red")
         resolucion["motivo"] = estado_fetch
@@ -756,12 +980,62 @@ def calcular_diff(catalogo_nuevo: list, ruta_anterior: Path) -> dict:
 # EJECUCIÓN PRINCIPAL
 # ─────────────────────────────────────────────
 
+def parsear_argumentos():
+    """
+    Parseo de argumentos de línea de comandos. Se mantiene compatible con
+    el uso posicional original (python enriquecer-catalogo.py archivo.json)
+    y se añade --solo-fallidas como bandera opcional, sin cambiar el
+    comportamiento por defecto (corrida completa) si no se pasa.
+    """
+    parser = argparse.ArgumentParser(
+        description="Resuelve catalogo-capas-ne.json contra GetCapabilities real.",
+    )
+    parser.add_argument(
+        "archivo_entrada",
+        nargs="?",
+        default=ARCHIVO_ENTRADA,
+        help=f"Ruta al catalogo-capas-ne.json (default: {ARCHIVO_ENTRADA})",
+    )
+    parser.add_argument(
+        "--solo-fallidas",
+        action="store_true",
+        help=(
+            "Reprocesa solo las candidatas que NO quedaron incluidas en la "
+            "última corrida (lee catalogo-capas.json anterior). Las que ya "
+            "estaban ok/ok_con_pendientes se reutilizan sin volver a golpear "
+            "el servicio. Solo para iterar rápido durante depuración — no "
+            "reemplaza una corrida completa antes de dar el catálogo por "
+            "definitivo."
+        ),
+    )
+    return parser.parse_args()
+
+
+def cargar_capas_exitosas_anteriores(ruta_salida: Path) -> dict:
+    """
+    Lee catalogo-capas.json de la corrida anterior, si existe, y devuelve
+    un dict {id: capa} con las capas que ya estaban resueltas con éxito
+    (ok/ok_con_pendientes — es lo único que ese archivo contiene, ya que
+    las excluidas nunca se escriben ahí, solo quedan documentadas en el
+    informe). Devuelve {} si el archivo no existe (primera corrida).
+    """
+    if not ruta_salida.exists():
+        return {}
+    with open(ruta_salida, encoding="utf-8") as f:
+        anterior = json.load(f)
+    return {c["id"]: c for c in anterior}
+
+
 def main():
+    args = parsear_argumentos()
+
     print("═══════════════════════════════════════════════════════")
     print("  Resolución de catálogo final desde GetCapabilities")
+    if args.solo_fallidas:
+        print("  Modo: --solo-fallidas (reutiliza capas ya exitosas, sin red)")
     print("═══════════════════════════════════════════════════════\n")
 
-    ruta_entrada = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(ARCHIVO_ENTRADA)
+    ruta_entrada = Path(args.archivo_entrada)
     if not ruta_entrada.exists():
         print(f"❌ Archivo no encontrado: {ruta_entrada}")
         sys.exit(1)
@@ -773,7 +1047,33 @@ def main():
     print(f"📄 Capas en catalogo-capas-ne.json: {len(catalogo_ne)}")
     print(f"🎯 Candidatas (incluir_en_catalogo_final=true): {len(candidatas)}\n")
 
-    catalogo_final = []
+    ruta_salida = ruta_entrada.parent / ARCHIVO_SALIDA
+
+    # ── Modo --solo-fallidas: separar candidatas ya exitosas de las que
+    #    hay que reprocesar. Las exitosas se reutilizan tal cual (mismo
+    #    _resolucion que tenían, solo se les añade una nota de que no se
+    #    volvió a consultar el servicio en esta corrida) ──
+    reutilizadas = []
+    if args.solo_fallidas:
+        exitosas_anteriores = cargar_capas_exitosas_anteriores(ruta_salida)
+        if not exitosas_anteriores:
+            print("⚠️  --solo-fallidas: no hay catalogo-capas.json previo, "
+                  "se procesan todas las candidatas igual que en corrida completa.\n")
+        candidatas_a_procesar = []
+        for capa in candidatas:
+            previa = exitosas_anteriores.get(capa.get("id"))
+            if previa is not None:
+                previa = dict(previa)  # copia, no mutar el dict cacheado
+                previa.setdefault("_resolucion", {})
+                previa["_resolucion"]["reutilizada_sin_red"] = True
+                reutilizadas.append(previa)
+            else:
+                candidatas_a_procesar.append(capa)
+        print(f"♻️  Reutilizadas sin red (ya ok en corrida anterior): {len(reutilizadas)}")
+        print(f"🔁 A reprocesar (fallaron antes o son nuevas): {len(candidatas_a_procesar)}\n")
+        candidatas = candidatas_a_procesar
+
+    catalogo_final = list(reutilizadas)
     excluidas      = []
 
     for i, capa in enumerate(candidatas):
@@ -782,6 +1082,11 @@ def main():
 
         capa_resuelta = resolver_capa(capa)
         estado = capa_resuelta["_resolucion"]["estado"]
+
+        if estado == "ok_servicio_caido":
+            print(f"⚠️  ok_servicio_caido (incluida, deshabilitada en árbol)")
+            catalogo_final.append(capa_resuelta)
+            continue
 
         if estado.startswith("excluida"):
             print(f"❌ {estado}")
@@ -800,7 +1105,6 @@ def main():
         print(f"{icono} {estado}")
         catalogo_final.append(capa_resuelta)
 
-    ruta_salida = ruta_entrada.parent / ARCHIVO_SALIDA
     diff = calcular_diff(catalogo_final, ruta_salida)
 
     with open(ruta_salida, "w", encoding="utf-8") as f:
@@ -811,7 +1115,13 @@ def main():
     with open(ruta_informe, "w", encoding="utf-8") as f:
         f.write(f"Informe de resolución de catálogo — {datetime.date.today()}\n")
         f.write("=" * 60 + "\n\n")
-        f.write(f"Candidatas evaluadas: {len(candidatas)}\n")
+        if args.solo_fallidas:
+            f.write("MODO: --solo-fallidas — las capas marcadas 'reutilizada_sin_red'\n")
+            f.write("no fueron consultadas en esta corrida; su estado corresponde a\n")
+            f.write("la última vez que sí se verificaron contra el servicio real.\n\n")
+        f.write(f"Candidatas evaluadas: {len(candidatas) + len(reutilizadas)}\n")
+        f.write(f"  De las cuales reutilizadas sin red: {len(reutilizadas)}\n")
+        f.write(f"  De las cuales reprocesadas contra el servicio: {len(candidatas)}\n")
         f.write(f"Incluidas en catálogo final: {len(catalogo_final)}\n")
         f.write(f"Excluidas: {len(excluidas)}\n\n")
 
@@ -836,6 +1146,20 @@ def main():
                 for p in pendientes:
                     f.write(f"      - {p}\n")
 
+        f.write("\n── Incluidas pero con servicio caído (deshabilitadas en el árbol) ──\n")
+        capas_caidas = [c for c in catalogo_final
+                        if c["_resolucion"].get("estado") == "ok_servicio_caido"]
+        if not capas_caidas:
+            f.write("  Ninguna.\n")
+        for c in capas_caidas:
+            f.write(f"  {c['title']} ({c['id']}):\n")
+            f.write(f"      motivo_caida: {c['_resolucion'].get('motivo_caida')}\n")
+
+        if args.solo_fallidas and reutilizadas:
+            f.write("\n── Reutilizadas sin red (no verificadas en esta corrida) ──\n")
+            for c in reutilizadas:
+                f.write(f"  {c['title']} ({c['id']})\n")
+
         f.write("\n── Diff contra ejecución anterior ──\n")
         if diff.get("primera_ejecucion"):
             f.write("  Primera ejecución — no hay comparación previa.\n")
@@ -848,13 +1172,22 @@ def main():
 
     # ── Resumen en consola ──
     print("\n" + "─" * 55)
+    if args.solo_fallidas:
+        print(f"♻️  Reutilizadas sin red: {len(reutilizadas)}")
+    n_caidas = sum(1 for c in catalogo_final if c["_resolucion"].get("estado") == "ok_servicio_caido")
     print(f"✅ Incluidas en catálogo final: {len(catalogo_final)}")
+    if n_caidas:
+        print(f"   (de las cuales {n_caidas} con servicio caído, deshabilitadas en árbol)")
     print(f"❌ Excluidas: {len(excluidas)}")
     if not diff.get("primera_ejecucion"):
         print(f"↔️  Diff — nuevas: {len(diff['nuevas'])}, eliminadas: {len(diff['eliminadas'])}, "
               f"modificadas: {len(diff['modificadas'])}")
     print(f"\n📦 Catálogo final: {ruta_salida}")
     print(f"📋 Informe:        {ruta_informe}")
+    if args.solo_fallidas:
+        print("\n⚠️  Corrida en modo --solo-fallidas: antes de dar el catálogo por")
+        print("   definitivo, correr sin esta bandera al menos una vez para")
+        print("   confirmar que las capas reutilizadas siguen funcionando hoy.")
     print("═══════════════════════════════════════════════════════\n")
 
 
