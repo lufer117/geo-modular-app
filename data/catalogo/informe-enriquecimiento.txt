@@ -1,0 +1,100 @@
+Informe de resolución de catálogo — 2026-08-30
+============================================================
+
+Candidatas evaluadas: 93
+  De las cuales reutilizadas sin red: 0
+  De las cuales reprocesadas contra el servicio: 93
+Incluidas en catálogo final: 84
+Excluidas: 9
+
+── Excluidas ──
+  [excluida_error_red] Usos del suelo en regadío
+      motivo: error_red: HTTP 403
+  [excluida_error_red] Direcciones
+      motivo: WFS sin GeoJSON confirmado por el servicio (requisito WFSLayer SDK v5)
+  [excluida_error_red] Direcciones
+      motivo: WFS sin GeoJSON confirmado por el servicio (requisito WFSLayer SDK v5)
+  [excluida_error_red] Direcciones y códigos postales de España
+      motivo: error_red: HTTPSConnectionPool(host='cartociudad.es', port=443): Max retries exceeded with 
+  [excluida_error_red] Direcciones
+      motivo: WFS sin GeoJSON confirmado por el servicio (requisito WFSLayer SDK v5)
+  [excluida_error_red] Edificaciones
+      motivo: WFS sin GeoJSON confirmado por el servicio (requisito WFSLayer SDK v5)
+  [excluida_error_red] Hidrografía de España de Aguas Físicas y del Modelo de Red
+      motivo: WFS sin GeoJSON confirmado por el servicio (requisito WFSLayer SDK v5)
+  [excluida_error_red] Ocupación del Suelo de España
+      motivo: WFS sin GeoJSON confirmado por el servicio (requisito WFSLayer SDK v5)
+  [excluida_error_red] Redes de transporte de España
+      motivo: WFS sin GeoJSON confirmado por el servicio (requisito WFSLayer SDK v5)
+
+── Incluidas con pendientes de curación manual ──
+  Base Topográfica Nacional (ign-cnig-base-topografica-nacional-xyz):
+      - tipo 'XYZ' sin GetCapabilities estándar — formatos/sublayers no derivados, revisar a mano
+  Cartografía Ráster de España del IGN (ign-cnig-cartografia-raster-de-espana-del-ign-xyz):
+      - tipo 'XYZ' sin GetCapabilities estándar — formatos/sublayers no derivados, revisar a mano
+  Mapa Base de España - IGNBaseTodo (ign-cnig-idee-mapa-base-de-espana-ignbasetodo-xyz-raster-til):
+      - tipo 'XYZ RASTER TILES' sin GetCapabilities estándar — formatos/sublayers no derivados, revisar a mano
+  Mapa Base de España - IGNBaseOrto (ign-cnig-idee-mapa-base-de-espana-ignbaseorto-xyztms-raster-):
+      - tipo 'XYZ/TMS RASTER TILES' sin GetCapabilities estándar — formatos/sublayers no derivados, revisar a mano
+  Mapa Base de España - IGNBaseSimplificado (ign-cnig-idee-mapa-base-de-espana-ignbasesimplificado-xyztms):
+      - tipo 'XYZ/TMS RASTER TILES' sin GetCapabilities estándar — formatos/sublayers no derivados, revisar a mano
+  Mapa Ciudadano (sistema-cartografico-nacional-idee-ign-cnig-mapa-ciudadano-x):
+      - tipo 'XYZ VECTOR TILES / MVT' sin GetCapabilities estándar — formatos/sublayers no derivados, revisar a mano
+  Modelo Digital de Elevaciones de España (ign-cnig-idee-modelo-digital-de-elevaciones-de-espana-xyz-ra):
+      - tipo 'XYZ RASTER TILES' sin GetCapabilities estándar — formatos/sublayers no derivados, revisar a mano
+  Ortoimágenes MA de España - Sentinel2 y PNOA MA (ign-cnig-idee-pnoa-ortoimagenes-ma-de-espana-sentinel2-y-pno):
+      - tipo 'XYZ/TMS RASTER TILES' sin GetCapabilities estándar — formatos/sublayers no derivados, revisar a mano
+  Cartografía Ráster de España del IGN (ign-cnig-cartografia-raster-de-espana-del-ign-wms):
+      - featureInfoFormat: no declarado por el servicio
+  Relieve del terreno de España - MDT 25 m (ign-cnig-idee-relieve-del-terreno-de-espana-mdt-25-m-xyztms-):
+      - tipo 'XYZ/TMS RASTER TILES' sin GetCapabilities estándar — formatos/sublayers no derivados, revisar a mano
+  Redes Geodésicas del IGN de España (ign-cnig-redes-geodesicas-del-ign-de-espana-wfs):
+      - srsname: ningún DefaultSRS/DefaultCRS declarado por el servicio — layerInitializer.js usará EPSG:4326 por defecto para el filtro BBOX, verificar si el servicio real lo requiere en otro CRS
+  Minutas del Mapa Topográfico Nacional 1:50.000 (catastrones) 1910-1970 (ign-cnig-minutas-del-mapa-topografico-nacional-150000-catast):
+      - legendUrl de sublayer 'EnlaceMTN25': sin_legendurl_declarada_en_capa
+      - legendUrl de sublayer 'Enlace': sin_legendurl_declarada_en_capa
+      - legendUrl de sublayer 'MTN25': sin_legendurl_declarada_en_capa
+      - legendUrl de sublayer 'MTN50': sin_legendurl_declarada_en_capa
+      - legendUrl de sublayer 'catastrones': sin_legendurl_declarada_en_capa
+  Cuadrículas cartográficas (ign-cnig-cuadriculas-cartograficas-wms):
+      - no se localizó Capability/Layer raíz — sublayers no derivados
+  Edificaciones (dgc-edificaciones-atom):
+      - tipo 'ATOM' sin GetCapabilities estándar — formatos/sublayers no derivados, revisar a mano
+  Cartografía catastral (dgc-cartografia-catastral-wms):
+      - legendUrl de sublayer 'CONSTRU': sin_legendurl_declarada_en_capa
+      - legendUrl de sublayer 'TXTCONSTRU': sin_legendurl_declarada_en_capa
+      - legendUrl de sublayer 'SUBPARCE': sin_legendurl_declarada_en_capa
+      - legendUrl de sublayer 'TXTSUBPARCE': sin_legendurl_declarada_en_capa
+      - legendUrl de sublayer 'PARCELA': sin_legendurl_declarada_en_capa
+      - legendUrl de sublayer 'TXTPARCELA': sin_legendurl_declarada_en_capa
+      - legendUrl de sublayer 'MASA': sin_legendurl_declarada_en_capa
+      - legendUrl de sublayer 'TXTMASA': sin_legendurl_declarada_en_capa
+      - legendUrl de sublayer 'EJES': sin_legendurl_declarada_en_capa
+      - legendUrl de sublayer 'LIMITES': sin_legendurl_declarada_en_capa
+      - legendUrl de sublayer 'TEXTOS': sin_legendurl_declarada_en_capa
+      - legendUrl de sublayer 'ELEMLIN': sin_legendurl_declarada_en_capa
+  Parcelas Catastrales (dgc-parcelas-catastrales-atom):
+      - tipo 'ATOM' sin GetCapabilities estándar — formatos/sublayers no derivados, revisar a mano
+  AEMET OpenData (aemet-aemet-opendata-api-rest):
+      - tipo 'API REST' sin GetCapabilities estándar — formatos/sublayers no derivados, revisar a mano
+  Series estadísticas municipales (ine-series-estadisticas-municipales-api-rest):
+      - tipo 'API REST' sin GetCapabilities estándar — formatos/sublayers no derivados, revisar a mano
+  OpenStreetMap Standard Tiles (openstreetmap-foundation-openstreetmap-standard-tiles-xyz-ra):
+      - tipo 'XYZ RASTER' sin GetCapabilities estándar — formatos/sublayers no derivados, revisar a mano
+  OpenMapTiles + TileServer GL (openmaptiles-maptiler-openmaptiles-tileserver-gl-descarga-se):
+      - tipo 'DESCARGA + SERVIDOR PROPIO' sin GetCapabilities estándar — formatos/sublayers no derivados, revisar a mano
+  Camino de Santiago (ign-camino-de-santiago-wms):
+      - no se localizó Capability/Layer raíz — sublayers no derivados
+
+── Incluidas pero con servicio caído (deshabilitadas en el árbol) ──
+  Red Natura 2000 (miteco-red-natura-2000-wms):
+      motivo_caida: servicio_caido: Referencia a objeto no establecida como instancia de un objeto.     System.NullReferenceException: Referencia a objeto no establecida como instancia de un objeto.
+   en _Default.ConstruirServiceArcGIS
+  Espacios Naturales Protegidos (ENP) (miteco-espacios-naturales-protegidos-enp-wms):
+      motivo_caida: servicio_caido: Referencia a objeto no establecida como instancia de un objeto.     System.NullReferenceException: Referencia a objeto no establecida como instancia de un objeto.
+   en _Default.ConstruirServiceArcGIS
+
+── Diff contra ejecución anterior ──
+  Nuevas: []
+  Eliminadas: ['direccion-general-de-catastro-cartografia-catastral-wms']
+  Modificadas:
