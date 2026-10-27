@@ -50,7 +50,7 @@ const _TIPO_MAP = {
  * @returns {Promise<Layer|null>} Instancia de capa, o null si el tipo es desconocido
  * 
  * 
- * 1. El objeto config llega en municipioSelector.js a través de:
+ * 1. El objeto config llega en core/ambito/cargaCapas.js a través de:
  * 2. configEngine.fetchCapas(municipioData) → devuelve un ARRAY de objetos config
  * 3. configs.map(config => crearCapa(config)) → cada elemento se pasa como parámetro
  *
@@ -70,7 +70,7 @@ const _TIPO_MAP = {
  * 
  */
 
-// Ejecutada por municipioSelector.js
+// Ejecutada por core/ambito/cargaCapas.js
 export async function crearCapa(config) {
   const modulePath = _TIPO_MAP[config.tipo]; // busca el tipo "WMS" y devuelve "esri/layers/WMSLayer" = modulePath
 

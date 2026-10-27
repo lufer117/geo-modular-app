@@ -77,8 +77,7 @@
 import * as configEngine          from "../config/configEngine.js";
 import { esSupramunicipal } from "../config/tipoAmbito.js";
 import * as mapManager            from "../core/mapManager.js";
-import { crearCapa }              from "../core/layerFactory.js";
-import { inicializarCapa }        from "../core/layerInitializer.js";
+import { construirCapas }         from "../core/ambito/cargaCapas.js";
 import { emit, on }               from "../utils/eventBus.js";
 import { clearContainer }         from "../utils/domUtils.js";
 import { t }                      from "../utils/i18nManager.js";
@@ -341,27 +340,14 @@ async function _cargarMunicipio(codigoIne) {
       return;
     }
 
-    const layersConNull = await Promise.all(
-      configs.map(config => crearCapa(config))
-    );
+    const { layers, cfgList, lazyLayerIds, capasInmediatas } =
+      await construirCapas(configs, municipioData);
 
-    const pares = configs
-      .map((config, i) => ({ config, layer: layersConNull[i] }))
-      .filter(({ layer }) => layer !== null);
-
-    if (pares.length === 0) {
+    if (layers.length === 0) {
       console.error("[municipioSelector] Ninguna capa pudo ser creada.");
       return;
     }
 
-    await Promise.all(
-      pares.map(({ layer, config }) => inicializarCapa(layer, config, municipioData))
-    );
-
-    const layers  = pares.map(p => p.layer);
-    const cfgList = pares.map(p => p.config);
-
-    const capasInmediatas = layers.filter((_, i) => cfgList[i].tipo !== "WFS");
     mapManager.addCapas(capasInmediatas);
 
     await mapManager.actualizarMascara(municipioData.polygon);
@@ -371,9 +357,8 @@ async function _cargarMunicipio(codigoIne) {
       municipioData,
       layers,
       configs: cfgList,
-      lazyLayerIds: new Set(
-        cfgList.filter(c => c.tipo === "WFS").map(c => c.id)
-      )
+      lazyLayerIds
+
     });
 
     console.info(
@@ -420,22 +405,9 @@ export async function cargarAmbitoTerritorial(territorioData) {
       return;
     }
 
-    const layersConNull = await Promise.all(
-      configs.map(config => crearCapa(config))
-    );
+    const { layers, cfgList, lazyLayerIds, capasInmediatas } =
+      await construirCapas(configs, territorioData);
 
-    const pares = configs
-      .map((config, i) => ({ config, layer: layersConNull[i] }))
-      .filter(({ layer }) => layer !== null);
-
-    await Promise.all(
-      pares.map(({ layer, config }) => inicializarCapa(layer, config, territorioData))
-    );
-
-    const layers  = pares.map(p => p.layer);
-    const cfgList = pares.map(p => p.config);
-
-    const capasInmediatas = layers.filter((_, i) => cfgList[i].tipo !== "WFS");
     mapManager.addCapas(capasInmediatas); // primera carga → reemplazo seguro, no hay nada que preservar aún
 
     await mapManager.actualizarMascara(territorioData.polygon);
@@ -445,9 +417,8 @@ export async function cargarAmbitoTerritorial(territorioData) {
       territorioData,
       layers,
       configs: cfgList,
-      lazyLayerIds: new Set(
-        cfgList.filter(c => c.tipo === "WFS").map(c => c.id)
-      )
+      lazyLayerIds
+
     });
 
     console.info(`[municipioSelector] ✓ ${layers.length} capas territoriales base cargadas`);
@@ -507,20 +478,8 @@ export async function agregarCapasMunicipio(codigoIne) {
       return;
     }
 
-    const layersConNull = await Promise.all(
-      configs.map(config => crearCapa(config))
-    );
-
-    const pares = configs
-      .map((config, i) => ({ config, layer: layersConNull[i] }))
-      .filter(({ layer }) => layer !== null);
-
-    await Promise.all(
-      pares.map(({ layer, config }) => inicializarCapa(layer, config, municipioData))
-    );
-
-    const layers  = pares.map(p => p.layer);
-    const cfgList = pares.map(p => p.config);
+    const { layers, cfgList, lazyLayerIds } =
+      await construirCapas(configs, municipioData);
 
     // ── Diferencia clave con _cargarMunicipio: addCapa() singular, en bucle ──
     // addCapas() (plural) reemplazaría toda la base territorial. addCapa()
@@ -549,9 +508,8 @@ export async function agregarCapasMunicipio(codigoIne) {
       municipioData,
       layers,
       configs: cfgList,
-      lazyLayerIds: new Set(
-        cfgList.filter(c => c.tipo === "WFS").map(c => c.id)
-      )
+      lazyLayerIds
+
     });
 
     console.info(
