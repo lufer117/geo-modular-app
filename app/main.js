@@ -97,7 +97,7 @@ async function waitForArcGISSDK(maxWaitMs = 5000) {
         clearInterval(interval);
         reject(new Error(
           "ArcGIS SDK no disponible tras 5s. " +
-          "Verifica que el <script type=\"module\" src=\"https://js.arcgis.com/5.0/\"> " +
+          "Verifica que el <script type=\"module\" src=\"https://js.arcgis.com/5.1/\"> " +
           "está en el <head> antes de main.js."
         ));
       }
