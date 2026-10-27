@@ -48,7 +48,8 @@ import * as mapManager from "../core/mapManager.js";
 // ── UI ────────────────────────────────────────────────────────────────────
 // Cada función importada monta una parte visual
 import { initActionBar } from "../ui/actionBar.js";
-import { renderMunicipioSelector, cargarAmbitoTerritorial } from "../ui/municipioSelector.js";
+import { renderMunicipioSelector, setLoadingSelector, limpiarSeleccionSelector } from "../ui/municipioSelector.js";
+import { crearEstrategia } from "../core/ambito/crearEstrategia.js";
 import { renderBasemapSelector }   from "../ui/basemapSelector.js";
 import { initLayerTree }           from "../ui/layerTree.js";
 import { initLegendPanel }         from "../ui/legendPanel.js";
@@ -226,13 +227,13 @@ async function main() {
     });
 
     // 4.5. Resolver ámbito territorial del deployment activo (solo resuelve
-    // datos, NO carga capas todavía — cargarAmbitoTerritorial() se llama
+    // datos, NO carga capas todavía — estrategia.iniciar() se llama
     // después de montar la UI, ver nota más abajo).
     const { municipiosDisponibles, mascaraInicial } = await resolverAmbitoTerritorial(DEPLOYMENT);
 
     // 5. Montar UI
     // ── AJUSTE CRÍTICO DE ORDEN ────────────────────────────────────────────
-    // initLayerTree() debe montarse ANTES de cargarAmbitoTerritorial(), porque
+    // initLayerTree() debe montarse ANTES de estrategia.iniciar(), porque
     // esa función emite "territorio-cargado" de forma síncrona al terminar.
     // eventBus no tiene buffer de eventos (pub/sub puro, ver utils/eventBus.js):
     // un evento emitido sin listeners suscritos se pierde sin aviso. Con
@@ -243,17 +244,24 @@ async function main() {
     // en consola) porque el evento llegaba a un módulo que aún no existía.
     initActionBar();
     initMapControls();
-    renderMunicipioSelector("#municipio-selector-container", municipiosDisponibles, DEPLOYMENT);
+    // Estrategia de ámbito (patrón Strategy): la única que sabe qué hacer según
+    // sea monomunicipal o supramunicipal. La UI solo le delega. Los callbacks de
+    // ui evitan que core/ importe de ui/ (la dependencia va siempre hacia dentro).
+    const estrategia = crearEstrategia(DEPLOYMENT, {
+      municipiosDisponibles,
+      mascaraInicial,
+      ui: { setLoading: setLoadingSelector, limpiarSeleccion: limpiarSeleccionSelector }
+    });
+
+    renderMunicipioSelector("#municipio-selector-container", estrategia, municipiosDisponibles);
     renderBasemapSelector("#basemap-selector-container");
-    initLayerTree("#layer-tree-container");   // ← debe ir antes de cargarAmbitoTerritorial()
+    initLayerTree("#layer-tree-container");   // ← debe ir antes de estrategia.iniciar()
     initLegendPanel("map-view");
     await initToolPanel(DEPLOYMENT.herramientas);
     initHeaderControls(document.getElementById("lang-selector-container"));
 
-    // 5.5. Ahora sí: cargar la base territorial, con layerTree ya escuchando.
-    if (mascaraInicial) {
-      await cargarAmbitoTerritorial(mascaraInicial);
-    }
+    // 5.5. La carga inicial de capas se dispara más abajo (estrategia.iniciar()),
+    //      cuando TODOS los listeners del eventBus ya están registrados.
     // ── Logo por-municipio en el header (runtime, 30.07.26) ──────────────────
     // Reemplaza el listener anterior que leía municipioData.logo — ese campo
     // ya no existe en municipios.json desde que se desacopló geometría de
@@ -297,6 +305,13 @@ async function main() {
       // Si no se encontró ningún logo, se deja el icono/thumbnail que ya
       // hubiera (por ejemplo el de deployment.branding) — no se fuerza nada.
     });
+
+    // 6. Arranque del ámbito: UNA sola llamada, con la UI montada y todos los
+    //    listeners registrados (layerTree y logo). El eventBus no guarda eventos:
+    //    uno emitido sin oyentes se pierde. Antes, el ámbito monomunicipal
+    //    cargaba dentro del render del selector (antes de montar layerTree) y
+    //    el supramunicipal desde main; ahora ambos pasan por el mismo punto.
+    await estrategia.iniciar();
 
     console.info("=== GIS Municipal — Listo ===");
 
