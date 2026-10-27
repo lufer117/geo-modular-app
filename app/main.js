@@ -24,7 +24,7 @@
  * (actualizarMascara + irAlMunicipio), sin cargar ninguna capa — el árbol
  * quedaba vacío hasta que el usuario elegía un municipio. Ahora, cuando
  * ambitoTerritorial !== "municipio", el paso 4.5 llama a
- * municipioSelector.cargarAmbitoTerritorial(territorioData), que resuelve
+ * estrategia.iniciar() (estrategia supramunicipal), que resuelve
  * y añade las capas de cobertura territorial (nacional/europea/global/
  * autonómica/provincial) además de aplicar máscara y zoom — mismo pipeline
  * completo que ya existía para un municipio individual, pero a escala
@@ -354,7 +354,7 @@ document.addEventListener("DOMContentLoaded", main);
 // ↓
 // resolverAmbitoTerritorial() → municipiosDisponibles + mascaraInicial
 // ↓
-// (si hay mascaraInicial) cargarAmbitoTerritorial() → capas territoriales +
+// (supramunicipal) estrategia.iniciar() → capas territoriales +
 //                          máscara + zoom (antes: solo máscara + zoom)
 // ↓
 // montar UI (selector recibe municipiosDisponibles ya resuelto)

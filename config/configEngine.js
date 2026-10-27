@@ -50,7 +50,7 @@
  *   fetchCapasMunicipales()   → únicamente cobertura "municipal".
  *     Usada para SUMAR capas al elegir un municipio dentro del territorio,
  *     sin reconstruir la base territorial ya cargada (ver
- *     municipioSelector.agregarCapasMunicipio()).
+ *     estrategiaSupramunicipal.seleccionar()).
  * fetchCapasTerritoriales(territorio) ∪ fetchCapasMunicipales(municipio)
  * es exactamente el mismo conjunto que fetchCapas(municipio) devolvería
  * hoy — se particiona el mismo resultado, no se inventan reglas nuevas.

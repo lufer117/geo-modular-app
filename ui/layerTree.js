@@ -300,7 +300,7 @@ function _agregarGrupoMunicipal(layers, configs, municipioData) {
   if (!configs || configs.length === 0) return;
 
   // Defensivo: si quedó un grupo municipal anterior sin retirar, se retira
-  // primero. municipioSelector.agregarCapasMunicipio() ya llama a retirar
+  // primero. estrategiaSupramunicipal.seleccionar() ya llama a retirar
   // antes de agregar, pero el árbol no debe asumir que ese orden siempre
   // se respeta desde cualquier punto de llamada futuro.
   _retirarGrupoMunicipal();
@@ -373,7 +373,7 @@ function _retirarGrupoMunicipal() {
 
   // Recortar los arrays globales de vuelta al tamaño previo. Es seguro
   // porque el grupo municipal siempre es lo último que se añadió — nunca
-  // hay un segundo grupo incremental después de él (agregarCapasMunicipio
+  // hay un segundo grupo incremental después de él (estrategiaSupramunicipal.seleccionar
   // siempre retira el anterior antes de sumar el nuevo).
   _layersRef  = _layersRef.slice(0, _inicioGrupoMunicipal);
   _configsRef = _configsRef.slice(0, _inicioGrupoMunicipal);

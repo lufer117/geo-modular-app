@@ -528,7 +528,7 @@ export function limpiarMascara() {
  * @returns {Promise<void>}
  */
 
-// Ejecutada por municipioSelector.js (agregarCapasMunicipio) con
+// Ejecutada por core/ambito/estrategiaSupramunicipal.js (seleccionar) con
 // mapManager.resaltarMunicipio(municipioData.polygon)
 export async function resaltarMunicipio(polygon) {
   if (!_resaltadoLayer || !polygon) return; //sin capa inicializada o sin geometría → no hay nada que dibujar
@@ -566,7 +566,7 @@ export async function resaltarMunicipio(polygon) {
  * municipio concreto a la vista territorial completa.
  */
 
-// Ejecutada por municipioSelector.js (retirarCapasMunicipio) con
+// Ejecutada por core/ambito/estrategiaSupramunicipal.js (retirar) con
 // mapManager.quitarResaltadoMunicipio() — simétrica a resaltarMunicipio()
 export function quitarResaltadoMunicipio() {
   _resaltadoLayer?.removeAll(); //(m) GraphicsLayer
