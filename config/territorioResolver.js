@@ -23,23 +23,23 @@
  *   "municipio"  → cliente tipo ayuntamiento único (lista de varios municipios solo con mode "demo")
  *                  (puede cruzar varias provincias, ej. el deployment demo:
  *                  Bilbao + Pamplona + Logroño + Burgos...). Usa el archivo
- *                  único data/municipios.json — NO se migra al patrón por
+ *                  único data/territorio/municipios.json — NO se migra al patrón por
  *                  provincia/CCAA de abajo, porque cargar el JSON completo
  *                  de 6 provincias para quedarse con 10 municipios sería
  *                  peor que el problema que resolvemos con ellos.
  *                  mascaraInicial: null.
  *   "provincia"  → cliente tipo diputación. Máscara inicial = polígono de
- *                  la provincia completa (data/provincias.json).
+ *                  la provincia completa (data/territorio/provincias.json).
  *                  municipiosDisponibles = TODOS los municipios de esa
  *                  provincia, leídos de su propio archivo
- *                  data/municipios_<provincia_code>.json — generado por
+ *                  data/territorio/municipios_<provincia_code>.json — generado por
  *                  tools/generar_geografia.py --municipios-de-provincia.
  *   "ccaa"       → cliente tipo gobierno regional. Máscara inicial =
- *                  polígono de la CCAA completa (data/ccaa.json).
+ *                  polígono de la CCAA completa (data/territorio/ccaa.json).
  *                  municipiosDisponibles = TODOS los municipios de esa
  *                  CCAA (sin importar cuántas provincias la compongan),
  *                  leídos de su propio archivo
- *                  data/municipios_ccaa_<ccaa_code>.json — generado por
+ *                  data/territorio/municipios_ccaa_<ccaa_code>.json — generado por
  *                  tools/generar_geografia.py --municipios-de-ccaa. Ese
  *                  archivo ya viene armado desde el shapefile municipal
  *                  filtrando directo por ccaa_code (el NATCODE de cada
@@ -55,14 +55,14 @@
  *
  * ── DATASETS POR PROVINCIA/CCAA (archivos separados, no un municipios.json global) ──
  * Antes, "provincia" y "ccaa" cargaban TODOS los municipios de España
- * desde un único data/municipios.json y filtraban en JavaScript. Con
+ * desde un único data/territorio/municipios.json y filtraban en JavaScript. Con
  * cientos de municipios por provincia, eso significa que el cliente
  * Navarra descargaría también los municipios de Bizkaia, Madrid, etc.
  * — datos que nunca va a usar.
  *
  * Ahora existen dos generadores nuevos en tools/generar_geografia.py:
- *   --municipios-de-provincia → data/municipios_<provincia_code>.json
- *   --municipios-de-ccaa      → data/municipios_ccaa_<ccaa_code>.json
+ *   --municipios-de-provincia → data/territorio/municipios_<provincia_code>.json
+ *   --municipios-de-ccaa      → data/territorio/municipios_ccaa_<ccaa_code>.json
  * Ambos nombrados por código INE (no por texto), para que este módulo
  * construya la ruta con una simple interpolación de string a partir de
  * deployment.codigoEntidad, sin necesitar ningún mapeo código→nombre
@@ -88,7 +88,7 @@
 import { LocalJsonAdapter } from "./adapters/LocalJsonAdapter.js";
 
 // ─── Adaptadores fijos (datasets que siguen siendo un archivo único) ───────
-// Rutas relativas desde config/ (mismo nivel que catalogo-capas.json en data/).
+// Rutas relativas desde config/ (mismo nivel que catalogo-capas.json en data/territorio/).
 
 const _adapterMunicipiosDemo = new LocalJsonAdapter("../data/territorio/municipios.json");
 const _adapterProvincias     = new LocalJsonAdapter("../data/territorio/provincias.json");
@@ -198,11 +198,11 @@ export async function resolverAmbitoTerritorial(deployment) {
 
 /**
  * Caso "municipio" — sin máscara territorial propia. Sigue usando el
- * archivo único data/municipios.json (lista curada a mano, puede cruzar
+ * archivo único data/territorio/municipios.json (lista curada a mano, puede cruzar
  * varias provincias — ver nota al inicio del archivo).
  * El filtro por deployment.municipios (que antes vivía en
  * municipioSelector.js, acoplado al import estático de municipios.js)
- * se resuelve aquí, contra data/municipios.json vía LocalJsonAdapter.
+ * se resuelve aquí, contra data/territorio/municipios.json vía LocalJsonAdapter.
  */
 async function _resolverAmbitoMunicipio(deployment) {
   const todos = await _adapterMunicipiosDemo.getData();
@@ -246,7 +246,7 @@ async function _resolverAmbitoMunicipio(deployment) {
  * poblado con todos los municipios de esa provincia.
  *
  * Ya NO filtra sobre un municipios.json global: pide directamente el
- * archivo data/municipios_<provincia_code>.json, que ya viene recortado
+ * archivo data/territorio/municipios_<provincia_code>.json, que ya viene recortado
  * a esa provincia desde el propio proceso de generación. El filtro por
  * provincia_code se mantiene igual como salvaguarda barata (por si el
  * archivo llegara a contener algo inesperado), no porque haga falta para
@@ -307,7 +307,7 @@ async function _resolverAmbitoProvincia(deployment) {
  *
  * A diferencia de un diseño anterior descartado (que fusionaba en
  * runtime los archivos de cada provincia de la CCAA), aquí se pide
- * directamente el archivo data/municipios_ccaa_<ccaa_code>.json — ya
+ * directamente el archivo data/territorio/municipios_ccaa_<ccaa_code>.json — ya
  * viene armado desde build time por
  * tools/generar_geografia.py --municipios-de-ccaa, que filtra el
  * shapefile municipal directo por ccaa_code del NATCODE (cada municipio

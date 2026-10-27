@@ -5,10 +5,10 @@ Lee los shapefiles oficiales del IGN (recintos INSPIRE — municipal,
 provincial, autonómico) y genera JSON de datos geográficos según los
 niveles y códigos que se pidan por línea de comandos:
 
-    data/municipios.json
-    data/provincias.json
-    data/ccaa.json
-    data/municipios_<nombre_provincia>.json   ← NUEVO: todos los
+    data/territorio/municipios.json
+    data/territorio/provincias.json
+    data/territorio/ccaa.json
+    data/territorio/municipios_<codigo_provincia>.json   ← NUEVO: todos los
                                                   municipios de una
                                                   provincia completa
 
@@ -32,16 +32,16 @@ Uso:
     # Todos los municipios de una o varias provincias, cada provincia en
     # su propio archivo, nombrado por código INE (el runtime construye
     # esta ruta solo, desde deployment.codigoEntidad):
-    #   data/municipios_31.json   ← Navarra (contiene "provincia_nombre": "Navarra" en cada entry)
-    #   data/municipios_48.json   ← Bizkaia
+    #   data/territorio/municipios_31.json   ← Navarra (contiene "provincia_nombre": "Navarra" en cada entry)
+    #   data/territorio/municipios_48.json   ← Bizkaia
     python tools/generar_geografia.py --municipios-de-provincia 31,48
 
     # NUEVO — todos los municipios de una o varias CCAA, cada CCAA en su
     # propio archivo (útil cuando la CCAA tiene varias provincias, ej.
     # País Vasco — aquí no hace falta enumerar sus provincias, se filtra
     # directo por ccaa_code del NATCODE):
-    #   data/municipios_ccaa_15.json   ← Navarra
-    #   data/municipios_ccaa_16.json   ← País Vasco (Álava+Gipuzkoa+Bizkaia, sin listar nada a mano)
+    #   data/territorio/municipios_ccaa_15.json   ← Navarra
+    #   data/territorio/municipios_ccaa_16.json   ← País Vasco (Álava+Gipuzkoa+Bizkaia, sin listar nada a mano)
     python tools/generar_geografia.py --municipios-de-ccaa 15,16
 
     # Combinado — caso real de prueba de ámbitos territoriales:
