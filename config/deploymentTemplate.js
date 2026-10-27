@@ -35,15 +35,18 @@
  *     Rutas relativas desde app/ o URL absoluta. logo_cliente: null → icono
  *     SVG por defecto (icon="map-pin"). logo_empresa siempre visible.
  *
- * ── MODELOS DE ÁMBITO TERRITORIAL (mutuamente excluyentes) ────────────────
+ * ── TIPOS DE ÁMBITO TERRITORIAL (mutuamente excluyentes) ────────────────
  *
- *   ÁMBITO MONOMUNICIPAL — `municipios: [...]`
- *     Lista curada de codigos_ine. Correcto cuando el cliente ES el
- *     municipio (ayuntamiento único) o gestiona un puñado fijo y estable
- *     de municipios sin ámbito administrativo superior que resolver.
- *       []            → sin restricción (demo: todos los del catálogo)
- *       ["X"]         → un municipio: carga automática al arrancar
- *       ["X","Y",...] → varios: selector activo restringido a esa lista
+ *   ÁMBITO MONOMUNICIPAL — `municipios: ["X"]`
+ *     Para clientes cuyo ámbito ES un único municipio (ayuntamiento). La
+ *     app arranca y lo carga automáticamente, sin selector ni interacción
+ *     del usuario final. En producción debe haber exactamente un código.
+ *     Varios municipios, o `[]` (todos los del catálogo), solo son
+ *     legítimos con `mode: "demo"`: sirven para mostrar la app en
+ *     reuniones y no son una configuración de cliente. Fuera de ese modo,
+ *     territorioResolver emite un aviso por consola. Un ámbito de varios
+ *     municipios (comarca, mancomunidad) será ámbito supramunicipal
+ *     cuando exista; todavía no está implementado.
  *
  *   ÁMBITO SUPRAMUNICIPAL — `ambitoTerritorial` + `codigoEntidad`
  *     Para clientes cuyo ámbito ES una entidad administrativa completa
@@ -57,7 +60,7 @@
  *     Ausencia de ambitoTerritorial = caso "municipio" por defecto
  *     (retrocompatible con ámbito monomunicipal).
  *
- *   No combinar A y B en el mismo deployment.
+ *   No combinar ambos ámbitos en el mismo deployment.
  *
  * ── CAMPO `herramientas[]` ──────────────────────────────────────────────
  *   Tres estados válidos, cada uno con significado distinto:
@@ -240,27 +243,6 @@ export const DEPLOYMENT = {
       habilitada: true
     }
   ]
-};
-*/
-
-
-// ── VARIANTE — ÁMBITO MONOMUNICIPAL, mancomunidad/comarca (N municipios) ─────────────
-// Lista curada y estable de municipios sin ámbito administrativo superior
-// que resolver. Selector activo restringido a esa lista.
-
-/*
-export const DEPLOYMENT = {
-  mode:           "production",
-  cliente:        "mancomunidad-nombre",
-  nombre_visible: "Mancomunidad de [Nombre]",
-  municipios:     ["00000", "00001", "00002"], // codigos_ine del ámbito
-  idiomas:        ["es", "en"],
-  idioma_defecto: "es",
-  branding: {
-    logo_cliente:  null,
-    logo_empresa:  "../assets/logos/empresa.png",
-  },
-  herramientas: [] // ejemplo de decisión de producto: panel sin acciones
 };
 */
 

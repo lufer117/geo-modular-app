@@ -75,6 +75,7 @@
  */
 
 import * as configEngine          from "../config/configEngine.js";
+import { esSupramunicipal } from "../config/tipoAmbito.js";
 import * as mapManager            from "../core/mapManager.js";
 import { crearCapa }              from "../core/layerFactory.js";
 import { inicializarCapa }        from "../core/layerInitializer.js";
@@ -148,7 +149,7 @@ export function renderMunicipioSelector(container, municipiosDisponibles = [], d
   _registrarListenerIdioma();
 
   const municipiosVisibles = _municipiosDisponibles;
-  const esAmbitoTerritorial = (deployment.ambitoTerritorial ?? "municipio") !== "municipio";
+  const esAmbitoTerritorial = esSupramunicipal(deployment);
 
   if (municipiosVisibles.length === 0) {
     console.warn(
@@ -296,7 +297,7 @@ function _crearComboboxItem(m) {
  */
 async function _onMunicipioChange(event) {
   const codigoIne = event.target.selectedItems?.[0]?.value ?? "";
-  const esAmbitoTerritorial = (_deploymentRef.ambitoTerritorial ?? "municipio") !== "municipio";
+  const esAmbitoTerritorial = esSupramunicipal(_deploymentRef);
 
   if (!esAmbitoTerritorial) {
     await _cargarMunicipio(codigoIne);

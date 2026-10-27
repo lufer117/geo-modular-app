@@ -20,7 +20,7 @@
  * deployment.codigoEntidad para devolver el recorte que corresponde.
  *
  * ── CASOS DE ÁMBITO SOPORTADOS ─────────────────────────────────────────────
- *   "municipio"  → cliente tipo ayuntamiento único o lista corta arbitraria
+ *   "municipio"  → cliente tipo ayuntamiento único (lista de varios municipios solo con mode "demo")
  *                  (puede cruzar varias provincias, ej. el deployment demo:
  *                  Bilbao + Pamplona + Logroño + Burgos...). Usa el archivo
  *                  único data/municipios.json — NO se migra al patrón por
@@ -211,6 +211,29 @@ async function _resolverAmbitoMunicipio(deployment) {
   const municipiosDisponibles = codigosPermitidos.size > 0
     ? todos.filter(m => codigosPermitidos.has(m.codigo_ine))
     : todos; // demo/TFM: sin filtro, todos los municipios del dataset
+
+  // ── Validación explícita: UN municipio en producción ───────────────────
+  // En producción el ámbito monomunicipal sirve un único municipio. Varios
+  // (o ninguno, que equivale a "todo el dataset") solo es legítimo con
+  // mode "demo". Se avisa en vez de lanzar error para que la app no se rompa
+  // por configuración; se endurecerá a error cuando se aborde la validación
+  // de configuración al arrancar (MEJORASPENDIENTES.md, mejora 1). También
+  // salta con 0 municipios, lo que detecta un código INE mal escrito.
+  if (municipiosDisponibles.length !== 1) {
+    const detalle =
+      `${municipiosDisponibles.length} municipios disponibles ` +
+      `(deployment.municipios: ${JSON.stringify(deployment.municipios ?? [])})`;
+
+    if (deployment.mode === "demo") {
+      console.info(`[territorioResolver] Modo demo: ${detalle}`);
+    } else {
+      console.warn(
+        `[territorioResolver] Ámbito monomunicipal con ${detalle}. ` +
+        `En producción debe haber exactamente un municipio; varios solo se ` +
+        `admiten con mode: "demo".`
+      );
+    }
+  }
 
   return {
     municipiosDisponibles,

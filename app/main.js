@@ -37,6 +37,7 @@
 import { LocalJsonAdapter }        from "../config/adapters/LocalJsonAdapter.js";
 import { setAdaptador }            from "../config/configEngine.js"; // le dice al sistema qué fuente de datos usar
 import { resolverAmbitoTerritorial } from "../config/territorioResolver.js";
+import { esSupramunicipal } from "../config/tipoAmbito.js";
 import { DEPLOYMENT }              from "../config/deployment.js";
 
 
@@ -164,7 +165,7 @@ async function aplicarBranding(deployment) {
  * ya maneja null devolviendo directamente sin probar red.
  */
 function _resolverClaveLogoEntidad(deployment) {
-  if (deployment.ambitoTerritorial) return deployment.codigoEntidad ?? null;
+  if (esSupramunicipal(deployment)) return deployment.codigoEntidad ?? null;
   return deployment.municipios?.[0] ?? null;
 }
 
@@ -275,7 +276,7 @@ async function main() {
     // bloque nunca actúe en el ámbito supramunicipal de todas formas. Si en el futuro
     // se decide sí actualizar el logo al elegir municipio dentro de un
     // territorio, este es el punto a extender — no antes.
-    const _permiteLogoPorMunicipio = !DEPLOYMENT.ambitoTerritorial;
+    const _permiteLogoPorMunicipio = !esSupramunicipal(DEPLOYMENT);
 
     eventBus.on("municipio-cargado", async ({ municipioData }) => {
       if (!_permiteLogoPorMunicipio) return; // ámbito territorial: branding fijo, no se toca
