@@ -37,7 +37,7 @@
  *
  * ── MODELOS DE ÁMBITO TERRITORIAL (mutuamente excluyentes) ────────────────
  *
- *   MODELO A — `municipios: [...]`
+ *   ÁMBITO MONOMUNICIPAL — `municipios: [...]`
  *     Lista curada de codigos_ine. Correcto cuando el cliente ES el
  *     municipio (ayuntamiento único) o gestiona un puñado fijo y estable
  *     de municipios sin ámbito administrativo superior que resolver.
@@ -45,7 +45,7 @@
  *       ["X"]         → un municipio: carga automática al arrancar
  *       ["X","Y",...] → varios: selector activo restringido a esa lista
  *
- *   MODELO B — `ambitoTerritorial` + `codigoEntidad`
+ *   ÁMBITO SUPRAMUNICIPAL — `ambitoTerritorial` + `codigoEntidad`
  *     Para clientes cuyo ámbito ES una entidad administrativa completa
  *     (diputación/provincia, gobierno autonómico/CCAA), no una selección
  *     manual. Activa config/territorioResolver.js: máscara inicial sobre
@@ -55,7 +55,7 @@
  *       ambitoTerritorial: "provincia" | "ccaa"
  *       codigoEntidad:     código INE de la provincia o CCAA
  *     Ausencia de ambitoTerritorial = caso "municipio" por defecto
- *     (retrocompatible con Modelo A).
+ *     (retrocompatible con ámbito monomunicipal).
  *
  *   No combinar A y B en el mismo deployment.
  *
@@ -79,7 +79,7 @@
 
 // ── CASO MÁS COMPLETO: ámbito CCAA + set completo de herramientas ────────
 // Activo por defecto en esta plantilla. Cliente tipo gobierno autonómico:
-// cubre TODO el territorio (Modelo B), expone análisis, dibujo e impresión
+// cubre TODO el territorio (ámbito supramunicipal), expone análisis, dibujo e impresión
 // (placeholder deshabilitado por falta de backend).
 
 export const DEPLOYMENT = {
@@ -145,7 +145,7 @@ export const DEPLOYMENT = {
 
 
 // ── VARIANTE — ámbito PROVINCIA (diputación) ──────────────────────────────
-// Modelo B con ambitoTerritorial "provincia". Mismo patrón que CCAA, cambia
+// Ámbito supramunicipal con ambitoTerritorial "provincia". Mismo patrón que CCAA, cambia
 // el nivel administrativo y el codigoEntidad (código INE de provincia).
 
 /*
@@ -205,7 +205,7 @@ export const DEPLOYMENT = {
 */
 
 
-// ── VARIANTE — MODELO A, ayuntamiento único (1 municipio) ─────────────────
+// ── VARIANTE — ÁMBITO MONOMUNICIPAL, ayuntamiento único (1 municipio) ─────────────────
 // La app arranca y carga el municipio automáticamente, sin interacción del
 // usuario final. Caso mínimo viable: mismo patrón que pamplona/logroño.
 
@@ -244,7 +244,7 @@ export const DEPLOYMENT = {
 */
 
 
-// ── VARIANTE — MODELO A, mancomunidad/comarca (N municipios) ─────────────
+// ── VARIANTE — ÁMBITO MONOMUNICIPAL, mancomunidad/comarca (N municipios) ─────────────
 // Lista curada y estable de municipios sin ámbito administrativo superior
 // que resolver. Selector activo restringido a esa lista.
 

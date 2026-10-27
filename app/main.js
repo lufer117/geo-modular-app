@@ -272,7 +272,7 @@ async function main() {
     // "municipio-cargado" únicamente — no a "capas-municipio-agregadas".
     // Es intencional: _permiteLogoPorMunicipio ya es false para cualquier
     // deployment con ambitoTerritorial, así que el guard hace que este
-    // bloque nunca actúe en el Modelo B de todas formas. Si en el futuro
+    // bloque nunca actúe en el ámbito supramunicipal de todas formas. Si en el futuro
     // se decide sí actualizar el logo al elegir municipio dentro de un
     // territorio, este es el punto a extender — no antes.
     const _permiteLogoPorMunicipio = !DEPLOYMENT.ambitoTerritorial;
@@ -345,7 +345,7 @@ document.addEventListener("DOMContentLoaded", main);
 // ↓
 // usuario selecciona municipio
 // ↓ (bifurca según ambitoTerritorial, ver municipioSelector._onMunicipioChange)
-// ├─ "municipio" → configEngine.fetchCapas() → reconstruye todo (Modelo A)
+// ├─ "municipio" → configEngine.fetchCapas() → reconstruye todo (ámbito monomunicipal)
 // └─ "provincia"/"ccaa" → configEngine.fetchCapasMunicipales() → SUMA
 //                          capas municipales sin tocar la base territorial
 // ↓

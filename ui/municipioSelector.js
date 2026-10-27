@@ -5,14 +5,14 @@
  *
  * ── RESPONSABILIDAD ──────────────────────────────────────────────────────
  * Renderizar un selector Calcite y orquestar el pipeline de carga de datos,
- * ahora en DOS MODELOS distintos según el ámbito del deployment:
+ * ahora en DOS ÁMBITOS distintos según deployment.ambitoTerritorial:
  *
- *   Modelo A — ambitoTerritorial: "municipio" (sin cambios de comportamiento)
+ *   ámbito monomunicipal — ambitoTerritorial: "municipio" (sin cambios de comportamiento)
  *     Un único pipeline: elegir municipio → RECONSTRUYE todo el conjunto
  *     de capas desde cero. Usado por ayuntamiento único y comarca curada.
  *     Función: _cargarMunicipio() (privada, sin cambios).
  *
- *   Modelo B — ambitoTerritorial: "provincia" | "ccaa" (NUEVO)
+ *   ámbito supramunicipal — ambitoTerritorial: "provincia" | "ccaa" (NUEVO)
  *     Carga incremental en dos capas:
  *       1. cargarAmbitoTerritorial(territorioData) — UNA VEZ al arrancar.
  *          Resuelve y añade las capas de cobertura territorial (nacional/
@@ -28,13 +28,13 @@
  *          Inverso exacto de (2): retira solo lo añadido, quita el
  *          resaltado y vuelve a la máscara/zoom territorial.
  *
- * ── POR QUÉ DOS MODELOS Y NO UNO SOLO ─────────────────────────────────────
- * El modelo A siempre tuvo sentido: sin territorio superior, "elegir
+ * ── POR QUÉ DOS ÁMBITOS Y NO UNO SOLO ─────────────────────────────────────
+ * El ámbito monomunicipal siempre tuvo sentido: sin territorio superior, "elegir
  * municipio" ES la única fuente de verdad de qué mostrar — no hay nada
- * que preservar entre selecciones. El modelo B nace porque a nivel
+ * que preservar entre selecciones. El ámbito supramunicipal nace porque a nivel
  * provincia/ccaa SÍ existe una base que no debe destruirse cada vez que
  * el usuario prueba un municipio distinto (ver 3DECISIONS.md — hilo de
- * ámbito territorial). Forzar el modelo A en ambos casos convertiría cada
+ * ámbito territorial). Forzar el ámbito monomunicipal en ambos casos convertiría cada
  * cambio de municipio en un cliente Diputación/Gobierno regional en una
  * recarga completa de capas ya cargadas — desperdicio de red y de estado
  * (WMS ya cargado, WFS con features en memoria) sin ninguna necesidad.
@@ -44,7 +44,7 @@
  * mismo flujo de carga de capas — cambia solo el componente de presentación
  * y cómo se lee/limpia la selección. selection-mode="single" (no
  * "single-persist"): el usuario puede deseleccionar, y eso dispara
- * retirarCapasMunicipio() en Modelo B (comportamiento estándar en geoapps
+ * retirarCapasMunicipio() en ámbito supramunicipal (comportamiento estándar en geoapps
  * territoriales de referencia — IDENA, GeoBizkaia — donde limpiar la
  * búsqueda de municipio vuelve a la vista territorial base, nunca deja
  * capas municipales "huérfanas" en el mapa).
@@ -62,7 +62,7 @@
  * combobox en 3DECISIONS.md).
  *
  * Cuando todos los municipios visibles pertenecen a la MISMA provincia
- * (ambitoTerritorial "provincia", o un Modelo A con municipios de un solo
+ * (ambitoTerritorial "provincia", o un ámbito monomunicipal con municipios de un solo
  * territorio), agrupar sería ruido visual — un único grupo repitiendo el
  * mismo nombre no aporta nada. En ese caso se renderiza la lista plana de
  * siempre, sin grupos. Ver _agruparPorProvincia() y _necesitaAgrupacion().
@@ -91,7 +91,7 @@ let _deploymentRef          = { municipios: [] };
 let _municipiosDisponibles  = [];     // resuelto por territorioResolver
 let _idiomaListenerRegistrado = false;
 
-// Estado nuevo — solo relevante en Modelo B (ambitoTerritorial provincia/ccaa).
+// Estado nuevo — solo relevante en ámbito supramunicipal (ambitoTerritorial provincia/ccaa).
 // Se guarda aquí porque main.js lo descarta tras la carga inicial, y
 // retirarCapasMunicipio() lo necesita para volver a la máscara/zoom
 // territorial sin tener que llamar de nuevo a territorioResolver.
@@ -109,7 +109,7 @@ export function getMunicipioActivo() {
  * API pública para cargar un municipio por código INE desde fuera del módulo.
  * Usada por main.js para restaurar el estado tras un cambio de idioma.
  * Delega en _cargarMunicipio para mantener DRY — un único pipeline.
- * Solo aplica al Modelo A (ambitoTerritorial "municipio").
+ * Solo aplica al ámbito monomunicipal (ambitoTerritorial "municipio").
  *
  * @param {string} codigoIne
  */
@@ -159,7 +159,7 @@ export function renderMunicipioSelector(container, municipiosDisponibles = [], d
   }
 
   // ── Municipio único: carga automática, sin selector en el DOM ────────────
-  // Solo aplica al Modelo A. En Modelo B (provincia/ccaa) SIEMPRE se muestra
+  // Solo aplica al ámbito monomunicipal. En ámbito supramunicipal (provincia/ccaa) SIEMPRE se muestra
   // el selector, incluso si el territorio de prueba solo tiene 1 municipio
   // en el dataset actual — el usuario elige explícitamente, no hay carga
   // automática de un municipio dentro de un territorio.
@@ -173,7 +173,7 @@ export function renderMunicipioSelector(container, municipiosDisponibles = [], d
 
   // ── Selector Calcite — calcite-combobox con autocompletado ───────────────
   // Sustituye a <calcite-select>: mismo dataset (municipiosVisibles), mismo
-  // flujo posterior (_onMunicipioChange sigue bifurcando Modelo A/B) —
+  // flujo posterior (_onMunicipioChange sigue bifurcando según el ámbito) —
   // cambia únicamente el componente de presentación y cómo se lee el valor
   // seleccionado (selectedItems en vez de .value plano).
 
@@ -218,7 +218,7 @@ export function renderMunicipioSelector(container, municipiosDisponibles = [], d
       .forEach(m => combobox.appendChild(_crearComboboxItem(m)));
   }
 
-  // El handler de cambio se bifurca según el modelo — ver _onMunicipioChange.
+  // El handler de cambio se bifurca según el ámbito — ver _onMunicipioChange.
   combobox.addEventListener("calciteComboboxChange", _onMunicipioChange);
 
   label.appendChild(combobox);
@@ -285,9 +285,9 @@ function _crearComboboxItem(m) {
 /**
  * Handler del evento calciteComboboxChange.
  * Se bifurca según el ámbito del deployment activo:
- *   - "municipio" → _cargarMunicipio() (Modelo A, comportamiento existente)
+ *   - "municipio" → _cargarMunicipio() (ámbito monomunicipal, comportamiento existente)
  *   - "provincia"/"ccaa" → agregarCapasMunicipio() / retirarCapasMunicipio()
- *     (Modelo B, incremental).
+ *     (ámbito supramunicipal, incremental).
  *
  * Con selection-mode="single", event.target.selectedItems es un array de
  * 0 o 1 elementos — nunca un .value plano como en calcite-select — de ahí
@@ -311,7 +311,7 @@ async function _onMunicipioChange(event) {
 }
 
 /**
- * Pipeline de carga de un municipio — MODELO A (ambitoTerritorial "municipio").
+ * Pipeline de carga de un municipio — ÁMBITO MONOMUNICIPAL (ambitoTerritorial "municipio").
  * Reconstruye por completo el conjunto de capas. Sin cambios de
  * comportamiento respecto a la versión anterior.
  *
@@ -387,7 +387,7 @@ async function _cargarMunicipio(codigoIne) {
   }
 }
 
-// ─── Pipeline MODELO B — ámbito territorial (provincia/ccaa) ──────────────
+// ─── Pipeline ÁMBITO SUPRAMUNICIPAL (provincia/ccaa) ──────────────
 
 /**
  * Carga la BASE territorial — capas de cobertura nacional/europea/global/
@@ -536,7 +536,7 @@ export async function agregarCapasMunicipio(codigoIne) {
     // sigue siendo el territorio completo. Solo se hace zoom al municipio
     // para que el usuario vea el detalle, sin perder el contexto visual
     // territorial de fondo.
-    // El resaltado sustituye aquí a lo que en el Modelo A hace la máscara:
+    // El resaltado sustituye aquí a lo que en el ámbito monomunicipal hace la máscara:
     // señala el municipio en foco SIN sustituir la base territorial —
     // capa independiente, ver mapManager.js (sección "Resaltado de municipio").
     await mapManager.irAlMunicipio(municipioData.bbox);
@@ -608,7 +608,7 @@ export async function retirarCapasMunicipio({ mantenerZoomTerritorial = false } 
 
   // Sincronizar el <calcite-combobox> de vuelta a "sin selección", por si
   // esta función se llamó desde un origen distinto al propio change del
-  // combobox (ej. Modelo B cambiando de un municipio a otro internamente,
+  // combobox (ej. ámbito supramunicipal cambiando de un municipio a otro internamente,
   // o un futuro botón externo de "limpiar filtros").
   // A diferencia de <calcite-select>, calcite-combobox no limpia su estado
   // visual con .value = "" — el estado vive en cada calcite-combobox-item,

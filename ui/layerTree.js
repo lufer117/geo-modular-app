@@ -111,7 +111,7 @@ let _territorioData = null;
  */
 const _wfsDiscoveryExpanded = new Map();
 
-// ── Grupo municipal incremental (Modelo B — ver AJUSTE en cabecera) ───────
+// ── Grupo municipal incremental (ámbito supramunicipal — ver AJUSTE en cabecera) ───────
 // Índice en _layersRef/_configsRef donde empieza el grupo municipal actual,
 // o null si no hay ninguno activo. Solo puede existir un grupo municipal
 // a la vez (un territorio tiene, como mucho, un municipio "en foco").
@@ -145,7 +145,7 @@ export function initLayerTree(container) {
     _renderTree(layers, configs, lazyLayerIds ?? new Set());
   });
 
-  // ← NUEVO: carga inicial de la base territorial (Modelo B — ambitoTerritorial
+  // ← NUEVO: carga inicial de la base territorial (ámbito supramunicipal — ambitoTerritorial
   // "provincia"/"ccaa"). Mismo tratamiento que municipio-cargado: es una
   // carga completa desde cero, no hay nada previo en el árbol que preservar.
   on("territorio-cargado", ({ layers, configs, lazyLayerIds, territorioData }) => {
@@ -154,7 +154,7 @@ export function initLayerTree(container) {
     _renderTree(layers, configs, lazyLayerIds ?? new Set());
   });
 
-  // ← NUEVO: capas municipales incrementales (Modelo B). A diferencia de
+  // ← NUEVO: capas municipales incrementales (ámbito supramunicipal). A diferencia de
   // los dos listeners anteriores, estos NO llaman a _renderTree — suman
   // o retiran un grupo propio sin tocar la base territorial ya renderizada.
   on("capas-municipio-agregadas", ({ layers, configs, municipioData }) => {
@@ -274,7 +274,7 @@ function _renderTree(layers, configs, lazyLayerIds) {
   console.info(`[layerTree] Árbol renderizado: ${configs.length} capas`);
 }
 
-// ─── Grupo municipal incremental (Modelo B) ────────────────────────────────
+// ─── Grupo municipal incremental (ámbito supramunicipal) ────────────────────────────────
 
 /**
  * Añade un grupo de nodos al final del árbol existente, SIN reconstruir
