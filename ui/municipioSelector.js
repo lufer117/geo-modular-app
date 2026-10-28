@@ -23,7 +23,7 @@
  * ── CALLBACKS HACIA LA ESTRATEGIA ────────────────────────────────────────
  * Las estrategias no importan de ui/ (core no depende de presentación). En
  * su lugar, main.js les pasa dos callbacks que este módulo exporta:
- *   setLoadingSelector(bool)   → spinner del combobox
+ *   setLoadingSelector(bool) → bloqueo del combobox durante la carga.
  *   limpiarSeleccionSelector() → deja el combobox sin selección visible
  *
  * ── SELECTOR UI: calcite-combobox ────────────────────────────────────────
@@ -56,6 +56,11 @@ let _containerEl              = null;
 let _estrategia               = null;
 let _municipiosDisponibles    = [];
 let _idiomaListenerRegistrado = false;
+// Refleja si la estrategia está cargando. Vive en la UI (no se consulta a la
+// estrategia) para no ampliar el contrato de crearEstrategia.js, y porque
+// renderMunicipioSelector() reconstruye el combobox al cambiar de idioma y
+// necesita saber si debe nacer bloqueado.
+let _cargando = false;
 
 /**
  * codigo_ine del municipio en foco. Fachada de solo lectura sobre la
@@ -115,6 +120,8 @@ export function renderMunicipioSelector(container, estrategia, municipiosDisponi
   combobox.setAttribute("selection-mode", "single");
   combobox.setAttribute("placeholder", t("nav.municipio.placeholder"));
   combobox.setAttribute("label", t("nav.municipio.placeholder"));
+    // Reconstruido durante una carga (cambio de idioma): nace bloqueado.
+  combobox.disabled = _cargando;
 
   // Agrupación por provincia: ver docstring del módulo.
   const grupos = _agruparPorProvincia(_municipiosDisponibles);
@@ -148,13 +155,27 @@ export function renderMunicipioSelector(container, estrategia, municipiosDisponi
 
 // ─── Callbacks para las estrategias (ver docstring del módulo) ─────────────
 
-/** Muestra u oculta el spinner de carga del combobox Calcite. */
+/**
+ * Bloquea el combobox mientras la estrategia carga.
+ *
+ * Se bloquea y no solo se señala porque seleccionar() descarta en silencio
+ * cualquier elección que llegue con una carga en curso, y limpiar() durante
+ * una carga dejaba capas huérfanas y municipioActivo en null. Con el combobox
+ * deshabilitado ni la elección, ni la X, ni el clic sobre el ya seleccionado
+ * pueden ocurrir.
+ *
+ * No se usa el atributo "loading": calcite-combobox 5.1.1 no tiene esa
+ * propiedad, así que nunca mostró nada.
+ *
+ * La reactivación depende de que la estrategia llame a setLoading(false) en
+ * un bloque finally (ya es así en iniciar() y seleccionar()): un error de red
+ * no debe dejar el selector bloqueado.
+ */
 export function setLoadingSelector(isLoading) {
+  _cargando = isLoading;  // antes del early return: render lo lee aunque aún no exista el combobox
   const select = document.getElementById("municipio-select");
   if (!select) return;
-  isLoading
-    ? select.setAttribute("loading", "")
-    : select.removeAttribute("loading");
+  select.disabled = isLoading;
 }
 
 /**

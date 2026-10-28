@@ -114,6 +114,9 @@ export function crearEstrategiaSupramunicipal({ municipiosDisponibles, mascaraIn
 
     try {
       console.info(`[ámbito supramunicipal] + Agregando capas municipales: ${municipioData.nombre}`);
+      
+
+
 
       emit("municipio-seleccionado", { municipioData });
 
@@ -170,6 +173,11 @@ export function crearEstrategiaSupramunicipal({ municipiosDisponibles, mascaraIn
    * resaltado y (salvo que se indique lo contrario) vuelve a máscara/zoom
    * territorial. mantenerZoomTerritorial lo usa seleccionar() al pasar de un
    * municipio a otro, porque el siguiente zoom lo hará ella misma.
+   * 
+   * No toca la UI. Llamada desde seleccionar(), el usuario acaba de elegir el
+   * municipio nuevo, y vaciar el combobox aquí interferiría con esa elección
+   * (hoy no se nota solo por el timing de reflejo de atributos de Calcite).
+   * Sincronizar el combobox es responsabilidad de limpiar().
    */
   async function retirar({ mantenerZoomTerritorial = false } = {}) {
     if (capasMunicipioActivas.length === 0 && !municipioActivo) return;
@@ -198,9 +206,7 @@ export function crearEstrategiaSupramunicipal({ municipiosDisponibles, mascaraIn
       await mapManager.irAlMunicipio(territorioData.bbox);
     }
 
-    // Sincroniza el combobox de vuelta a "sin selección" por si se llegó aquí
-    // desde un origen distinto al propio change del combobox.
-    limpiarSeleccion();
+   
 
     console.info(`[ámbito supramunicipal] − ${idsARetirar.length} capas municipales retiradas`);
   }
@@ -217,6 +223,8 @@ export function crearEstrategiaSupramunicipal({ municipiosDisponibles, mascaraIn
 
     async limpiar() {
       await retirar();
+      // "Sin selección" es el estado final deseado solo en este camino.
+      limpiarSeleccion();
     },
 
     getMunicipioActivo() {
