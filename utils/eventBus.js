@@ -9,13 +9,54 @@
  * solo hablan a través de este bus. Esto permite añadir o retirar
  * módulos sin modificar los existentes (Open/Closed Principle).
  *
- * EVENTOS DEFINIDOS EN LA APP:
- *   "municipio-seleccionado"  → { municipioData }
- *   "municipio-cargado"       → { municipioData, layers, configs }
- *   "capa-activada"           → { layerId, layer, config }
- *   "capa-desactivada"        → { layerId, layer, config }
- *   "vista-cambiada"          → { modo: "2D" | "3D" }
- *   "basemap-cambiado"        → { basemapId }
+ * CONTRATO DEL BUS:
+ *    - on(evento, cb): suscribe la función cb (callback: la acción que se
+ *     ejecutará cuando ocurra el evento) a un evento. Devuelve a su vez una
+ *     función que, al llamarla, cancela esa suscripción.
+ *    - off(evento, cb): cancela la suscripción de cb a ese evento; desde ese
+ *     momento deja de recibir avisos. Hay que pasarle la misma función que se
+ *     usó en on(), porque así es como el bus sabe cuál retirar.
+ *   - emit(evento, datos): avisa a todos los suscritos a ese evento, en ese
+ *     mismo momento y uno tras otro. Si uno falla, se registra el error en
+ *     consola y los demás reciben el aviso igualmente.
+ *   - Cada módulo escucha eventos por su nombre exacto. No existe "escuchar
+ *     una sola vez" ni "escuchar todos los eventos de un grupo". Ejemplos:
+ *       · layerTree quiere enterarse de "capas-municipio-agregadas" y de
+ *         "capas-municipio-retiradas": se suscribe a cada uno por separado;
+ *         no puede pedir "todo lo que empiece por capas-municipio-".
+ *       · Un módulo suscrito a "idioma-cambiado" recibe todos los cambios de
+ *         idioma, no solo el primero; para dejar de recibirlos tiene que
+ *         cancelar la suscripción con off().
+ * 
+ *
+ * CATÁLOGO DE EVENTOS (fuente única; actualizar aquí al añadir o cambiar uno):
+ * 
+ * (Payload = los datos que acompañan al evento, p. ej. en "vista-cambiada"
+ *  el modo al que se cambió: { modo: "3D" }.)
+ *
+ *   Evento                      Emisor                       Payload
+ *   ──────────────────────────  ───────────────────────────  ─────────────────────────────────────────
+ *   "idioma-cambiado"           i18nManager                  { lang }
+ *   "vista-cambiada"            mapManager                   { modo: "2D" | "3D" }
+ *   "municipio-seleccionado"    estrategia (ambas)           { municipioData }
+ *   "municipio-cargado"         estrategiaMonomunicipal      { municipioData, layers, configs, lazyLayerIds }
+ *   "territorio-cargado"        estrategiaSupramunicipal     { territorioData, layers, configs, lazyLayerIds }
+ *   "capas-municipio-agregadas" estrategiaSupramunicipal     { municipioData, layers, configs, lazyLayerIds }
+ *   "capas-municipio-retiradas" estrategiaSupramunicipal     { layerIds }
+ *   "capa-activada"             layerTree                    { layerId, layer, config }
+ *   "capa-desactivada"          layerTree                    { layerId, layer, config }
+ *   "basemap-cambiado"          basemapSelector              { basemapId }
+ *
+  * 
+ * 
+ * SIMETRÍA POR ÁMBITO: la estrategia monomunicipal emite "municipio-cargado";
+ * la supramunicipal emite "territorio-cargado" (carga base) y luego
+ * "capas-municipio-agregadas/retiradas" (carga incremental por municipio).
+ *
+ * SIN CONSUMIDORES 28.10.26: "municipio-seleccionado", "capa-activada",
+ * "capa-desactivada" y "basemap-cambiado" se emiten pero ningún módulo los
+ * escucha todavía. Se mantienen como puntos de extensión (p. ej. leyenda,
+ * analítica) sin coste: emit() sobre un evento sin listeners no hace nada.
  */
 
 const _listeners = new Map();
