@@ -558,3 +558,9 @@ calcite-tree-item calcite-chip {
 .layer-row > calcite-tooltip {
   position: absolute;
 }
+
+/* [mejora4-pieza2] */
+/* Botón "Reintentar" del discovery WFS (estado de error o vacío). */
+.layer-retry {
+  margin: 0.25rem 0 0.25rem 1.5rem;
+}

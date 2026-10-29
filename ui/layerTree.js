@@ -569,6 +569,10 @@ async function _handleWfsDiscovery(item) {
     const featureTypes = await fetchFeatureTypes(config.url);
 
     if (featureTypes.length === 0) {
+      // Liberar la marca de expandido: permite reintentar (botón o re-expandir).
+      // Por qué: la respuesta vacía puede venir de un fallo transitorio del
+      // servicio; dejar el nodo "ya expandido" lo bloquearía hasta recargar.
+      _wfsDiscoveryExpanded.delete(configId);
       _setDiscoveryState(item, childrenTree, "empty");
       return;
     }
@@ -628,6 +632,11 @@ async function _handleWfsDiscovery(item) {
 
   } catch (err) {
     console.error(`[layerTree] Error al expandir WFS "${configId}":`, err);
+    // Liberar la marca de expandido: un fallo puntual (timeout, red, 5xx) no
+    // debe convertirse en estado permanente. Los cachés de formato y ejes de
+    // wfsCapabilitiesParser solo se escriben tras un GetCapabilities correcto,
+    // así que el reintento no hereda ningún resultado envenenado.
+    _wfsDiscoveryExpanded.delete(configId);
     _setDiscoveryState(item, childrenTree, "error");
   }
 }
@@ -911,13 +920,17 @@ async function _crearHijoWfs(featureType, configPadre, disponibilidad = DISPONIB
     const span = document.createElement("span");
     span.className   = "layer-label layer-label--error";
     span.textContent = featureType.title;
-    item.appendChild(span);
 
     const errorChip = document.createElement("calcite-chip");
     errorChip.setAttribute("scale", "s");
     errorChip.setAttribute("kind", "danger");
     errorChip.textContent = "Error";
-    item.appendChild(errorChip);
+
+    const fila = document.createElement("div");
+    fila.className = "layer-row";
+    fila.appendChild(span);
+    fila.appendChild(errorChip);
+    item.appendChild(fila);
 
     return { item, layer: null };
   }
@@ -1033,7 +1046,11 @@ function _setDiscoveryState(parentItem, childrenTree, state) {
   const span = document.createElement("span");
   span.className   = `layer-label layer-label--${state}`;
   span.textContent = text;
-  infoItem.appendChild(span);
+  // Etiqueta y chip en una fila con wrap (.layer-row, ver styles.css): sin ella,
+  // el chip conserva su ancho y el mensaje se parte letra a letra.
+  const fila = document.createElement("div");
+  fila.className = "layer-row";
+  fila.appendChild(span);
 
   if (chip) {
     const chipEl = document.createElement("calcite-chip");
@@ -1041,10 +1058,29 @@ function _setDiscoveryState(parentItem, childrenTree, state) {
     chipEl.setAttribute("kind", chip);
     if (icon) chipEl.setAttribute("icon", icon);
     chipEl.textContent = state === "empty" ? "Vacío" : "Error";
-    infoItem.appendChild(chipEl);
+    fila.appendChild(chipEl);
   }
 
+  infoItem.appendChild(fila);
   childrenTree.appendChild(infoItem);
+
+  // Botón de reintento (error y vacío). Va fuera del calcite-tree-item
+  // deshabilitado, que no admite interacción. stopPropagation evita que el clic
+  // alcance al tree-item padre y lo colapse. _handleWfsDiscovery limpia el
+  // contenedor y muestra el spinner de inmediato, por lo que no hay ventana
+  // para peticiones duplicadas.
+  const reintentar = document.createElement("calcite-button");
+  reintentar.className = "layer-retry";
+  reintentar.setAttribute("scale", "s");
+  reintentar.setAttribute("appearance", "outline");
+  reintentar.setAttribute("icon-start", "refresh");
+  reintentar.textContent = "Reintentar";
+  reintentar.addEventListener("click", e => {
+    e.stopPropagation();
+    reintentar.setAttribute("disabled", "");
+    _handleWfsDiscovery(parentItem);
+  });
+  childrenTree.appendChild(reintentar);
 }
 
 // ─── Agrupación ───────────────────────────────────────────────────────────
