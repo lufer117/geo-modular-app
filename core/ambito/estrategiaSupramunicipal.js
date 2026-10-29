@@ -50,50 +50,74 @@ export function crearEstrategiaSupramunicipal({ municipiosDisponibles, mascaraIn
   // quitar del mapa sin afectar la base territorial.
   let capasMunicipioActivas = [];
 
-  async function iniciar() {
-    if (!territorioData) {
-      console.warn("[ámbito supramunicipal] Sin territorio inicial: no se carga la base territorial");
-      return;
-    }
-    if (cargando) return;
-
-    cargando = true;
-    setLoading(true);
-
-    try {
-      console.info("[ámbito supramunicipal] → Cargando base territorial");
-
-      const configs = await configEngine.fetchCapasTerritoriales(territorioData);
-
-      if (configs.length === 0) {
-        console.warn("[ámbito supramunicipal] Sin capas territoriales para este ámbito");
-        return;
-      }
-
-      const { layers, cfgList, lazyLayerIds, capasInmediatas } =
-        await construirCapas(configs, territorioData);
-
-      // Primera carga → reemplazo seguro, no hay nada que preservar aún.
-      mapManager.addCapas(capasInmediatas);
-
-      await mapManager.actualizarMascara(territorioData.polygon);
-      await mapManager.irAlMunicipio(territorioData.bbox);
-
-      emit("territorio-cargado", {
-        territorioData,
-        layers,
-        configs: cfgList,
-        lazyLayerIds
-      });
-
-      console.info(`[ámbito supramunicipal] ✓ ${layers.length} capas territoriales base cargadas`);
-
-    } catch (err) {
-      console.error("[ámbito supramunicipal] Error al cargar la base territorial:", err);
-    } finally {
-      cargando = false;
-      setLoading(false);
-    }
+  async function iniciar({ alBaseVisible } = {}) {
+    if (!territorioData) {
+      console.warn("[ámbito supramunicipal] Sin territorio inicial: no se carga la base territorial");
+      return;
+    }
+    if (cargando) return;
+
+    cargando = true;
+    setLoading(true);
+
+    try {
+      console.info("[ámbito supramunicipal] → Cargando base territorial");
+
+      const configs = await configEngine.fetchCapasTerritoriales(territorioData);
+
+      if (configs.length === 0) {
+        console.warn("[ámbito supramunicipal] Sin capas territoriales para este ámbito");
+        return;
+      }
+
+      // ── ORDEN DE CARGA: primero lo que el usuario ve, después los datos ──
+      // construirCapas() NO se lanza en paralelo con la máscara y el zoom:
+      // crear e inicializar ~80 capas es trabajo de CPU en el hilo principal
+      // y, medido en el log (29.10.26), lo satura y retrasa el zoom (el
+      // splash no podía salir antes de que terminara la construcción).
+
+      // 1) Base visual con el mapa casi vacío (basemap + máscara + zoom).
+      //    Con pocas capas, "view.updating" sí es una señal fiable de que
+      //    todo está pintado; con 62 capas mezcladas no lo es.
+      await mapManager.actualizarMascara(territorioData.polygon);
+      // Sin animación: el splash cubre este encuadre y animarlo solo añade
+      // 1,2 s de espera. El zoom animado se conserva en el resto de usos.
+      await mapManager.irAlMunicipio(territorioData.bbox, { animar: false });
+
+      // 2) Aviso a quien orquesta (main.js) para retirar el splash. Se
+      //    inyecta como callback para que el ámbito no conozca el splash
+      //    (SRP). Un fallo aquí nunca debe impedir cargar las capas.
+      if (typeof alBaseVisible === "function") {
+        try {
+          await alBaseVisible();
+        } catch (err) {
+          console.warn("[ámbito supramunicipal] alBaseVisible falló (se continúa):", err);
+        }
+      }
+
+      // 3) Capas de datos: se construyen ya sin splash y con el hilo libre.
+      const { layers, cfgList, lazyLayerIds, capasInmediatas } =
+        await construirCapas(configs, territorioData);
+
+      // Primera carga → reemplazo seguro, no hay nada que preservar aún
+      // (addCapas conserva máscara y resaltado, que son infraestructura).
+      mapManager.addCapas(capasInmediatas);
+
+      emit("territorio-cargado", {
+        territorioData,
+        layers,
+        configs: cfgList,
+        lazyLayerIds
+      });
+
+      console.info(`[ámbito supramunicipal] ✓ ${layers.length} capas territoriales base cargadas`);
+
+    } catch (err) {
+      console.error("[ámbito supramunicipal] Error al cargar la base territorial:", err);
+    } finally {
+      cargando = false;
+      setLoading(false);
+    }
   }
 
   async function seleccionar(codigoIne) {

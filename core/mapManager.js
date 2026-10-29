@@ -15,9 +15,10 @@
  *
  * ── PATRÓN viewOnReady() ─────────────────────────────────────────────────
  * SDK v5 usa viewOnReady() 
- * La SceneView se inicializa en background para no bloquear el arranque:
- * _sceneReadyPromise guarda la promesa y toggleVista() la awaita solo
- * la primera vez que el usuario activa 3D.
+ * La SceneView se inicializa BAJO DEMANDA, la primera vez que el usuario activa 3D:
+ * asignar `map` a <arcgis-scene> crea el WebGL 3D y una layerView por cada capa,
+ * lo que competiría con el 2D durante el arranque. _asegurarSceneView() memoriza
+ * la promesa y toggleVista() la awaita (solo trabaja la primera vez).
  *
  * ── MÁSCARA MUNICIPAL ────────────────────────────────────────────────────
  * GraphicsLayer con polígono INVERSO al municipio (mundo − municipio),
@@ -85,7 +86,7 @@ let _sceneEl           = null; // guarda el web component <arcgis-scene> (conten
 let _vistaActiva       = "2D"; // guarda el estado global, default 2D
 let _maskLayer         = null; // GraphicsLayer usada para la máscara municipal
 let _resaltadoLayer    = null; // GraphicsLayer usada para el contorno del municipio en foco (ámbito territorial)
-let _sceneReadyPromise = null;  // Guarda la Promesa de inicialización 3D en background
+let _sceneInitPromise  = null;  // Promesa de la inicialización 3D diferida (se crea en el primer toggle a 3D)
 let _municipioViewpoint = null; // Viewpoint del último municipio cargado
 
 // Ids de capas que NUNCA deben eliminarse en el ciclo de reemplazo de
@@ -172,7 +173,7 @@ export async function initMap({ mapContainerId, sceneContainerId }) { // paramet
   // Desde aquí comparten exactamente el mismo array de capas.
   // Cualquier capa que se añada a _map se verá automáticamente en la vista 2D/3D.
    _mapEl.map   = _map; // .map (p) es una propiedad de arcgis-map y _map es una clase Map "An instance of a Map object to display in the view"
-  _sceneEl.map = _map; 
+  // _sceneEl.map se asigna bajo demanda en _asegurarSceneView() (ver toggleVista).
 
     // Espera solo la vista 2D para no bloquear el arranque de la app.
   // no espera 3D porque muy pesado al arrancar
@@ -182,7 +183,9 @@ export async function initMap({ mapContainerId, sceneContainerId }) { // paramet
   // Vista inicial centrada en España
   // <arcgis-map>.view (p) : The MapView instance created and managed by the component.
   // <arcgis-map>.goTo (m) : Sets the view to a given target.
-  await _mapEl.view.goTo({ center: [-3.7038, 40.4168], zoom: 6 });
+  // Sin animación: el usuario no ve este encuadre (lo cubre el splash) y la
+  // animación solo añade tiempo antes de cargar el ámbito territorial.
+  await _mapEl.view.goTo({ center: [-3.7038, 40.4168], zoom: 6 }, { animate: false });
 
   // ─── OVERRIDE DEL BOTÓN HOME — MapView (2D) ───────────────────────────────
   // arcgis-home en SDK v5 usa view.initialExtent (extensión al arrancar),
@@ -201,18 +204,39 @@ export async function initMap({ mapContainerId, sceneContainerId }) { // paramet
     });
   }
 
-  // ─── SCENEVIEW LAZY ───────────────────────────────────────────────────────
-  // Se inicializa en background para no bloquear el arranque.
-  // toggleVista() esperará esta promesa solo la primera vez que se active 3D.
-  _sceneReadyPromise = _sceneEl.viewOnReady().then(() => {
-    console.info("[mapManager] SceneView (3D) lista (background)");
+}
+
+// ─── TOGGLE 2D / 3D ──────────────────────────────────────────────────────
+
+/**
+ * Inicializa la SceneView 3D la primera vez que se necesita.
+ *
+ * POR QUÉ diferida: asignar `map` a <arcgis-scene> crea el WebGL 3D, el
+ * terreno y una layerView por cada capa del Map. Hacerlo en el arranque
+ * compite con el 2D por CPU y red, y genera errores WMTS en una vista que
+ * el usuario no está mirando. Se memoriza la promesa para que varias
+ * llamadas no inicialicen dos veces; si falla, se libera para permitir
+ * reintento.
+ *
+ * @returns {Promise<void>}
+ */
+function _asegurarSceneView() {
+  if (_sceneInitPromise) return _sceneInitPromise;
+
+  _sceneInitPromise = (async () => {
+    _sceneEl.map = _map;
+    await _sceneEl.viewOnReady();
+    console.info("[mapManager] SceneView (3D) lista (bajo demanda)");
+
+    // Hereda la cámara de la vista 2D y, si ya hay municipio/territorio
+    // activo, su viewpoint como destino del botón Home en 3D (la SceneView
+    // no existía cuando irAlMunicipio() se ejecutó en 2D).
     _sceneEl.view.viewpoint = _mapEl.view.viewpoint.clone();
+    if (_municipioViewpoint) _sceneEl.view.homeViewpoint = _municipioViewpoint;
 
     // ─── OVERRIDE DEL BOTÓN HOME — SceneView (3D) ─────────────────────────
-    // Se registra aquí, no antes, porque la SceneView y su Light DOM
-    // solo están garantizados cuando viewOnReady() se resuelve.
-    // Registrarlo en initMap() antes de este punto podría devolver null
-    // si el componente aún no ha renderizado sus hijos.
+    // Se registra aquí, no antes, porque el Light DOM de la SceneView solo
+    // está garantizado cuando viewOnReady() se resuelve.
     const homeScene = _sceneEl.querySelector("arcgis-home");
     if (homeScene) {
       homeScene.addEventListener("click", (e) => {
@@ -221,11 +245,13 @@ export async function initMap({ mapContainerId, sceneContainerId }) { // paramet
         _sceneEl.view.goTo(_municipioViewpoint, { animate: true, duration: 800 });
       });
     }
+  })().catch((err) => {
+    _sceneInitPromise = null; // permitir reintento en el siguiente toggle
+    throw err;
   });
 
+  return _sceneInitPromise;
 }
-
-// ─── TOGGLE 2D / 3D ──────────────────────────────────────────────────────
 
 /**
  * Alterna entre vista 2D y 3D sincronizando la posición de cámara.
@@ -239,19 +265,9 @@ export async function initMap({ mapContainerId, sceneContainerId }) { // paramet
 
 
 export async function toggleVista() {
-  // Si la promesa existe, espera a que la SceneView esté lista antes de alternar la vista. Solo se espera la primera vez.
-  if (_sceneReadyPromise) {
-    await _sceneReadyPromise;
-    _sceneReadyPromise = null;
-
-    // Al inicializar la SceneView por primera vez, si ya hay un municipio activo,
-    // aplicar su homeViewpoint. Sin esto, el Home en 3D siempre volvería al mundo
-    // porque la SceneView no existía cuando irAlMunicipio() se ejecutó en 2D.
-    if (_municipioViewpoint && _sceneEl?.view) {
-    _sceneEl.view.homeViewpoint = _municipioViewpoint;
-    }
-  
-  }
+  // Primera vez que se pide 3D: inicializarla ahora. Las siguientes llamadas
+  // reciben la misma promesa ya resuelta, sin coste.
+  await _asegurarSceneView();
 
   const is2D = _vistaActiva === "2D";
   const sourceView = is2D ? _mapEl.view : _sceneEl.view;
@@ -584,7 +600,7 @@ export function quitarResaltadoMunicipio() {
  */
 
 // Ejecutada por municipioSelector.js con mapManager.irAlMunicipio(municipioData.bbox)
-export async function irAlMunicipio(bbox) {
+export async function irAlMunicipio(bbox,{ animar = true } = {}) {
   
   // uso de ?. Evita que la aplicación se detenga con un error si el elemento (_mapEl o _sceneEl) aún no está disponible en el DOM
   const view = _vistaActiva === "2D" ? _mapEl?.view : _sceneEl?.view; //detectar si el modo actual es 2D, si es true selecciona <arcgis-map>, si es false <arcgis-scene>
@@ -611,7 +627,10 @@ export async function irAlMunicipio(bbox) {
     spatialReference: { wkid: 4326 }
   });
 
-  await view.goTo(extent.expand(1.2), { animate: true, duration: 1200 }); //.goTo(m) de _mapEl o _sceneEl, .expand(m) de extent
+  await view.goTo(
+    extent.expand(1.2),
+    animar ? { animate: true, duration: 1200 } : { animate: false }
+  ); //.goTo(m) de _mapEl o _sceneEl, .expand(m) de extent
 
   
   // Guardar viewpoint del municipio para que el botón Home pueda navegar de vuelta.

@@ -40,3 +40,7 @@ data/
 
 # Ignorar carpeta de instrucciones de GitHub
 .github/instructions/
+
+# Backups
+*.bak*
+*.ps1

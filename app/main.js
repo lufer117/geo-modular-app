@@ -47,6 +47,7 @@ import * as mapManager from "../core/mapManager.js";
 
 // ── UI ────────────────────────────────────────────────────────────────────
 // Cada función importada monta una parte visual
+import * as splash from "../ui/loadingOverlay.js";
 import { initActionBar } from "../ui/actionBar.js";
 import { renderMunicipioSelector, setLoadingSelector, limpiarSeleccionSelector } from "../ui/municipioSelector.js";
 import { crearEstrategia } from "../core/ambito/crearEstrategia.js";
@@ -62,6 +63,8 @@ import { initToolPanel } from "../ui/toolPanel.js";
 import { resolverLogo } from "../utils/logoResolver.js";
 
 import { init as initI18n } from "../utils/i18nManager.js";
+
+const T = (m) => console.log(`[T] ${m}: ${Math.round(performance.now())}ms`);
 
 // ─── Bootstrap ────────────────────────────────────────────────────────────
 
@@ -104,6 +107,51 @@ async function waitForArcGISSDK(maxWaitMs = 5000) {
     }, 50);
   });
 }
+
+/**
+ * Espera a que la vista inicial (basemap + máscara + encuadre) esté pintada,
+ * para retirar el splash sin mostrar un mapa a medio componer.
+ *
+ * POR QUÉ esta señal: se invoca cuando el mapa solo tiene basemap, máscara y
+ * resaltado (las capas de datos se añaden DESPUÉS), así que view.updating es
+ * fiable. Con las ~60 capas WMS/WFS ya cargadas no lo sería: parpadea y mezcla
+ * servicios lentos o caídos que no definen la primera impresión.
+ *
+ * Secuencia: cámara detenida -> dos rondas (frame + updating=false + margen).
+ * Las dos rondas cubren el hueco entre el goTo y la petición de los tiles
+ * nuevos. Un tope de tiempo evita dejar al usuario tras el splash si algún
+ * servicio no responde.
+ */
+async function _esperarVistaEstable(view, { maxWaitMs = 12000 } = {}) {
+  if (!view) return;
+  const reactiveUtils = await $arcgis.import("@arcgis/core/core/reactiveUtils.js");
+  await view.when();
+
+  const siguienteFrame = () =>
+    new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+  const hastaPintado = (async () => {
+    // 1) La cámara debe haber terminado de moverse (fin del goTo).
+    await reactiveUtils.whenOnce(() => view.stationary);
+    // 2) Dos rondas: tras el goTo, los tiles nuevos se piden un frame
+    //    después, y un solo whenOnce podría resolver antes de que empiecen.
+    for (let i = 0; i < 2; i++) {
+      await siguienteFrame();
+      await reactiveUtils.whenOnce(() => !view.updating);
+      await new Promise(r => setTimeout(r, 250));
+    }
+  })();
+
+  // Tope: nunca dejar al usuario tapado por el splash si algún servicio no responde.
+  await Promise.race([
+    hastaPintado,
+    new Promise(r => setTimeout(() => {
+      console.warn(`[main] Espera de vista estable agotó el tope (${maxWaitMs} ms); se retira el splash igualmente`);
+      r();
+    }, maxWaitMs))
+  ]);
+}
+
 
 // ── Branding ────────────────────────────────────────────────────────────
 // Aplica la identidad visual de la instancia desde DEPLOYMENT. Se ejecuta
@@ -204,7 +252,9 @@ function _inyectarLogoEmpresa(src) {
 // ── ARRANQUE ────────────────────────────────────────────────────────────────────
 
 async function main() {
+
   try {
+    T("inicio");
     console.info("=== GIS Municipal — Arrancando... ===");
 
 
@@ -225,6 +275,10 @@ async function main() {
       mapContainerId:   "map-view",
       sceneContainerId: "scene-view"
     });
+
+    T("mapa listo");
+
+   
 
     // 4.5. Resolver ámbito territorial del deployment activo (solo resuelve
     // datos, NO carga capas todavía — estrategia.iniciar() se llama
@@ -311,7 +365,27 @@ async function main() {
     //    uno emitido sin oyentes se pierde. Antes, el ámbito monomunicipal
     //    cargaba dentro del render del selector (antes de montar layerTree) y
     //    el supramunicipal desde main; ahora ambos pasan por el mismo punto.
-    await estrategia.iniciar();
+    let splashOculto = false;
+    const ocultarSplash = async () => {
+      if (splashOculto) return;          // idempotente
+      splashOculto = true;
+      T("base visible: inicio espera");
+      await _esperarVistaEstable(document.getElementById("map-view").view);
+      T("base visible: vista estable");
+      splash.ocultar();
+      T("splash oculto");
+
+    };
+
+    // ocultarSplash se pasa como callback: la estrategia lo invoca cuando la
+    // base visual (basemap + máscara + zoom) está lista, ANTES de añadir las
+    // ~60 capas de datos. Así el splash se retira sobre un mapa ya compuesto y
+    // las capas aparecen después, por detrás.
+    await estrategia.iniciar({ alBaseVisible: ocultarSplash });
+    T("capas listas");
+    await ocultarSplash(); // respaldo: ámbitos que no llaman al callback (monomunicipal)
+    
+
 
     console.info("=== GIS Municipal — Listo ===");
 
@@ -320,6 +394,10 @@ async function main() {
 
     //error en consola
     console.error("[main] Error fatal al inicializar:", err); // error en consola
+
+    // Se oculta el splash para que el mensaje de #app-error sea visible.
+    // Sin esto, el z-index del splash lo taparía.
+    splash.ocultar();
 
     // muestra error al usuario en el navegador
     const errEl = document.getElementById("app-error"); // conecta con index

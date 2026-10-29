@@ -24,6 +24,27 @@ body {
   font-family: var(--calcite-font-family, "Avenir Next", "Helvetica Neue", sans-serif);
 }
 
+
+/* ── Splash de carga inicial ─────────────────────────────────────────────── */
+/* Se oculta con una clase, no con display:none, para poder animar el fundido. */
+.splash {
+  position: fixed;
+  inset: 0;
+  z-index: 100000;            /* por encima de los controles del mapa y de Calcite */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--calcite-color-foreground-1, #fff);
+  opacity: 1;
+  transition: opacity .4s ease, visibility 0s;
+}
+.splash--oculto {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;       /* no bloquea clics mientras se desvanece */
+  transition: opacity .4s ease, visibility 0s .4s;
+}
+
 /* ── Shell ───────────────────────────────────────────────────────────────── */
 
 calcite-shell {
