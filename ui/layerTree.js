@@ -687,14 +687,20 @@ function _crearItemCapa(config, layer, globalIndex) {
     const span = document.createElement("span");
     span.className   = "layer-label layer-label--error";
     span.textContent = config.title;
-    item.appendChild(span);
 
     const chip = document.createElement("calcite-chip");
     chip.setAttribute("scale", "s");
     chip.setAttribute("kind", "danger");
     chip.setAttribute("icon", "exclamation-mark-triangle");
     chip.textContent = "No disponible";
-    item.appendChild(chip);
+
+    // Título y chip en fila con wrap (.layer-row): sin ella el chip conserva su
+    // ancho y el título se parte letra a letra.
+    const fila = document.createElement("div");
+    fila.className = "layer-row";
+    fila.appendChild(span);
+    fila.appendChild(chip);
+    item.appendChild(fila);
 
     return item;
   }
