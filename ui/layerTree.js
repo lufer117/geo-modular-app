@@ -84,7 +84,7 @@ import { clearContainer }  from "../utils/domUtils.js";
 import * as mapManager     from "../core/mapManager.js";
 import { crearCapaWfsHija } from "../core/layerFactory.js";
 import { aplicarBboxWfs }  from "../core/layerInitializer.js"; // ← CAMBIO: importar helper de filtrado
-import { fetchFeatureTypes, checkFeaturesInBbox } from "../utils/wfsCapabilitiesParser.js";
+import { fetchFeatureTypes, checkFeaturesInBbox, DISPONIBILIDAD } from "../utils/wfsCapabilitiesParser.js";
 
 // ─── Estado interno del módulo ────────────────────────────────────────────
 
@@ -585,7 +585,7 @@ async function _handleWfsDiscovery(item) {
     // por lo que Promise.all es seguro sin .catch adicional.
     const bbox = _territorioData?.bbox ?? null; // ← CAMBIO: _municipioData → _territorioData
 
-    let availabilityMap; // Map<nombre_featureType, boolean>
+    let availabilityMap; // Map<nombre_featureType, DISPONIBILIDAD>
 
     if (bbox) {
       // const checks  = featureTypes.map(ft => checkFeaturesInBbox(config.url, ft.name, bbox));
@@ -601,7 +601,7 @@ async function _handleWfsDiscovery(item) {
       // Si el servidor no tiene datos en esta zona, la capa quedará vacía pero
       // no bloqueará el discovery.
       console.warn("[layerTree] _territorioData.bbox no disponible; omitiendo check BBOX");
-      availabilityMap = new Map(featureTypes.map(ft => [ft.name, true]));
+      availabilityMap = new Map(featureTypes.map(ft => [ft.name, DISPONIBILIDAD.DESCONOCIDA]));
 
       // BUG MARCADO: aquí se usa `results[i]` aunque `results` no existe en esta rama.
       // Si se corrige, esta rama debería mapear a `true` por defecto.q
@@ -612,7 +612,7 @@ async function _handleWfsDiscovery(item) {
     // _crearHijoWfs recibe el flag de disponibilidad: si es false, renderiza
     // el nodo como deshabilitado con chip informativo y omite la instancia de capa.
     const hijos = await Promise.all(
-      featureTypes.map(ft => _crearHijoWfs(ft, config, availabilityMap.get(ft.name) ?? false))
+      featureTypes.map(ft => _crearHijoWfs(ft, config, availabilityMap.get(ft.name) ?? DISPONIBILIDAD.DESCONOCIDA))
     );
 
     // Limpiar el spinner antes de añadir los hijos
@@ -868,16 +868,17 @@ function _crearItemWfsDiscovery(config, globalIndex) {
  *
  * @param {import('../utils/wfsCapabilitiesParser.js').FeatureTypeInfo} featureType
  * @param {Object} configPadre - Config del catálogo del servicio padre
+ * @param {"si"|"no"|"desconocida"} [disponibilidad] - Valor de DISPONIBILIDAD
  * @returns {Promise<{item: HTMLElement, layer: WFSLayer|null}>}
  */
-async function _crearHijoWfs(featureType, configPadre, disponible = true) {
+async function _crearHijoWfs(featureType, configPadre, disponibilidad = DISPONIBILIDAD.SI) {
   const hijoId = `${configPadre.id}::${featureType.name}`;
 
   // ── Cortocircuito: sin datos en este municipio ────────────────────────
   // No instanciamos la WFSLayer porque no hay nada que añadir al mapa.
   // El nodo se renderiza deshabilitado con un chip informativo para que
   // el usuario sepa que el tipo existe pero no tiene cobertura aquí.
-  if (!disponible) {
+  if (disponibilidad === DISPONIBILIDAD.NO) {
      const item = document.createElement("calcite-tree-item");
   item.dataset.layerId = hijoId;
   item.dataset.wfsHijo = "true";
@@ -932,10 +933,20 @@ async function _crearHijoWfs(featureType, configPadre, disponible = true) {
   // Almacenar referencia directa en el nodo DOM para acceso O(1) desde el listener
   item._layerInstance = layer;
 
+  // ── Fila de contenido: etiqueta + indicadores ─────────────────────────────
+  // Etiqueta, chip de CRS e icono de aviso se agrupan en una fila flex con wrap
+  // (ver .layer-row en styles.css). Por qué: calcite-tree-item reparte el ancho
+  // entre sus hijos directos y, con la etiqueta y varios chips al mismo nivel,
+  // el nombre cedía todo el espacio y se partía letra a letra. Con wrap, la
+  // etiqueta conserva siempre un ancho mínimo legible y los indicadores bajan
+  // a la línea siguiente si no caben.
+  const fila = document.createElement("div");
+  fila.className = "layer-row";
+
   const span = document.createElement("span");
   span.className   = "layer-label";
   span.textContent = featureType.title;
-  item.appendChild(span);
+  fila.appendChild(span);
 
   // Mostrar el nombre técnico como tooltip para que el usuario pueda
   // identificar el FeatureType exacto en caso de necesitar referenciarlo
@@ -949,8 +960,38 @@ async function _crearHijoWfs(featureType, configPadre, disponible = true) {
     crsChip.setAttribute("scale", "s");
     crsChip.setAttribute("kind", "neutral");
     crsChip.textContent = featureType.crs.replace(/.*:/, "EPSG:");
-    item.appendChild(crsChip);
+    fila.appendChild(crsChip);
   }
+
+  // Disponibilidad no comprobada (timeout, red, HTTP no-OK, servicio sin
+  // outputFormat JSON...): la capa sigue activable, pero se avisa de que la
+  // cobertura no se confirmó. Honestidad de estado: la UI no afirma "sin datos"
+  // cuando solo sabe "no pude comprobarlo".
+  // Solo icono en el árbol (ocupa ~1 rem) y la explicación completa en un
+  // calcite-tooltip: un chip con texto largo es lo que dejaba sin sitio al nombre.
+  if (disponibilidad === DISPONIBILIDAD.DESCONOCIDA) {
+    const aviso = "Cobertura sin confirmar: no se pudo comprobar si hay datos en esta zona (el servicio no respondió a tiempo o no admite la comprobación). Puede activar la capa igualmente; si no hay datos, se verá vacía.";
+
+    const icono = document.createElement("calcite-icon");
+    icono.className = "layer-aviso-icon";
+    icono.setAttribute("icon", "information");
+    icono.setAttribute("scale", "s");
+    icono.setAttribute("text-label", aviso);
+    // title vacío: evita que el title nativo del item (nombre técnico) se
+    // superponga al calcite-tooltip al pasar el ratón por el icono.
+    icono.setAttribute("title", "");
+    fila.appendChild(icono);
+
+    // overlay-positioning="fixed": el panel de capas tiene scroll propio y un
+    // tooltip "absolute" quedaría recortado por su overflow.
+    const tooltip = document.createElement("calcite-tooltip");
+    tooltip.setAttribute("overlay-positioning", "fixed");
+    tooltip.referenceElement = icono;
+    tooltip.textContent = aviso;
+    fila.appendChild(tooltip);
+  }
+
+  item.appendChild(fila);
 
   return { item, layer };
 }

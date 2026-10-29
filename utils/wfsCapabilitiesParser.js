@@ -75,6 +75,24 @@ function _log(...args) {
 const CAPABILITIES_TIMEOUT_MS = 15_000;
 const BBOX_CHECK_TIMEOUT_MS   = 10_000;
 
+/**
+ * Resultado de checkFeaturesInBbox: tres estados, no un booleano.
+ *   SI          → el servidor respondió y hay al menos una feature en el bbox.
+ *   NO          → el servidor respondió con una colección válida y vacía.
+ *   DESCONOCIDA → no se pudo saber (timeout, red, HTTP no-OK, cuerpo no
+ *                 interpretable o servicio sin outputFormat JSON).
+ *
+ * Por qué no un booleano: un servicio lento no es evidencia de que no haya
+ * datos. Con true/false, un timeout se colaba como "sin datos" y deshabilitaba
+ * capas que sí tenían features (caso SIOSE, P16). Con tres estados, quien
+ * llama decide qué hacer con la incertidumbre.
+ */
+const DISPONIBILIDAD = Object.freeze({
+  SI:          "si",
+  NO:          "no",
+  DESCONOCIDA: "desconocida",
+});
+
 // ─── cachés de comportamiento por servicio ────────────────────────────────────
 //
 // Ambos Maps usan la URL limpia (_cleanUrl) como clave para identificar
@@ -306,7 +324,7 @@ async function fetchFeatureTypes(serviceUrl) {
 }
 
 /**
- * Comprueba si un FeatureType tiene geometrías dentro del bbox del municipio.
+ * Comprueba si un FeatureType tiene geometrías dentro del bbox del territorio.
  *
  * Estrategia: GetFeature mínimo (COUNT=1 / maxFeatures=1) con filtro BBOX.
  * Se envían ambos parámetros para cubrir WFS 1.x y 2.0 sin negociar versión.
@@ -315,11 +333,11 @@ async function fetchFeatureTypes(serviceUrl) {
  * poblados por fetchFeatureTypes — checkFeaturesInBbox no necesita recibirlos
  * como parámetros ni layerTree necesita conocerlos (SRP).
  *
- * Degradación segura:
- *   - Sin outputFormat JSON en caché → return true (nodo activable)
- *   - Error de red, timeout, JSON inválido → return false
- * Es preferible un nodo activable con posibles features vacías que deshabilitar
- * una capa con datos reales por un fallo de protocolo.
+ * ── TRES ESTADOS (ver DISPONIBILIDAD) ─────────────────────────────────────
+ * Solo se devuelve NO cuando el servidor contestó con una colección válida y
+ * vacía. Cualquier otra cosa que impida saberlo devuelve DESCONOCIDA: es
+ * preferible un nodo activable y marcado como "sin confirmar" que deshabilitar
+ * una capa con datos reales por un fallo de protocolo o de latencia.
  *
  * Por qué query string manual y no URLSearchParams:
  *   URLSearchParams codifica ":" como "%3A". ArcGIS Server no reconoce el
@@ -328,15 +346,15 @@ async function fetchFeatureTypes(serviceUrl) {
  * @param {string}   serviceUrl - URL base del servicio WFS
  * @param {string}   typeName   - Nombre del FeatureType (campo name de FeatureTypeInfo)
  * @param {number[]} bbox       - [xmin, ymin, xmax, ymax] en WGS84
- * @returns {Promise<boolean>}  true si existen features en el bbox
+ * @returns {Promise<"si"|"no"|"desconocida">} Valor de DISPONIBILIDAD. Nunca rechaza.
  */
 async function checkFeaturesInBbox(serviceUrl, typeName, bbox) {
   const cleanedUrl   = _cleanUrl(serviceUrl);
   const outputFormat = _outputFormatCache.get(cleanedUrl) ?? null;
 
   if (outputFormat === null) {
-    console.warn(`[wfsCapabilitiesParser] Sin outputFormat JSON para ${serviceUrl} — asumiendo disponible`);
-    return true;
+    console.warn(`[wfsCapabilitiesParser] Sin outputFormat JSON para ${serviceUrl} — disponibilidad desconocida`);
+    return DISPONIBILIDAD.DESCONOCIDA;
   }
 
   const controller = new AbortController();
@@ -347,7 +365,6 @@ async function checkFeaturesInBbox(serviceUrl, typeName, bbox) {
     const bboxStr   = _buildBboxString(bbox, axisOrder);
 
     // Query manual: preserva ":" literal en TYPENAME (namespace de ArcGIS Server).
-    // URLSearchParams lo codifica como "%3A" → el servidor no reconoce el tipo.
     const queryString = [
       'SERVICE=WFS',
       'REQUEST=GetFeature',
@@ -364,16 +381,32 @@ async function checkFeaturesInBbox(serviceUrl, typeName, bbox) {
       signal: controller.signal,
     });
 
-    if (!response.ok) return false;
+    if (!response.ok) {
+      console.warn(`[wfsCapabilitiesParser] HTTP ${response.status} al comprobar "${typeName}" — disponibilidad desconocida`);
+      return DISPONIBILIDAD.DESCONOCIDA;
+    }
 
     const data = await response.json();
-    const count = data?.features?.length ?? 0;
-    _log('Resultado bbox check:', typeName, '→ features:', count);
-    return Array.isArray(data?.features) && count > 0;
 
-  } catch {
-    // AbortError, NetworkError o JSON malformado → no penalizar la capa
-    return false;
+    // Respuesta 200 pero sin colección de features (p. ej. una excepción OGC
+    // serializada como JSON): no es evidencia de "vacío".
+    if (!Array.isArray(data?.features)) {
+      console.warn(`[wfsCapabilitiesParser] Respuesta sin "features" para "${typeName}" — disponibilidad desconocida`);
+      return DISPONIBILIDAD.DESCONOCIDA;
+    }
+
+    const count = data.features.length;
+    _log('Resultado bbox check:', typeName, '→ features:', count);
+    return count > 0 ? DISPONIBILIDAD.SI : DISPONIBILIDAD.NO;
+
+  } catch (err) {
+    // AbortError (timeout), error de red/CORS o JSON malformado: no sabemos
+    // si hay datos, y no es motivo para afirmar que no los hay.
+    const motivo = err.name === 'AbortError'
+      ? `timeout (${BBOX_CHECK_TIMEOUT_MS} ms)`
+      : err.message;
+    console.warn(`[wfsCapabilitiesParser] Bbox check "${typeName}": ${motivo} — disponibilidad desconocida`);
+    return DISPONIBILIDAD.DESCONOCIDA;
   } finally {
     clearTimeout(timeoutId);
   }
@@ -391,4 +424,4 @@ function isWfsUrl(url) {
   return lower.includes('wfs') || lower.includes('service=wfs');
 }
 
-export { fetchFeatureTypes, checkFeaturesInBbox, isWfsUrl };
+export { fetchFeatureTypes, checkFeaturesInBbox, isWfsUrl, DISPONIBILIDAD };
