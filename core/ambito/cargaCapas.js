@@ -28,6 +28,19 @@ import { crearCapa }       from "../layerFactory.js";
 import { inicializarCapa } from "../layerInitializer.js";
 
 /**
+ * Una capa "diferida" no entra al mapa en la carga inicial: se anade cuando el
+ * usuario la activa. Son las WFS (discovery lazy) y las marcadas con
+ * servicio_disponible:false en el catalogo. Esa marca es una foto fija del
+ * ultimo enriquecimiento y puede estar caducada, asi que no se usa para
+ * bloquear la capa, pero tampoco se carga sin que nadie la pida: evita errores
+ * de servicios caidos en cada arranque. Si el servicio ya se recupero, funcionara
+ * al activarla; si no, layerTree la marca como fallida y permite reintentar.
+ */
+export function esCapaDiferida(config) {
+  return config.tipo === "WFS" || config.servicio_disponible === false;
+}
+
+/**
  * Construye e inicializa las capas de una lista de configs.
  *
  * Tolerancia a fallos: crearCapa() ya devuelve null (y registra el error)
@@ -67,7 +80,7 @@ export async function construirCapas(configs, territorioData) {
     cfgList.filter(c => c.tipo === "WFS").map(c => c.id)
   );
 
-  const capasInmediatas = layers.filter((_, i) => cfgList[i].tipo !== "WFS");
+  const capasInmediatas = layers.filter((_, i) => !esCapaDiferida(cfgList[i]));
 
   return { layers, cfgList, lazyLayerIds, capasInmediatas };
 }

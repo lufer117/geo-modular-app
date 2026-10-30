@@ -564,3 +564,14 @@ calcite-tree-item calcite-chip {
 .layer-retry {
   margin: 0.25rem 0 0.25rem 1.5rem;
 }
+
+/* [mejora4-pieza4] */
+/* Indicador de fallo de carga de una capa (icono + tooltip, sin chip con texto). */
+.layer-aviso-icon--error {
+  color: var(--calcite-color-status-danger);
+  cursor: help;
+}
+
+calcite-tree-item > calcite-tooltip {
+  position: absolute;
+}

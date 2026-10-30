@@ -179,6 +179,7 @@ export async function initMap({ mapContainerId, sceneContainerId }) { // paramet
   // no espera 3D porque muy pesado al arrancar
   await _mapEl.viewOnReady(); // (m) <arcgis-map>.viewOnReady() devuelve una promesa
   console.info("[mapManager] MapView (2D) lista");
+  _escucharErroresLayerView(_mapEl.view, "2D");
 
   // Vista inicial centrada en España
   // <arcgis-map>.view (p) : The MapView instance created and managed by the component.
@@ -227,6 +228,7 @@ function _asegurarSceneView() {
     _sceneEl.map = _map;
     await _sceneEl.viewOnReady();
     console.info("[mapManager] SceneView (3D) lista (bajo demanda)");
+    _escucharErroresLayerView(_sceneEl.view, "3D");
 
     // Hereda la cámara de la vista 2D y, si ya hay municipio/territorio
     // activo, su viewpoint como destino del botón Home en 3D (la SceneView
@@ -446,6 +448,36 @@ export function addCapas(capas) {
  *
  * @param {Layer} capa
  */
+
+/**
+ * Publica en el eventBus los fallos de creacion de layerview de una vista.
+ *
+ * Por que aqui y no en layerTree: mapManager es el unico dueno de las vistas
+ * (SRP); el arbol solo reacciona al evento "capa-error-carga" sin conocer el
+ * SDK. Se registra una vez por vista (la 3D, al crearse bajo demanda).
+ * La vista se incluye en el payload porque hay fallos exclusivos de 3D (WMTS con
+ * esquema de teselas no soportado, P48) que no invalidan la capa en 2D.
+ *
+ * @param {MapView|SceneView} view
+ * @param {"2D"|"3D"} vista
+ */
+function _escucharErroresLayerView(view, vista) {
+  view.on("layerview-create-error", ({ layer, error }) => {
+    console.warn(`[mapManager] layerview-create-error (${vista}) "${layer?.id}":`, error?.message ?? error);
+    eventBus.emit("capa-error-carga", { layerId: layer?.id, vista, error });
+  });
+}
+
+/**
+ * Retira una capa de datos del Map sin destruirla. Lo usa layerTree al marcar
+ * una capa como fallida, para que volver a activarla la reanada limpia.
+ *
+ * @param {Layer} capa
+ */
+export function quitarCapa(capa) {
+  if (!_map || !capa) return;
+  _map.layers.remove(capa);
+}
 
 // Ejecturada por layerTree.js para cargar WFS cuando el usuario marca el checkbox
 export function addCapa(capa) {

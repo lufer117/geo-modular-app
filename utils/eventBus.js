@@ -46,6 +46,7 @@
  *   "capa-activada"             layerTree                    { layerId, layer, config }
  *   "capa-desactivada"          layerTree                    { layerId, layer, config }
  *   "basemap-cambiado"          basemapSelector              { basemapId }
+ *   "capa-error-carga"          mapManager                   { layerId, vista: "2D" | "3D", error }
  *
   * 
  * 

@@ -82,8 +82,8 @@
 import { on, emit }        from "../utils/eventBus.js";
 import { clearContainer }  from "../utils/domUtils.js";
 import * as mapManager     from "../core/mapManager.js";
-import { crearCapaWfsHija } from "../core/layerFactory.js";
-import { aplicarBboxWfs }  from "../core/layerInitializer.js"; // ← CAMBIO: importar helper de filtrado
+import { crearCapa, crearCapaWfsHija } from "../core/layerFactory.js";
+import { aplicarBboxWfs, inicializarCapa }  from "../core/layerInitializer.js"; // ← CAMBIO: importar helper de filtrado
 import { fetchFeatureTypes, checkFeaturesInBbox, DISPONIBILIDAD } from "../utils/wfsCapabilitiesParser.js";
 
 // ─── Estado interno del módulo ────────────────────────────────────────────
@@ -102,6 +102,14 @@ let _lazyLayerIds  = new Set();
 // asume escala municipal — sigue siendo el mismo mecanismo, agnóstico
 // a si el bbox es de un municipio o de un territorio completo.
 let _territorioData = null;
+
+// Territorio (municipio) del grupo municipal incremental; lo necesita la
+// reconstrucción de una capa de ese grupo tras un fallo (ver "Fallos de carga").
+let _datosGrupoMunicipal = null;
+
+// Fallos (layerId → error) que llegaron antes de que existiera su nodo en el
+// árbol. Se guarda el error para poder registrarlo con su motivo real al aplicarlo.
+const _fallosPendientes = new Map();
 
 /**
  * Conjunto de IDs de nodos WFS "discovery" que ya han sido expandidos.
@@ -164,6 +172,9 @@ export function initLayerTree(container) {
   on("capas-municipio-retiradas", () => {
     _retirarGrupoMunicipal();
   });
+
+  // Fallos de carga de capas (mapManager → layerview-create-error). Ver "Fallos de carga".
+  on("capa-error-carga", _handleErrorCarga);
 }
 
 // ─── Renderizado principal ─────────────────────────────────────────────────
@@ -200,7 +211,9 @@ function _renderTree(layers, configs, lazyLayerIds) {
   // de todos los nodos hoja. Los nodos agrupadores y nodos WFS discovery
   // no tienen data-layer-id → el listener los ignora.
   tree.addEventListener("calciteTreeItemSelect", e => {
-    _handleLayerSelect(e);
+    _handleLayerSelect(e).catch(err =>
+      console.error("[layerTree] Error al gestionar la selección de capa:", err)
+    );
   });
 
   // ── Listener de expansión (discovery WFS) ─────────────────────────────
@@ -272,6 +285,7 @@ function _renderTree(layers, configs, lazyLayerIds) {
 
   _containerEl.appendChild(tree);
   console.info(`[layerTree] Árbol renderizado: ${configs.length} capas`);
+  _aplicarFallosPendientes();
 }
 
 // ─── Grupo municipal incremental (ámbito supramunicipal) ────────────────────────────────
@@ -306,6 +320,7 @@ function _agregarGrupoMunicipal(layers, configs, municipioData) {
   _retirarGrupoMunicipal();
 
   _inicioGrupoMunicipal = _layersRef.length;
+  _datosGrupoMunicipal  = municipioData;
   _layersRef  = [..._layersRef, ...layers];
   _configsRef = [..._configsRef, ...configs];
 
@@ -389,7 +404,7 @@ function _retirarGrupoMunicipal() {
  * Gestiona la activación/desactivación de una capa hoja.
  * Se llama desde el listener de calciteTreeItemSelect.
  */
-function _handleLayerSelect(e) {
+async function _handleLayerSelect(e) {
   const item = e.target.closest("calcite-tree-item[data-layer-id]");
   if (!item) return;
 
@@ -400,7 +415,7 @@ function _handleLayerSelect(e) {
   // porque no estaba en el array original de configs/layers.
   // Se gestiona en _handleWfsHijoSelect.
   if (item.dataset.wfsHijo === "true") {
-    _handleWfsHijoSelect(item, layerId);
+    await _handleWfsHijoSelect(item, layerId);
     return;
   }
 
@@ -415,7 +430,7 @@ function _handleLayerSelect(e) {
   // Calcite actualiza "selected" antes de emitir el evento.
   const visible = !item.hasAttribute("selected");
 
-  const layer  = _layersRef[globalIndex];
+  let layer  = _layersRef[globalIndex];
   const config = _configsRef[globalIndex];
 
   if (!layer) {
@@ -423,8 +438,29 @@ function _handleLayerSelect(e) {
     return;
   }
 
-  // Lazy-load: la capa entra al mapa solo la primera vez que se activa.
-  if (visible && _lazyLayerIds.has(layerId) && !layer.map) {
+  // Desmarcar un nodo en fallo: solo descarta el aviso. La capa ya no estaba en
+  // el mapa; la instancia fallida queda señalada para reconstruirse al volver a
+  // marcar (ver bloque "Fallos de carga").
+  if (!visible && item.dataset.instanciaFallida === "true") {
+    _descartarAvisoFallo(item);
+    console.info(`[layerTree] "${layerId}" → aviso de fallo descartado`);
+    return;
+  }
+
+  // Reintento: si la capa falló antes, se reconstruye (una instancia con la
+  // carga fallida no puede volver a cargar; ver bloque "Fallos de carga").
+  if (visible && item.dataset.instanciaFallida === "true") {
+    layer = await _reconstruirCapaHoja(item, globalIndex, config);
+    if (!layer) {
+      _marcarFalloCarga(layerId, new Error("No se pudo reconstruir la capa"));
+      return;
+    }
+  }
+
+  // Toda capa que no esté en el mapa se añade al activarla. Antes solo las WFS
+  // (carga diferida); ahora también las que cargaCapas.esCapaDiferida() deja
+  // fuera del arranque (servicio_disponible: false) y las retiradas tras un fallo.
+  if (visible && !layer.map) {
     mapManager.addCapa(layer);
   }
 
@@ -442,13 +478,29 @@ function _handleLayerSelect(e) {
  * @param {HTMLElement} item   - El calcite-tree-item del hijo
  * @param {string}      hijoId - ID derivado: "{padreId}::{featureType.name}"
  */
-function _handleWfsHijoSelect(item, hijoId) {
+async function _handleWfsHijoSelect(item, hijoId) {
   const visible = !item.hasAttribute("selected");
 
   // La instancia de capa se almacena en el propio nodo DOM como referencia.
   // Esto evita un Map externo y mantiene el estado colocado junto al elemento
   // que lo necesita. Se asigna en _crearHijoWfs cuando se crean los hijos.
-  const layer = item._layerInstance;
+  let layer = item._layerInstance;
+
+  // Desmarcar un nodo en fallo: solo descarta el aviso (ver bloque "Fallos de carga").
+  if (!visible && item.dataset.instanciaFallida === "true") {
+    _descartarAvisoFallo(item);
+    console.info(`[layerTree] WFS hijo "${hijoId}" → aviso de fallo descartado`);
+    return;
+  }
+
+  // Reintento tras un fallo previo: nueva instancia (ver bloque "Fallos de carga").
+  if (visible && item.dataset.instanciaFallida === "true") {
+    layer = await _reconstruirHijoWfs(item);
+    if (!layer) {
+      _marcarFalloCarga(hijoId, new Error("No se pudo reconstruir la capa"));
+      return;
+    }
+  }
 
   if (!layer) {
     console.warn(`[layerTree] Capa WFS hija sin instancia: "${hijoId}"`);
@@ -478,6 +530,7 @@ function _handleWfsHijoSelect(item, hijoId) {
       })
       .catch(err => {
         console.error(`[layerTree] Error al cargar capa WFS hija "${hijoId}":`, err);
+        _marcarFalloCarga(hijoId, err);
       });
   }
 
@@ -522,6 +575,11 @@ function _handleWmsSublayerSelect(item, hijoId) {
 
   // Si se activa una sublayer y el WMS padre está oculto, lo mostramos.
   // Sin esto, sublayer.visible=true sería invisible para el usuario.
+  // El WMS padre puede no estar en el mapa (capa diferida o retirada tras un fallo).
+  if (visible && !layer.map) {
+    mapManager.addCapa(layer);
+  }
+
   if (visible && !layer.visible) {
     layer.visible = true;
   }
@@ -641,6 +699,198 @@ async function _handleWfsDiscovery(item) {
   }
 }
 
+// ─── Fallos de carga y reintento (mejora 4, pieza 4) ───────────────────────
+//
+// Por qué existe: un servicio de terceros puede fallar al cargar una capa
+// (timeout, 5xx, ServiceExceptionReport...). Sin este bloque el usuario marcaba
+// la capa y no pasaba nada, y la única salida era recargar la página.
+//
+// Mecanismo único para WMS, WFS hijas y el resto:
+//   1. El fallo llega por "capa-error-carga" (layerview-create-error, 2D) o por
+//      el catch de layer.load() en las WFS hijas.
+//   2. _marcarFalloCarga() quita la capa del mapa y añade un icono con tooltip.
+//      El nodo NO se desmarca: el check expresa la intención del usuario ("quiero
+//      esta capa") y el icono expresa el estado real del servicio ("falló").
+//      Mezclar ambos en un solo booleano hacía que el clic fuese impredecible
+//      (pieza 4b). Sin chip con texto: un chip largo dejaba sin sitio al nombre
+//      de la capa (ver pieza 1b).
+//   3. Desmarcar el nodo descarta el aviso; volver a marcarlo RECONSTRUYE la
+//      capa (dataset.instanciaFallida). Es obligatorio:
+//      Loadable.load() solo se ejecuta la primera vez por instancia y las
+//      llamadas posteriores devuelven la misma promesa ya resuelta/rechazada,
+//      así que reañadir la misma instancia al mapa no reintentaría nada.
+
+const TEXTO_FALLO_CARGA =
+  "No se pudo cargar esta capa (el servicio no respondió o devolvió un error). " +
+  "Desmárquela y vuelva a marcarla para reintentar.";
+
+/** Nodos del árbol cuyo data-layer-id coincide exactamente con layerId. */
+function _nodosDeCapa(layerId) {
+  if (!_containerEl || !layerId) return [];
+  return Array.from(
+    _containerEl.querySelectorAll(
+      `calcite-tree-item[data-layer-id="${CSS.escape(layerId)}"]`
+    )
+  );
+}
+
+/** Instancia de capa asociada a un nodo (hijo WFS o nodo con índice global). */
+function _instanciaDeNodo(item) {
+  if (item._layerInstance) return item._layerInstance;
+  const idx = parseInt(item.dataset.layerIndex, 10);
+  return Number.isNaN(idx) ? null : (_layersRef[idx] ?? null);
+}
+
+/**
+ * Listener de "capa-error-carga" (emitido por mapManager).
+ * Solo se marca el nodo con fallos de la vista 2D: los fallos exclusivos de 3D
+ * (p. ej. WMTS con esquema de teselas no soportado, P48) no invalidan la capa en
+ * 2D, así que de momento solo se registran.
+ */
+function _handleErrorCarga({ layerId, vista, error }) {
+  if (!layerId) return;
+  if (vista !== "2D") {
+    console.info(`[layerTree] Fallo de layerview en ${vista} ("${layerId}"): solo se registra`, error);
+    return;
+  }
+  _marcarFalloCarga(layerId, error);
+}
+
+/**
+ * Marca como fallida la capa layerId: la retira del mapa, desmarca su nodo y
+ * añade el indicador. Idempotente (varios eventos del mismo fallo no duplican
+ * el icono). Si el nodo aún no existe (el fallo llegó antes de renderizar el
+ * árbol) se recuerda y se aplica en _aplicarFallosPendientes().
+ */
+function _marcarFalloCarga(layerId, err) {
+  const nodos = _nodosDeCapa(layerId);
+  if (nodos.length === 0) {
+    _fallosPendientes.set(layerId, err);
+    return;
+  }
+
+  console.warn(`[layerTree] Capa no cargada "${layerId}":`, err?.message ?? err ?? "(sin detalle)");
+
+  nodos.forEach(item => {
+    const layer = _instanciaDeNodo(item);
+    if (layer) mapManager.quitarCapa(layer);
+
+    // El nodo conserva su check (intención del usuario). instanciaFallida marca
+    // que la instancia actual no sirve y hay que reconstruirla al reactivar;
+    // cargaFallida indica que el aviso está visible.
+    item.dataset.instanciaFallida = "true";
+
+    if (item.dataset.cargaFallida === "true") return;
+    item.dataset.cargaFallida = "true";
+    _añadirIndicadorFallo(item);
+  });
+}
+
+/** Aplica los fallos que llegaron antes de que existiera el nodo. */
+function _aplicarFallosPendientes() {
+  Array.from(_fallosPendientes).forEach(([layerId, err]) => {
+    if (_nodosDeCapa(layerId).length === 0) return;
+    _fallosPendientes.delete(layerId);
+    _marcarFalloCarga(layerId, err);
+  });
+}
+
+/** Icono + tooltip de fallo. Se coloca en .layer-row si el nodo la tiene. */
+function _añadirIndicadorFallo(item) {
+  const destino = item.querySelector(":scope > .layer-row") ?? item;
+
+  const icono = document.createElement("calcite-icon");
+  icono.className = "layer-aviso-icon layer-aviso-icon--error layer-fallo-icon";
+  icono.setAttribute("icon", "exclamation-mark-triangle");
+  icono.setAttribute("scale", "s");
+  icono.setAttribute("text-label", TEXTO_FALLO_CARGA);
+  icono.setAttribute("title", ""); // evita solaparse con el title nativo del nodo
+  destino.appendChild(icono);
+
+  const tooltip = document.createElement("calcite-tooltip");
+  tooltip.className = "layer-fallo-tooltip";
+  tooltip.setAttribute("overlay-positioning", "fixed");
+  tooltip.referenceElement = icono;
+  tooltip.textContent = TEXTO_FALLO_CARGA;
+  destino.appendChild(tooltip);
+}
+
+/**
+ * Quita solo el aviso visual (icono y tooltip) del propio nodo, no el de sus
+ * hijos. La instancia sigue marcada como fallida: se reconstruirá al reactivar.
+ */
+function _descartarAvisoFallo(item) {
+  delete item.dataset.cargaFallida;
+  item
+    .querySelectorAll(".layer-fallo-icon, .layer-fallo-tooltip")
+    .forEach(n => { if (n.closest("calcite-tree-item") === item) n.remove(); });
+}
+
+/** Limpia aviso y marca de instancia fallida (tras reconstruir con éxito). */
+function _limpiarMarcaFallo(item) {
+  _descartarAvisoFallo(item);
+  delete item.dataset.instanciaFallida;
+}
+
+/**
+ * Reconstruye una capa hoja del catálogo tras un fallo (nueva instancia).
+ * Reutiliza crearCapa + inicializarCapa, los mismos pasos de la carga original
+ * (DRY), con el territorio que le corresponde: el del grupo municipal si el
+ * índice pertenece a él, el territorial en caso contrario. Devuelve la nueva
+ * instancia o null si no se pudo crear.
+ */
+async function _reconstruirCapaHoja(item, globalIndex, config) {
+  try {
+    const nueva = await crearCapa(config);
+    if (!nueva) return null;
+
+    const datos = (_inicioGrupoMunicipal !== null && globalIndex >= _inicioGrupoMunicipal)
+      ? _datosGrupoMunicipal
+      : _territorioData;
+    await inicializarCapa(nueva, config, datos);
+
+    const vieja = _layersRef[globalIndex];
+    _layersRef[globalIndex] = nueva;
+
+    // WMS con sublayers: los nodos hijos guardan referencias a la instancia
+    // anterior; se reasignan a la nueva (y se respeta lo que el usuario tenía marcado).
+    item.querySelectorAll('calcite-tree-item[data-wms-sublayer="true"]').forEach(hijo => {
+      const nombre = hijo.dataset.layerId.slice(config.id.length + 2); // "{idPadre}::{nombre}"
+      const sub = nueva.sublayers?.find?.(s => s.name === nombre) ?? null;
+      hijo._parentLayer      = nueva;
+      hijo._sublayerInstance = sub;
+      if (sub) sub.visible = hijo.hasAttribute("selected");
+    });
+
+    try { vieja?.destroy?.(); } catch { /* instancia ya retirada: sin efecto */ }
+    _limpiarMarcaFallo(item);
+    return nueva;
+  } catch (err) {
+    console.error(`[layerTree] No se pudo reconstruir la capa "${config?.id}":`, err);
+    return null;
+  }
+}
+
+/** Reconstruye un FeatureLayer hijo de WFS discovery tras un fallo. */
+async function _reconstruirHijoWfs(item) {
+  try {
+    const nueva = await crearCapaWfsHija(item._featureType, item._configPadre);
+    if (!nueva) return null;
+
+    if (_territorioData) {
+      await aplicarBboxWfs(nueva, _territorioData, item._configPadre.srsname ?? "EPSG:4326");
+    }
+
+    try { item._layerInstance?.destroy?.(); } catch { /* sin efecto */ }
+    item._layerInstance = nueva;
+    _limpiarMarcaFallo(item);
+    return nueva;
+  } catch (err) {
+    console.error("[layerTree] No se pudo reconstruir la capa WFS hija:", err);
+    return null;
+  }
+}
+
 // ─── Construcción de items ─────────────────────────────────────────────────
 
 /**
@@ -664,46 +914,21 @@ function _crearItemGrupo(label, negrita) {
 /**
  * Crea el nodo Calcite para una capa hoja estándar (con data-layer-id).
  *
- * ── SERVICIOS CAÍDOS (config.servicio_disponible === false) ──────────────
- * Marcado por enriquecer-catalogo.py cuando el GetCapabilities del servicio
- * responde con un ServiceExceptionReport en vez del capabilities esperado
- * (ver hallazgo real 30/08/2026, Red Natura 2000/ENP — error interno del
- * backend del proveedor, no un problema de configuración del cliente).
- * La capa se conserva en el catálogo (no se excluye) para que el usuario
- * vea que el dato existe pero no está disponible ahora mismo, en vez de
- * que la capa simplemente desaparezca del árbol sin explicación.
- * Mismo patrón visual que _crearHijoWfs usa para FeatureTypes sin
- * cobertura en el municipio: nodo disabled + tooltip + chip informativo.
+ * ── servicio_disponible (catálogo) ───────────────────────────────────────
+ * enriquecer-catalogo.py lo escribe como foto fija del momento en que se
+ * ejecutó (caso real: Red Natura 2000/ENP, error interno del proveedor).
+ * La UI NO lo usa para pintar ni bloquear el nodo: un dato que puede estar
+ * caducado no debe afirmar ni bloquear (mismo principio que la disponibilidad
+ * en tres estados de la pieza 1). El estado real se descubre al activar la
+ * capa: si falla, _marcarFalloCarga() lo señala y volver a marcarla la
+ * reconstruye y reintenta. cargaCapas.esCapaDiferida() evita además que estas
+ * capas entren al mapa (y generen errores en consola) hasta que alguien las
+ * active. Ver 3DECISIONS.md, 30/10/26.
  */
 function _crearItemCapa(config, layer, globalIndex) {
   const item = document.createElement("calcite-tree-item");
   item.dataset.layerId    = config.id;
   item.dataset.layerIndex = globalIndex;
-
-  if (config.servicio_disponible === false) {
-    item.setAttribute("disabled", "");
-    item.title = `${config.title} — servicio no disponible actualmente`;
-
-    const span = document.createElement("span");
-    span.className   = "layer-label layer-label--error";
-    span.textContent = config.title;
-
-    const chip = document.createElement("calcite-chip");
-    chip.setAttribute("scale", "s");
-    chip.setAttribute("kind", "danger");
-    chip.setAttribute("icon", "exclamation-mark-triangle");
-    chip.textContent = "No disponible";
-
-    // Título y chip en fila con wrap (.layer-row): sin ella el chip conserva su
-    // ancho y el título se parte letra a letra.
-    const fila = document.createElement("div");
-    fila.className = "layer-row";
-    fila.appendChild(span);
-    fila.appendChild(chip);
-    item.appendChild(fila);
-
-    return item;
-  }
 
   if (layer.visible) {
     item.setAttribute("selected", "");
@@ -951,6 +1176,9 @@ async function _crearHijoWfs(featureType, configPadre, disponibilidad = DISPONIB
 
   // Almacenar referencia directa en el nodo DOM para acceso O(1) desde el listener
   item._layerInstance = layer;
+  // Necesarios para reconstruir la capa si falla (ver "Fallos de carga").
+  item._featureType = featureType;
+  item._configPadre = configPadre;
 
   // ── Fila de contenido: etiqueta + indicadores ─────────────────────────────
   // Etiqueta, chip de CRS e icono de aviso se agrupan en una fila flex con wrap

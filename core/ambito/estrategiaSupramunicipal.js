@@ -27,7 +27,7 @@
 
 import * as configEngine   from "../../config/configEngine.js";
 import * as mapManager     from "../mapManager.js";
-import { construirCapas }  from "./cargaCapas.js";
+import { construirCapas, esCapaDiferida }  from "./cargaCapas.js";
 import { emit }            from "../../utils/eventBus.js";
 
 /**
@@ -162,7 +162,7 @@ export function crearEstrategiaSupramunicipal({ municipiosDisponibles, mascaraIn
       // addCapa() singular, en bucle: addCapas() (plural) reemplazaría toda
       // la base territorial. Aquí solo se suma.
       layers.forEach((layer, i) => {
-        if (cfgList[i].tipo !== "WFS") {
+        if (!esCapaDiferida(cfgList[i])) {
           mapManager.addCapa(layer);
         }
       });
