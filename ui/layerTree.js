@@ -847,7 +847,13 @@ async function _reconstruirCapaHoja(item, globalIndex, config) {
     const datos = (_inicioGrupoMunicipal !== null && globalIndex >= _inicioGrupoMunicipal)
       ? _datosGrupoMunicipal
       : _territorioData;
-    await inicializarCapa(nueva, config, datos);
+    // [mejora4-pieza3] Una capa FILTRABLE que no puede aplicar su filtro (load()
+    // fallido o con timeout) no se muestra: se descarta y se informa del fallo.
+    const init = await inicializarCapa(nueva, config, datos);
+    if (init?.ok === false) {
+      try { nueva.destroy?.(); } catch { /* sin efecto */ }
+      throw init.error ?? new Error("No se pudo inicializar la capa");
+    }
 
     const vieja = _layersRef[globalIndex];
     _layersRef[globalIndex] = nueva;

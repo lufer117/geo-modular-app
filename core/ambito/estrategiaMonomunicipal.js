@@ -26,7 +26,7 @@
 
 import * as configEngine   from "../../config/configEngine.js";
 import * as mapManager     from "../mapManager.js";
-import { construirCapas }  from "./cargaCapas.js";
+import { construirCapas, notificarFallosDeCarga }  from "./cargaCapas.js";
 import { emit }            from "../../utils/eventBus.js";
 
 /**
@@ -63,7 +63,7 @@ export function crearEstrategiaMonomunicipal({ municipiosDisponibles, ui }) {
         return;
       }
 
-      const { layers, cfgList, lazyLayerIds, capasInmediatas } =
+      const { layers, cfgList, lazyLayerIds, capasInmediatas, fallidas } =
         await construirCapas(configs, municipioData);
 
       if (layers.length === 0) {
@@ -82,6 +82,7 @@ export function crearEstrategiaMonomunicipal({ municipiosDisponibles, ui }) {
         configs: cfgList,
         lazyLayerIds
       });
+      notificarFallosDeCarga(fallidas);
 
       console.info(
         `[ámbito monomunicipal] ✓ ${layers.length} capas cargadas para "${municipioData.nombre}"`

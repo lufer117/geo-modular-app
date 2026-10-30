@@ -27,7 +27,7 @@
 
 import * as configEngine   from "../../config/configEngine.js";
 import * as mapManager     from "../mapManager.js";
-import { construirCapas, esCapaDiferida }  from "./cargaCapas.js";
+import { construirCapas, esCapaDiferida, notificarFallosDeCarga }  from "./cargaCapas.js";
 import { emit }            from "../../utils/eventBus.js";
 
 /**
@@ -96,7 +96,7 @@ export function crearEstrategiaSupramunicipal({ municipiosDisponibles, mascaraIn
       }
 
       // 3) Capas de datos: se construyen ya sin splash y con el hilo libre.
-      const { layers, cfgList, lazyLayerIds, capasInmediatas } =
+      const { layers, cfgList, lazyLayerIds, capasInmediatas, fallidas } =
         await construirCapas(configs, territorioData);
 
       // Primera carga → reemplazo seguro, no hay nada que preservar aún
@@ -110,6 +110,7 @@ export function crearEstrategiaSupramunicipal({ municipiosDisponibles, mascaraIn
         lazyLayerIds
       });
 
+      notificarFallosDeCarga(fallidas);
       console.info(`[ámbito supramunicipal] ✓ ${layers.length} capas territoriales base cargadas`);
 
     } catch (err) {
@@ -156,13 +157,13 @@ export function crearEstrategiaSupramunicipal({ municipiosDisponibles, mascaraIn
         return;
       }
 
-      const { layers, cfgList, lazyLayerIds } =
+      const { layers, cfgList, lazyLayerIds, fallidas } =
         await construirCapas(configs, municipioData);
 
       // addCapa() singular, en bucle: addCapas() (plural) reemplazaría toda
       // la base territorial. Aquí solo se suma.
       layers.forEach((layer, i) => {
-        if (!esCapaDiferida(cfgList[i])) {
+        if (!esCapaDiferida(cfgList[i]) && !fallidas.has(cfgList[i].id)) {
           mapManager.addCapa(layer);
         }
       });
@@ -179,6 +180,8 @@ export function crearEstrategiaSupramunicipal({ municipiosDisponibles, mascaraIn
         configs: cfgList,
         lazyLayerIds
       });
+
+      notificarFallosDeCarga(fallidas);
 
       console.info(
         `[ámbito supramunicipal] ✓ ${layers.length} capas municipales agregadas para "${municipioData.nombre}"`

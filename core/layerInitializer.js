@@ -86,6 +86,8 @@
  
  */
 
+import { conTimeout } from "../utils/promesas.js";
+
 // ─── API pública ──────────────────────────────────────────────────────────
 
 /**
@@ -96,10 +98,14 @@
  * @param {Object} territorioData - Territorio activo (municipio, provincia o
  *   ccaa), ya resuelto. Forma: { codigo_ine, nombre, provincia_code,
  *   ccaa_code, bbox, polygon }. codigo_ine es null a nivel provincia/ccaa.
- * @returns {Promise<void>}
+ * @returns {Promise<{ ok: boolean, error?: Error }>}
+ *   ok:false indica que la capa NO quedó correctamente inicializada (hoy: una capa
+ *   FILTRABLE cuyo layer.load() falló o superó el tiempo máximo). Quien la llame
+ *   no debe mostrarla: sin su filtro mostraría datos de fuera del ámbito (y, en
+ *   FeatureLayer/WFS, descargaría el servicio completo). Ver cargaCapas.js.
  */
 export async function inicializarCapa(layer, config, territorioData) {
-  if (!layer || !config || !territorioData) return;
+  if (!layer || !config || !territorioData) return { ok: true };
 
   try {
     switch (config.disponibilidad_municipal) {
@@ -128,7 +134,10 @@ export async function inicializarCapa(layer, config, territorioData) {
     }
   } catch (err) {
     console.error(`[layerInitializer] Error al inicializar capa "${config.id}":`, err);
+    return { ok: false, error: err };
   }
+
+  return { ok: true };
 }
 
 /**
@@ -257,6 +266,11 @@ async function _estrategiaBbox(layer, config, territorioData) {
  * compara el valor del filtro. Editable si en el futuro se añaden más
  * niveles (ej. "comarca" cuando se implemente).
  */
+// Tiempo máximo de espera de layer.load() en capas FILTRABLE (FEATURE/WFS).
+// Mismo orden de magnitud que los timeouts del discovery WFS (10-15 s). Constante
+// y no configuración: solo se haría configurable si aparece la necesidad real.
+const TIMEOUT_LOAD_FILTRABLE_MS = 10_000;
+
 const _CAMPO_POR_NIVEL = {
   municipal:  "codigo_ine",
   provincial: "provincia_code",
@@ -308,16 +322,19 @@ async function _estrategiaFiltrable(layer, config, territorioData) {
     );
 
   } else if (tipo === "FEATURE" || tipo === "WFS") {
-    try {
-      await layer.load();
-      layer.definitionExpression = `${campoFiltro} = '${valorFiltro}'`;
-      console.info(
-        `[layerInitializer] definitionExpression "${layer.definitionExpression}" (nivel ${nivel}) → "${config.id}"`
-      );
-    } catch (err) {
-      console.warn(
-        `[layerInitializer] No se pudo aplicar definitionExpression a "${config.id}":`, err
-      );
-    }
+    // Sin try/catch propio: si load() falla o excede el tiempo, el error sube a
+    // inicializarCapa(), que devuelve { ok:false }. Antes se capturaba aquí solo
+    // con un warning y la capa seguía su camino SIN filtro (y entraba al mapa
+    // pidiendo el servicio completo). Con timeout, una respuesta tardía tampoco
+    // puede colarla: la capa fallida no se añade al mapa.
+    await conTimeout(
+      layer.load(),
+      TIMEOUT_LOAD_FILTRABLE_MS,
+      `layer.load() de "${config.id}"`
+    );
+    layer.definitionExpression = `${campoFiltro} = '${valorFiltro}'`;
+    console.info(
+      `[layerInitializer] definitionExpression "${layer.definitionExpression}" (nivel ${nivel}) → "${config.id}"`
+    );
   }
 }
