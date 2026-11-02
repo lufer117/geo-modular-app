@@ -137,6 +137,29 @@ function _getAdapterMunicipiosDeCcaa(ccaaCode) {
   return _adaptadoresMunicipiosPorCcaa.get(ccaaCode);
 }
 
+/**
+ * Carga un dataset y, si falla, lanza un error que dice QUÉ archivo falta y
+ * CÓMO generarlo (M-01, pieza 2). Sin esto, el banner de main.js mostraba
+ * solo "HTTP 404 Not Found — ../data/...", sin pista de la solución.
+ * La comprobación vive aquí y no en validarDeployment.js porque exige red,
+ * y el validador es síncrono y puro a propósito.
+ *
+ * @param {LocalJsonAdapter} adaptador
+ * @param {string} archivo - ruta legible para el mensaje
+ * @param {string} comando - comando que genera el archivo
+ * @returns {Promise<Array>}
+ */
+async function _cargarDataset(adaptador, archivo, comando) {
+  try {
+    return await adaptador.getData();
+  } catch (err) {
+    throw new Error(
+      `[territorioResolver] No se pudo cargar ${archivo} (${err.message}). ` +
+      `Si falta, genéralo con: ${comando}`
+    );
+  }
+}
+
 // ─── API pública ──────────────────────────────────────────────────────────
 
 /**
@@ -205,34 +228,38 @@ export async function resolverAmbitoTerritorial(deployment) {
  * se resuelve aquí, contra data/territorio/municipios.json vía LocalJsonAdapter.
  */
 async function _resolverAmbitoMunicipio(deployment) {
-  const todos = await _adapterMunicipiosDemo.getData();
+  const todos = await _cargarDataset(
+    _adapterMunicipiosDemo,
+    "data/territorio/municipios.json",
+    "python tools/generar_geografia.py --municipios <códigos separados por coma>"
+  );
   const codigosPermitidos = new Set(deployment.municipios ?? []);
 
   const municipiosDisponibles = codigosPermitidos.size > 0
     ? todos.filter(m => codigosPermitidos.has(m.codigo_ine))
-    : todos; // demo/TFM: sin filtro, todos los municipios del dataset
+    : todos; // demo: sin filtro, todos los municipios del dataset
 
-  // ── Validación explícita: UN municipio en producción ───────────────────
-  // En producción el ámbito monomunicipal sirve un único municipio. Varios
-  // (o ninguno, que equivale a "todo el dataset") solo es legítimo con
-  // mode "demo". Se avisa en vez de lanzar error para que la app no se rompa
-  // por configuración; se endurecerá a error cuando se aborde la validación
-  // de configuración al arrancar (MEJORASPENDIENTES.md, mejora 1). También
-  // salta con 0 municipios, lo que detecta un código INE mal escrito.
-  if (municipiosDisponibles.length !== 1) {
+  // ── Códigos que no existen en los datos (M-01, pieza 3) ────────────────
+  // validarDeployment.js ya comprobó el formato y que en producción haya
+  // exactamente uno; lo que solo se puede saber aquí, con el JSON cargado,
+  // es si cada código existe. En producción es error: un código mal escrito
+  // dejaría la app sin municipio. En demo solo se avisa.
+  const encontrados = new Set(municipiosDisponibles.map(m => m.codigo_ine));
+  const ausentes    = [...codigosPermitidos].filter(c => !encontrados.has(c));
+  if (ausentes.length > 0) {
     const detalle =
-      `${municipiosDisponibles.length} municipios disponibles ` +
-      `(deployment.municipios: ${JSON.stringify(deployment.municipios ?? [])})`;
-
+      `Código(s) INE ${JSON.stringify(ausentes)} de deployment.municipios no ` +
+      `están en data/territorio/municipios.json. Revisa el código o regenera ` +
+      `el archivo con tools/generar_geografia.py --municipios.`;
     if (deployment.mode === "demo") {
-      console.info(`[territorioResolver] Modo demo: ${detalle}`);
+      console.warn(`[territorioResolver] ${detalle}`);
     } else {
-      console.warn(
-        `[territorioResolver] Ámbito monomunicipal con ${detalle}. ` +
-        `En producción debe haber exactamente un municipio; varios solo se ` +
-        `admiten con mode: "demo".`
-      );
+      throw new Error(`[territorioResolver] ${detalle}`);
     }
+  }
+
+  if (deployment.mode === "demo") {
+    console.info(`[territorioResolver] Modo demo: ${municipiosDisponibles.length} municipios disponibles`);
   }
 
   return {
@@ -262,8 +289,16 @@ async function _resolverAmbitoProvincia(deployment) {
   }
 
   const [provincias, municipios] = await Promise.all([
-    _adapterProvincias.getData(),
-    _getAdapterMunicipiosDeProvincia(codigoProvincia).getData(),
+    _cargarDataset(
+      _adapterProvincias,
+      "data/territorio/provincias.json",
+      `python tools/generar_geografia.py --provincias ${codigoProvincia}`
+    ),
+    _cargarDataset(
+      _getAdapterMunicipiosDeProvincia(codigoProvincia),
+      `data/territorio/municipios_${codigoProvincia}.json`,
+      `python tools/generar_geografia.py --municipios-de-provincia ${codigoProvincia}`
+    ),
   ]);
 
   const provincia = provincias.find(p => p.provincia_code === codigoProvincia);
@@ -327,8 +362,16 @@ async function _resolverAmbitoCcaa(deployment) {
   }
 
   const [ccaas, municipios] = await Promise.all([
-    _adapterCcaa.getData(),
-    _getAdapterMunicipiosDeCcaa(codigoCcaa).getData(),
+    _cargarDataset(
+      _adapterCcaa,
+      "data/territorio/ccaa.json",
+      `python tools/generar_geografia.py --ccaa ${codigoCcaa}`
+    ),
+    _cargarDataset(
+      _getAdapterMunicipiosDeCcaa(codigoCcaa),
+      `data/territorio/municipios_ccaa_${codigoCcaa}.json`,
+      `python tools/generar_geografia.py --municipios-de-ccaa ${codigoCcaa}`
+    ),
   ]);
 
   const ccaa = ccaas.find(c => c.ccaa_code === codigoCcaa);

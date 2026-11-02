@@ -470,6 +470,18 @@ arcgis-coordinate-conversion {
   font-size: var(--calcite-font-size--1, 0.875rem);
 }
 
+/* Lista de errores de configuración (bootstrap.js, M-01 pieza 2):
+   alineada a la izquierda para que se lea como lista. */
+.app-error-banner p {
+  margin: 0;
+}
+
+.app-error-banner ul {
+  margin: 0.5rem 0 0;
+  padding-left: 1.25rem;
+  text-align: left;
+}
+
 
 
 /* ══════════════════════════════════════════════════════════════════

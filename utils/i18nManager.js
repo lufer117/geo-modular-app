@@ -35,7 +35,8 @@ import { emit } from "./eventBus.js";
 // ── Constantes ──────────────────────────────────────────────────────────────
 const STORAGE_KEY  = "geo-app-lang";
 // Idiomas que el sistema conoce. Añadir aquí + crear su JSON es suficiente.
-const IDIOMAS_SOPORTADOS = ["es", "en", "eu", "gl", "ca", "va"];
+// Exportada: validarDeployment.js la usa como fuente única (M-01, pieza 2).
+export const IDIOMAS_SOPORTADOS = ["es", "en", "eu", "gl", "ca", "va"];
 
 // Traducciones cargadas en memoria. null hasta que init() resuelve.
 let _traducciones = null;
