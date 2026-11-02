@@ -63,15 +63,15 @@
  *   No combinar ambos ámbitos en el mismo deployment.
  *
  * ── CAMPO `herramientas[]` ──────────────────────────────────────────────
- *   Tres estados válidos, cada uno con significado distinto:
+ *   Tres formas de declararlo (dos comportamientos distintos):
  *     1. Array con contenido  → panel con acciones habilitadas/deshabilitadas
- *     2. Array vacío []       → decisión de producto: panel presente, sin
- *                                acciones (el cliente conoce el catálogo y
- *                                elige no exponer ninguna herramienta)
+ *     2. Array vacío []       → decisión de producto: panel oculto (el
+ *                                cliente conoce el catálogo y elige
+ *                                no exponer ninguna herramienta)
  *     3. Campo ausente        → caso legado / deployment sin migrar.
  *                                initToolPanel() resuelve con
- *                                `DEPLOYMENT.herramientas ?? []` de forma
- *                                seguridad, sin lanzar excepción.
+ *                                `[]` como valor por defecto y no lanza
+ *                                excepción: el panel se oculta, igual que con [].
  *   Un `componente`/`componentes` es el nombre del Web Component de
  *   ArcGIS o Calcite que implementa la herramienta. `habilitada: false`
  *   deja la herramienta visible pero inactiva (útil para placeholders sin

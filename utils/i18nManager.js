@@ -30,7 +30,6 @@
  * Trabajo futuro: SSR o endpoint que sirva el locale antes de la carga del SDK.
  */
 
-import { DEPLOYMENT } from "../config/deployment.js";
 import { emit } from "./eventBus.js";
 
 // ── Constantes ──────────────────────────────────────────────────────────────
@@ -44,16 +43,27 @@ let _traducciones = null;
 // Idioma activo en esta sesión.
 let _langActivo = "es";
 
+// Configuración de idiomas del cliente, capturada en init(deployment). Se
+// guarda a nivel de módulo porque setLang() la necesita después, en runtime,
+// y este módulo ya es con estado (_langActivo, _traducciones). Los valores
+// iniciales solo cubren un uso previo a init().
+let _idiomasDeployment = ["es"];
+let _idiomaDefecto = null;
+
 // ── API pública ─────────────────────────────────────────────────────────────
 
 /**
  * Inicializa el sistema i18n.
  * Debe llamarse en main.js ANTES de montar cualquier módulo de UI.
  *
+ * @param {{ idiomas: string[], idioma_defecto?: string }} deployment
+ *   Configuración ya normalizada (ver config/normalizarDeployment.js).
  * @returns {Promise<void>}
  */
 
-export async function init() {
+export async function init(deployment) {
+  _idiomasDeployment = deployment.idiomas;
+  _idiomaDefecto     = deployment.idioma_defecto;
   const traduccionesResueltas = await _resolverYcargarIdioma();
   _langActivo = traduccionesResueltas.lang;
   _traducciones = traduccionesResueltas.traducciones;
@@ -104,7 +114,7 @@ export function getLang() {
 
 export async function setLang(code) {
   // Validar que el idioma es soportado por el sistema Y por el deployment actual
-  const idiomasPermitidos = DEPLOYMENT.idiomas ?? ["es"];
+  const idiomasPermitidos = _idiomasDeployment;
   if (!idiomasPermitidos.includes(code)) {
     console.warn(`[i18n] Idioma "${code}" no está en deployment.idiomas:`, idiomasPermitidos);
     return;
@@ -157,7 +167,7 @@ async function _resolverYcargarIdioma() {
  * active un idioma que el cliente no tiene configurado.
  */
 function _resolverIdioma() {
-  const permitidos = (DEPLOYMENT.idiomas ?? ["es"])
+  const permitidos = _idiomasDeployment
     .filter(l => IDIOMAS_SOPORTADOS.includes(l));
 
   // Prioridad 1: ?lang= en URL
@@ -169,7 +179,7 @@ function _resolverIdioma() {
   if (stored && permitidos.includes(stored)) return stored;
 
   // Prioridad 3: deployment.idioma_defecto
-  const defecto = DEPLOYMENT.idioma_defecto;
+  const defecto = _idiomaDefecto;
   if (defecto && permitidos.includes(defecto)) return defecto;
 
   // Prioridad 4: fallback absoluto

@@ -2,7 +2,6 @@
   // Responsabilidad: selector de idioma en la cabecera.
   
 
-  import { DEPLOYMENT }        from "../config/deployment.js";
   import { getLang, setLang }  from "../utils/i18nManager.js";
   import { getMunicipioActivo }  from "./municipioSelector.js";
   import * as mapManager from "../core/mapManager.js";
@@ -13,12 +12,14 @@
    * Inicializa los controles del header.
    * Si el deployment tiene un solo idioma, no renderiza nada.
    * @param {HTMLElement} container — div#lang-selector-container
+   * @param {string[]} idiomas — deployment.idiomas, ya normalizado
    */
-  export function initHeaderControls(container) {
+  export function initHeaderControls(container, idiomas) {
     if (!container) return;
-    if (DEPLOYMENT.idiomas.length <= 1) return;
+    if (idiomas.length <= 1) return;
 
     _containerEl = container;
+    _idiomas = idiomas;
     _renderSelectorIdioma(container);
     _registrarListenersIdioma();
   }
@@ -26,6 +27,7 @@
   // ─── Privadas ─────────────────────────────────────────────────────────────────
 
   let _containerEl = null;
+  let _idiomas = [];
   let _idiomaListenerRegistrado = false;
 
   function _renderSelectorIdioma(container) {
@@ -37,7 +39,7 @@
     // Un botón por idioma declarado en deployment.js.
     const grupo = document.createElement("calcite-button-group");
 
-    DEPLOYMENT.idiomas.forEach(codigo => {
+    _idiomas.forEach(codigo => {
       const btn = document.createElement("calcite-button");
       btn.textContent  = codigo.toUpperCase();
       btn.appearance   = codigo === langActivo ? "solid" : "outline";

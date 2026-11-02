@@ -38,7 +38,6 @@ import { LocalJsonAdapter }        from "../config/adapters/LocalJsonAdapter.js"
 import { setAdaptador }            from "../config/configEngine.js"; // le dice al sistema qué fuente de datos usar
 import { resolverAmbitoTerritorial } from "../config/territorioResolver.js";
 import { esSupramunicipal } from "../config/tipoAmbito.js";
-import { DEPLOYMENT }              from "../config/deployment.js";
 
 
 // ── Core ─────────────────────────────────────────────────────────────────
@@ -251,7 +250,7 @@ function _inyectarLogoEmpresa(src) {
 
 // ── ARRANQUE ────────────────────────────────────────────────────────────────────
 
-async function main() {
+export async function main(deployment) {
 
   try {
     T("inicio");
@@ -259,13 +258,13 @@ async function main() {
 
 
     // 0. Aplicar branding de la instancia antes de montar cualquier UI
-    await aplicarBranding(DEPLOYMENT);
+    await aplicarBranding(deployment);
     // 1. Esperar SDK — bug corregido: la función existía pero no se llamaba
     await waitForArcGISSDK();
 
     // 2. Inicializar i18n ANTES de montar UI
     //    Carga el JSON del idioma activo y aplica data-i18n al DOM
-    await initI18n();
+    await initI18n(deployment);
 
     // 3. Registrar adaptador de datos antes de cualquier operación de catálogo
     setAdaptador(new LocalJsonAdapter("../data/catalogo/catalogo-capas.json"));
@@ -283,7 +282,7 @@ async function main() {
     // 4.5. Resolver ámbito territorial del deployment activo (solo resuelve
     // datos, NO carga capas todavía — estrategia.iniciar() se llama
     // después de montar la UI, ver nota más abajo).
-    const { municipiosDisponibles, mascaraInicial } = await resolverAmbitoTerritorial(DEPLOYMENT);
+    const { municipiosDisponibles, mascaraInicial } = await resolverAmbitoTerritorial(deployment);
 
     // 5. Montar UI
     // ── AJUSTE CRÍTICO DE ORDEN ────────────────────────────────────────────
@@ -301,7 +300,7 @@ async function main() {
     // Estrategia de ámbito (patrón Strategy): la única que sabe qué hacer según
     // sea monomunicipal o supramunicipal. La UI solo le delega. Los callbacks de
     // ui evitan que core/ importe de ui/ (la dependencia va siempre hacia dentro).
-    const estrategia = crearEstrategia(DEPLOYMENT, {
+    const estrategia = crearEstrategia(deployment, {
       municipiosDisponibles,
       mascaraInicial,
       ui: { setLoading: setLoadingSelector, limpiarSeleccion: limpiarSeleccionSelector }
@@ -311,8 +310,8 @@ async function main() {
     renderBasemapSelector("#basemap-selector-container");
     initLayerTree("#layer-tree-container");   // ← debe ir antes de estrategia.iniciar()
     initLegendPanel("map-view");
-    await initToolPanel(DEPLOYMENT.herramientas);
-    initHeaderControls(document.getElementById("lang-selector-container"));
+    await initToolPanel(deployment.herramientas);
+    initHeaderControls(document.getElementById("lang-selector-container"), deployment.idiomas);
 
     // 5.5. La carga inicial de capas se dispara más abajo (estrategia.iniciar()),
     //      cuando TODOS los listeners del eventBus ya están registrados.
@@ -338,7 +337,7 @@ async function main() {
     // bloque nunca actúe en el ámbito supramunicipal de todas formas. Si en el futuro
     // se decide sí actualizar el logo al elegir municipio dentro de un
     // territorio, este es el punto a extender — no antes.
-    const _permiteLogoPorMunicipio = !esSupramunicipal(DEPLOYMENT);
+    const _permiteLogoPorMunicipio = !esSupramunicipal(deployment);
 
     eventBus.on("municipio-cargado", async ({ municipioData }) => {
       if (!_permiteLogoPorMunicipio) return; // ámbito territorial: branding fijo, no se toca
@@ -408,10 +407,9 @@ async function main() {
   }
 }
 
-// Garantizar que el DOM está listo antes de acceder a los elementos
-// el evento garantiza que el Index HTML este completamente parseado 
-// los elementos existen y luego si ejecuta main
-document.addEventListener("DOMContentLoaded", main);
+// main() lo invoca app/bootstrap.js una vez comprobada la configuración.
+// Ya no se engancha a DOMContentLoaded: bootstrap carga este módulo con
+// import() dinámico, y para entonces el evento ya habría saltado.
 
 
 // ── FLUJO MENTAL ────────────────────────────────────────────────────────────────────
