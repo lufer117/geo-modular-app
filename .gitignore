@@ -44,3 +44,7 @@ data/
 # Backups
 *.bak*
 *.ps1
+
+# Python
+__pycache__/
+*.pyc
