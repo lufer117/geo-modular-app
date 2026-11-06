@@ -42,6 +42,7 @@ data/SHP_ETRS89/
 data/pruebas_catalogo/
 data/territorio/
 data/catalogo/sugerencias.tsv
+data/.tmp.driveupload
 
 
 # Ignorar carpeta de instrucciones de GitHub
@@ -54,3 +55,6 @@ data/catalogo/sugerencias.tsv
 # Python
 __pycache__/
 *.pyc
+
+#Drive
+*.tmp.driveupload
