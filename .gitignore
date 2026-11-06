@@ -35,7 +35,13 @@ context/
 docs/
 prompts/
 research/
-data/
+
+# data/: se versiona lo funcional; se excluye lo pesado, local o regenerable
+
+data/SHP_ETRS89/
+data/pruebas_catalogo/
+data/territorio/
+data/catalogo/sugerencias.tsv
 
 
 # Ignorar carpeta de instrucciones de GitHub

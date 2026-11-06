@@ -1,0 +1,36 @@
+{
+  "app.title": "Udal GIS",
+  "app.description": "Udal Datu Ikuskatzaile Moldagarria",
+
+  "nav.municipio.label": "Udalerria:",
+  "nav.municipio.placeholder": "— Hautatu udalerri bat —",
+
+  "action.capas": "Geruzak",
+  "action.leyenda": "Kondaira",
+  "action.toggle3d": "2D/3D txandakatu",
+
+  "panel.layers.heading": "Geruzak",
+  "panel.layers.description": "Hautatu udalerri bat bere geruzak ikusteko",
+  "panel.basemap.heading": "Oinarrizko mapa",
+  "panel.capas.heading": "Geruza erabilgarriak",
+  "panel.legend.heading": "Kondaira",
+
+  "lang.selector.label": "Hizkuntza",
+
+  "layers.loading": "Kargatzen...",
+  "layers.empty": "Ez dago daturik eremu honetan",
+  "layers.error": "Errorea geruzak kargatzean",
+  "layers.wfs.expanding": "Geruza motak kontsultatzen...",
+  "layers.wfs.empty": "Ez da geruza motarik aurkitu",
+  "layers.wfs.error": "Errorea zerbitzua kontsultatzean",
+
+  "tools.panel.heading": "Tresnak",
+  "tools.distancia": "Distantzia",
+  "tools.area": "Azalera",
+  "tools.linea3d": "Distantzia (3D)",
+  "tools.area3d": "Azalera (3D)",
+  "tools.dibujo": "Marraztu",
+  "tools.limpiar": "Garbitu",
+  "tools.imprimir": "Inprimatu",
+  "tools.proximamente": "Laster"
+}
